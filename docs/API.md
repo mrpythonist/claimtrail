@@ -91,7 +91,7 @@ Other errors return `{"message": "..."}` with the appropriate status:
 
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
-| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since. No shipment or claim figures exist yet. |
+| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, and evidence counts. No claim or financial figures exist yet. |
 
 ### Members (tenant-scoped)
 
@@ -113,6 +113,83 @@ deactivated, or removed.
 | POST | `/invitations` | Yes + org header | Invite an email address. Body: `email`, `role`. Only an owner can invite an owner. Sends the invitation email (201). |
 | POST | `/invitations/accept` | Yes, no org header | Accept with the token from the email. Body: `token`. The invitation must have been sent to the signed-in user's email. |
 | DELETE | `/invitations/{invitation}` | Yes + org header | Revoke a pending invitation. Requires `manage-invitations`. |
+
+### Carriers (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/carriers` | Yes + org header | Paginated carriers (25 per page). Query: `search`, `page`. Requires `view-shipments`. |
+| POST | `/carriers` | Yes + org header | Create a carrier. Body: `name`, optional `contact_name`, `contact_email`, `contact_phone`, `dot_number`, `notes` (201). Requires `create-shipments`. |
+| PUT | `/carriers/{carrier}` | Yes + org header | Update a carrier. Requires `edit-shipments`. There is no carrier delete endpoint yet. |
+
+### Shipments (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/shipments` | Yes + org header | Paginated shipments (15 per page, max 100). Query: `search` (reference, broker, driver), `status`, `carrier_id`, `date_from`, `date_to` (pickup appointment range), `sort` (`created_at`, `pickup_appointment`, `delivery_appointment`, `status`), `direction`, `page`. Requires `view-shipments`. |
+| POST | `/shipments` | Yes + org header | Create a shipment. Body: `internal_reference` (required, unique per organization), `broker_or_customer_name` (required), optional `external_load_reference`, `carrier_id`, `driver_name`, `driver_contact`, `pickup_location`, `delivery_location`, `pickup_appointment`, `delivery_appointment`, `actual_arrival_at`, `actual_departure_at`, `base_rate`, `currency` (default `USD`), `status` (`draft` or `planned`, default `draft`), `notes` (201). Requires `create-shipments`. |
+| GET | `/shipments/{shipment}` | Yes + org header | One shipment with carrier, creator, event count, and evidence count. Requires `view-shipments`. |
+| PUT | `/shipments/{shipment}` | Yes + org header | Update a shipment. Status changes must follow the transition map (see below). Requires `edit-shipments`. Archived shipments return 403: they are read-only. |
+| POST | `/shipments/{shipment}/archive` | Yes + org header | Archive a shipment. One-way; there is no unarchive. Requires `archive-shipments`. |
+| GET | `/shipments/export` | Yes + org header | Download the filtered list as CSV (same filters as the list). Requires `export-shipments`. |
+
+Status transitions move forward one step at a time: `draft` to
+`planned` to `in_transit` to `delivered` to `completed`. Any
+non-archived status may move to `archived`, and `archived` is terminal.
+An invalid transition returns 422 with a message naming both statuses.
+
+### Shipment CSV import (tenant-scoped)
+
+Two steps. Preview parses and validates without creating anything;
+confirm creates only the valid, non-duplicate rows from the server-side
+preview. Both steps require `import-shipments`.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| POST | `/shipments/import/preview` | Yes + org header | Multipart upload: `file` (CSV, max 5 MB) and optional `mapping` (JSON object of exact header text to field name). Returns `preview_token`, `summary` (`total`, `valid`, `invalid`, `duplicate`), `columns`, and `rows` with per-row `data`, `errors`, and `is_duplicate`. Previews expire after 30 minutes. |
+| POST | `/shipments/import/confirm` | Yes + org header | Body: `preview_token`, optional `row_indexes` (1-based; omit to import all valid rows). Returns `imported`, `skipped`, and `skipped_rows` with a reason per row. A token can only be confirmed once. |
+
+Column mapping accepts the canonical field names and common aliases
+(case-insensitive, so "Internal Reference" and "internal_reference"
+both work). The `carrier` column resolves a carrier by name within the
+organization; an unknown carrier is a row error. Duplicates are
+detected against existing references in the organization and within the
+file. Files are limited to 1000 rows. Imported shipments may carry any
+non-archived status; the create endpoint only accepts `draft` and
+`planned`.
+
+### Shipment events (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/shipments/{shipment}/events` | Yes + org header | Paginated events for a shipment, newest first. Requires `view-events`. |
+| POST | `/shipments/{shipment}/events` | Yes + org header | Record an event. Body: `event_category_id` (required), `event_date` (required), optional `start_time`, `end_time` (HH:MM, end after start), `duration_minutes`, `location`, `description`, `estimated_amount`, `currency`, `notes` (201). Duration is computed from start and end when both are present. Events start as `potential`. Requires `create-events`. Archived shipments return 422. |
+| GET | `/events/{event}` | Yes + org header | One event. Requires `view-events`. |
+| PUT | `/events/{event}` | Yes + org header | Update an event, including `status` (`potential`, `under_review`, `dismissed`). Duration is recomputed from the merged times. Requires `edit-events`. Events on archived shipments return 403. |
+| DELETE | `/events/{event}` | Yes + org header | Delete an event. Evidence on the event keeps its shipment link. Requires `delete-events`. |
+
+### Event categories (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/event-categories` | Yes + org header | System categories plus the organization's custom ones. Requires `view-events`. |
+| POST | `/event-categories` | Yes + org header | Add a custom category. Body: `label`, optional `description` (201). The slug must not collide with an existing visible category. Requires `create-events`. |
+
+### Evidence (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/evidence` | Yes + org header | Paginated evidence library (25 per page). Query: `shipment_id`, `shipment_event_id`, `document_category`, `verification_status`, `page`. Requires `view-evidence`. |
+| POST | `/evidence` | Yes + org header | Multipart upload: `file` (max 20 MB; pdf, jpg, jpeg, png, webp, doc, docx, xls, xlsx, csv, txt), `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `document_category` (required), `description` (201). Requires `upload-evidence`. Archived shipments return 422. |
+| GET | `/evidence/{evidence}` | Yes + org header | One evidence record's metadata. The storage key is never exposed. Requires `view-evidence`. |
+| GET | `/evidence/{evidence}/download` | Yes + org header | Download the file. Add `?preview=1` to serve it inline (for images and PDFs). On S3 this redirects to a 5-minute signed URL. Requires `view-evidence`. |
+| PUT | `/evidence/{evidence}/verification` | Yes + org header | Set `verification_status` (`pending`, `verified`, `rejected`). Requires `verify-evidence`. |
+| DELETE | `/evidence/{evidence}` | Yes + org header | Delete the record and the stored file. Requires `delete-evidence`. The deletion is written to the application log; the full audit trail arrives in Milestone 4. |
+
+Document categories: `bill_of_lading`, `proof_of_delivery`,
+`rate_confirmation`, `arrival_departure_record`,
+`appointment_confirmation`, `broker_communication`, `driver_photo`,
+`receipt`, `lumper_receipt`, `other`.
 
 ## Example: register, create an organization, invite someone
 

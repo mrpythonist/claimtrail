@@ -68,6 +68,60 @@ interface ApiOptions {
   redirectOnUnauthorized?: boolean;
 }
 
+/** Options shared by the upload and download helpers (no JSON body). */
+type ApiTransportOptions = Omit<ApiOptions, "body" | "method">;
+
+/** Authorization and tenant headers shared by every API call. */
+function authHeaders(options: {
+  orgId?: string | null;
+  withOrg?: boolean;
+}): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (options.withOrg !== false) {
+    const resolvedOrg = options.orgId ?? getStoredOrgId();
+    if (resolvedOrg) {
+      headers["X-Organization-Id"] = resolvedOrg;
+    }
+  }
+
+  return headers;
+}
+
+/**
+ * Clears the session and sends the user to the login page after a 401,
+ * unless the caller opted out. api.ts has no access to the Next router,
+ * and a full reload is desirable here: it clears any in-memory state
+ * after the session expires.
+ */
+function handleUnauthorized(redirectOnUnauthorized: boolean): void {
+  if (!redirectOnUnauthorized) return;
+  clearSession();
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/login";
+  }
+}
+
+/** Builds the ApiRequestError for a failed response from its JSON body. */
+function errorFromBody(status: number, body: unknown): ApiRequestError {
+  const errorBody = body as ApiError;
+  return new ApiRequestError(status, {
+    message: errorBody.message || `Request failed (${status})`,
+    errors: errorBody.errors,
+  });
+}
+
+const UNREACHABLE_MESSAGE =
+  "Could not reach the server. Check your connection and try again.";
+
 /**
  * Typed fetch wrapper for the ClaimTrail API.
  *
@@ -87,21 +141,7 @@ export async function apiFetch<T>(
     redirectOnUnauthorized = true,
   } = options;
 
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
-
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (withOrg) {
-    const resolvedOrg = orgId ?? getStoredOrgId();
-    if (resolvedOrg) {
-      headers["X-Organization-Id"] = resolvedOrg;
-    }
-  }
+  const headers = authHeaders({ orgId, withOrg });
 
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -115,30 +155,95 @@ export async function apiFetch<T>(
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiRequestError(0, {
-      message: "Could not reach the server. Check your connection and try again.",
-    });
+    throw new ApiRequestError(0, { message: UNREACHABLE_MESSAGE });
   }
 
   const data = (await response.json().catch(() => ({}))) as ApiError | T;
 
   if (!response.ok) {
-    if (response.status === 401 && redirectOnUnauthorized) {
-      clearSession();
-      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-        // api.ts has no access to the Next router, and a full reload is
-        // desirable here: it clears any in-memory state after the
-        // session expires.
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/login";
-      }
+    if (response.status === 401) {
+      handleUnauthorized(redirectOnUnauthorized);
     }
-    const errorBody = data as ApiError;
-    throw new ApiRequestError(response.status, {
-      message: errorBody.message || `Request failed (${response.status})`,
-      errors: errorBody.errors,
-    });
+    throw errorFromBody(response.status, data);
   }
 
   return data as T;
+}
+
+/**
+ * Multipart POST for file uploads (evidence files, shipment import).
+ * Sends the same Authorization and X-Organization-Id headers as
+ * apiFetch, but deliberately does not set Content-Type: the browser
+ * sets it with the multipart boundary. 401 handling matches apiFetch.
+ */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  options: ApiTransportOptions = {},
+): Promise<T> {
+  const {
+    orgId,
+    withOrg = true,
+    redirectOnUnauthorized = true,
+  } = options;
+
+  const headers = authHeaders({ orgId, withOrg });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+  } catch {
+    throw new ApiRequestError(0, { message: UNREACHABLE_MESSAGE });
+  }
+
+  const data = (await response.json().catch(() => ({}))) as ApiError | T;
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      handleUnauthorized(redirectOnUnauthorized);
+    }
+    throw errorFromBody(response.status, data);
+  }
+
+  return data as T;
+}
+
+/**
+ * GET that returns raw file bytes (CSV exports, evidence downloads and
+ * previews). Sends the same headers as apiFetch. On an error status the
+ * response body is parsed as JSON and thrown as ApiRequestError, since
+ * the API returns Laravel error JSON even for file endpoints.
+ */
+export async function apiDownload(
+  path: string,
+  options: ApiTransportOptions = {},
+): Promise<Blob> {
+  const {
+    orgId,
+    withOrg = true,
+    redirectOnUnauthorized = true,
+  } = options;
+
+  const headers = authHeaders({ orgId, withOrg });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { method: "GET", headers });
+  } catch {
+    throw new ApiRequestError(0, { message: UNREACHABLE_MESSAGE });
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      handleUnauthorized(redirectOnUnauthorized);
+    }
+    const data = (await response.json().catch(() => ({}))) as ApiError;
+    throw errorFromBody(response.status, data);
+  }
+
+  return response.blob();
 }

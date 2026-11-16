@@ -1,12 +1,18 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CarrierController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
+use App\Http\Controllers\Api\V1\EventCategoryController;
+use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\ShipmentController;
+use App\Http\Controllers\Api\V1\ShipmentEventController;
+use App\Http\Controllers\Api\V1\ShipmentImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -57,6 +63,38 @@ Route::prefix('v1')->group(function () {
             Route::get('/invitations', [OrganizationInvitationController::class, 'index']);
             Route::post('/invitations', [OrganizationInvitationController::class, 'store']);
             Route::delete('/invitations/{invitation}', [OrganizationInvitationController::class, 'destroy']);
+
+            Route::get('/carriers', [CarrierController::class, 'index']);
+            Route::post('/carriers', [CarrierController::class, 'store']);
+            Route::put('/carriers/{carrier}', [CarrierController::class, 'update']);
+
+            // Fixed shipment paths must come before /shipments/{shipment},
+            // or "export" and "import" would bind as a shipment id.
+            Route::get('/shipments/export', [ShipmentController::class, 'export']);
+            Route::post('/shipments/import/preview', [ShipmentImportController::class, 'preview']);
+            Route::post('/shipments/import/confirm', [ShipmentImportController::class, 'confirm']);
+            Route::get('/shipments', [ShipmentController::class, 'index']);
+            Route::post('/shipments', [ShipmentController::class, 'store']);
+            Route::get('/shipments/{shipment}', [ShipmentController::class, 'show']);
+            Route::put('/shipments/{shipment}', [ShipmentController::class, 'update']);
+            Route::post('/shipments/{shipment}/archive', [ShipmentController::class, 'archive']);
+
+            Route::get('/shipments/{shipment}/events', [ShipmentEventController::class, 'index']);
+            Route::post('/shipments/{shipment}/events', [ShipmentEventController::class, 'store']);
+
+            Route::get('/event-categories', [EventCategoryController::class, 'index']);
+            Route::post('/event-categories', [EventCategoryController::class, 'store']);
+
+            Route::get('/events/{event}', [ShipmentEventController::class, 'show']);
+            Route::put('/events/{event}', [ShipmentEventController::class, 'update']);
+            Route::delete('/events/{event}', [ShipmentEventController::class, 'destroy']);
+
+            Route::get('/evidence', [EvidenceFileController::class, 'index']);
+            Route::post('/evidence', [EvidenceFileController::class, 'store']);
+            Route::get('/evidence/{evidence}', [EvidenceFileController::class, 'show']);
+            Route::get('/evidence/{evidence}/download', [EvidenceFileController::class, 'download']);
+            Route::put('/evidence/{evidence}/verification', [EvidenceFileController::class, 'verify']);
+            Route::delete('/evidence/{evidence}', [EvidenceFileController::class, 'destroy']);
         });
     });
 });

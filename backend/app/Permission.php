@@ -30,11 +30,13 @@ enum Permission: string
     // Shipment events (enforced from Milestone 2)
     case CreateEvents = 'create-events';
     case EditEvents = 'edit-events';
+    case DeleteEvents = 'delete-events';
     case ViewEvents = 'view-events';
 
     // Evidence (enforced from Milestone 2)
     case UploadEvidence = 'upload-evidence';
     case DeleteEvidence = 'delete-evidence';
+    case VerifyEvidence = 'verify-evidence';
     case ViewEvidence = 'view-evidence';
 
     // Claims (enforced from Milestone 3)

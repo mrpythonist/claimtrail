@@ -1,9 +1,9 @@
 # Security
 
 ClaimTrail stores commercially sensitive transportation records. This
-document lists the controls in place in Milestone 1 and the review work
-that is still open. Having controls does not mean the product is compliant
-with any regulation; no compliance is claimed.
+document lists the controls in place in Milestones 1 and 2 and the review
+work that is still open. Having controls does not mean the product is
+compliant with any regulation; no compliance is claimed.
 
 ## Controls in place
 
@@ -52,6 +52,24 @@ with any regulation; no compliance is claimed.
 - `APP_DEBUG` must be `false` in production so error pages do not leak
   internals.
 
+### File uploads (Milestone 2)
+
+- Uploads are capped at 20 MB and restricted to document and image
+  types (pdf, jpg, jpeg, png, webp, doc, docx, xls, xlsx, csv, txt).
+  The `mimes` rule checks the file's actual contents, so a renamed
+  executable does not pass as a PDF.
+- Files are stored on a private disk (`storage/app/private` locally,
+  S3 in production) under generated keys. The original filename is
+  metadata only and never becomes a path.
+- There are no permanent public URLs. Every download and preview goes
+  through an authorized controller route that checks organization
+  membership and the `view-evidence` permission. On S3 the route
+  redirects to a 5-minute signed URL.
+- The storage key and disk name are never exposed in API responses.
+- Uploads, downloads, verification, and deletion are all
+  permission-gated (`upload-evidence`, `view-evidence`,
+  `verify-evidence`, `delete-evidence`).
+
 ### Secrets
 
 - No secrets are committed. `.env` files are git-ignored; only
@@ -72,11 +90,13 @@ product handles real customer data.
 3. **Security headers.** No Content-Security-Policy, HSTS, or similar
    headers are configured yet. Add them at the nginx or Next.js config
    level before production.
-4. **Audit trail.** Milestone 1 has no audit logging. It arrives in
-   Milestone 4; until then, membership and invitation changes are not
-   recorded beyond database timestamps.
-5. **File uploads.** No uploads exist yet. Milestone 2 must add type
-   validation, size limits, private storage, and signed download URLs.
+4. **Audit trail.** There is no append-only audit trail yet. It arrives
+   in Milestone 4. Until then, membership and invitation changes are not
+   recorded beyond database timestamps, and the only deletion record is
+   a log line when an evidence file is deleted.
+5. **Upload scanning.** Uploaded files are type-checked by content but
+   not scanned for malware. Add antivirus scanning before the product
+   handles uploads from untrusted users.
 6. **Penetration test.** No external security review has been done.
 7. **Legal documents.** The privacy policy and terms of service are
    placeholders marked for legal review.

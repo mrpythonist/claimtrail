@@ -74,10 +74,11 @@ backend/
 
 `config/permissions.php` maps each role to its permissions. `Permission`
 is a string-backed enum with the full vocabulary, including permissions
-for modules that do not exist yet (shipments, claims, and so on). Mapping
+for modules that do not exist yet (claims, deadlines, and so on). Mapping
 a permission does not create the feature; it only means the role model is
 complete from the start and later modules enforce against the same
-vocabulary.
+vocabulary. Shipment, event, and evidence permissions are enforced from
+Milestone 2.
 
 `AppServiceProvider` registers one gate per permission. Controllers and
 policies call `Gate::authorize('manage-members', $organization)` or
@@ -107,20 +108,25 @@ frontend/
       privacy/ terms/        Placeholders, marked for legal review
       (app)/                Authenticated route group (guarded layout)
         dashboard/
+        shipments/           List, create, detail, edit, CSV import
+        evidence/            Evidence library
         settings/
           organization/ members/ profile/
           organizations/new/
     components/
-      ui/                    Button, Input, Select, Card, Badge, Alert,
+      ui/                    Button, Input, Textarea, Card, Badge, Alert,
                              Spinner, EmptyState, Modal, Table, PageHeader
+      shipments/             ShipmentForm, EventForm (shared by pages)
       layout/                AppShell (sidebar, org switcher, user menu),
                              AuthLayout (centered auth card)
     lib/
-      api.ts                 Typed fetch wrapper, token and org headers
+      api.ts                 Typed fetch wrapper, token and org headers;
+                             apiUpload for multipart, apiDownload for files
       auth.tsx               AuthProvider, login/logout, org selection
       permissions.ts         The single frontend role to capability map
       validation.ts          Client-side form validation (backend is authoritative)
       types.ts               Shared API types
+      shipments.ts           Shipment status chain, labels, file helpers
       timezones.ts           Timezone choices
 ```
 

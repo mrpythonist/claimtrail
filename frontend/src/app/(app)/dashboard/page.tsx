@@ -16,18 +16,6 @@ import type { DashboardData, Organization } from "@/lib/types";
 
 const UPCOMING_MODULES = [
   {
-    title: "Shipments",
-    description: "Loads, appointments, rates, and status, with CSV import and export.",
-  },
-  {
-    title: "Events",
-    description: "Detention, layover, TONU, lumper, and other charge events per shipment.",
-  },
-  {
-    title: "Evidence",
-    description: "Rate confirmations, bills of lading, receipts, and photos, stored privately.",
-  },
-  {
     title: "Claims",
     description: "Claim workflow from potential opportunity through submission and payment.",
   },
@@ -212,11 +200,62 @@ function DashboardContent({ org }: { org: Organization }) {
         </Card>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Shipments</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.shipments_total}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              <Link href="/shipments" className="text-brand-700 hover:underline">
+                View shipments
+              </Link>
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Shipments with events</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.shipments_with_events}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {data.counts.events_total} events in total
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Open events</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.events_open}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Potential or under review
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Evidence files</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.evidence_total}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              <Link href="/evidence" className="text-brand-700 hover:underline">
+                View evidence
+              </Link>
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold text-slate-900">What comes next</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Milestone 1 covers accounts, organizations, and members. The modules
-          below arrive in later milestones.
+          Shipments, events, and evidence are live. The modules below arrive
+          in later milestones.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {UPCOMING_MODULES.map((module) => (

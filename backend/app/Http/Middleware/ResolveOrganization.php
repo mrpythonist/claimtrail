@@ -28,6 +28,12 @@ class ResolveOrganization
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Start clean: the singleton survives across requests in
+        // long-running processes and in tests, so a previous request's
+        // organization must never leak into this one's membership
+        // check or tenant scope.
+        app(CurrentOrganization::class)->set(null);
+
         $organizationId = $request->header('X-Organization-Id');
 
         if (empty($organizationId)) {

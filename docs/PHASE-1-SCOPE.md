@@ -11,10 +11,10 @@ which of the 14 specified modules are done and which are still to come.
 | 1 | Authentication | M1 | Done |
 | 2 | Multi-tenant organizations | M1 | Done |
 | 3 | Role-based access control | M1 | Done |
-| 4 | Dashboard | M1 (overview) / M4 (full metrics) | Partial: member and invitation counts only |
-| 5 | Shipment management | M2 | Not started |
-| 6 | Shipment events | M2 | Not started |
-| 7 | Evidence management | M2 | Not started |
+| 4 | Dashboard | M1 (overview) / M2 (shipments) / M4 (full metrics) | Partial: member, invitation, shipment, event, and evidence counts; no claim or financial figures yet |
+| 5 | Shipment management | M2 | Done |
+| 6 | Shipment events | M2 | Done |
+| 7 | Evidence management | M2 | Done |
 | 8 | Claim management | M3 | Not started |
 | 9 | Evidence requirements and readiness | M3 | Not started |
 | 10 | Deadline management | M3 | Not started |
@@ -52,16 +52,37 @@ which of the 14 specified modules are done and which are still to come.
 - Tests: 51 backend feature tests, 16 frontend tests, production build
   verified, lint clean.
 
-## Milestone 2: shipments, events, evidence (planned)
+## Milestone 2: shipments, events, evidence (done)
 
-- Shipment CRUD with statuses, search, filter, sort, pagination, CSV
-  import (mapping, validation, duplicate detection, preview, row errors)
-  and CSV export.
-- Shipment events: detention, layover, TONU, lumper, additional stop,
-  additional miles, other. Multiple events per shipment.
-- Evidence: secure upload, type and size validation, private storage,
-  signed download URLs, categorization, verification status.
-- Extends the dashboard with shipment and event counts.
+- Carriers: list, create, update. Shipments reference a carrier
+  optionally. No carrier delete endpoint yet.
+- Shipment CRUD with forward-only status transitions
+  (draft, planned, in transit, delivered, completed), archiving
+  (one-way, archived shipments are read-only), search, filters, sorting,
+  pagination.
+- CSV import in two steps: preview with column mapping, per-row
+  validation errors, and duplicate detection (against the database and
+  within the file), then confirm from the server-side preview. Only
+  valid, non-duplicate rows are created, and the summary reports what
+  happened to every selected row.
+- CSV export streaming the filtered list.
+- Shipment events: seven system categories (detention, layover, TONU,
+  lumper, additional stop, additional miles, other) plus custom
+  organization categories. Multiple events per shipment. Duration
+  computed from start and end times. Statuses: potential, under review,
+  dismissed. Events are potential opportunities only.
+- Evidence: upload with type and size validation (20 MB max), private
+  local storage in development with S3 configured for production,
+  authorized download and inline preview, categorization, verification
+  status. No permanent public URLs. Evidence deletion writes a log line;
+  the full audit trail arrives in Milestone 4.
+- Dashboard extended with shipment, event, and evidence counts.
+- Pages: shipments list, create, detail (with events and evidence),
+  edit, CSV import flow, evidence library.
+- Tests: 51 new backend feature tests (102 total), 21 new frontend
+  tests (37 total), production build verified, lint clean.
+- Known gaps: no carrier deletion, no unarchive, no evidence link to
+  claims yet (claims arrive in Milestone 3), no browser end-to-end tests.
 
 ## Milestone 3: claims, readiness, deadlines, PDF (planned)
 

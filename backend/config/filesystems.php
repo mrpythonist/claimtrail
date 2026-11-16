@@ -38,6 +38,17 @@ return [
             'report' => false,
         ],
 
+        // Private disk for evidence files. Files here are never served
+        // by URL: the evidence download controller streams them after
+        // checking organization membership and permissions.
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

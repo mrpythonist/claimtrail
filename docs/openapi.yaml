@@ -3,10 +3,11 @@ info:
   title: ClaimTrail API
   version: 1.0.1
   description: >
-    Multi-tenant transportation revenue recovery API. Milestone 1 covers
-    authentication, organizations, members, invitations, and the dashboard
-    overview. Later milestones add shipments, events, evidence, claims,
-    deadlines, PDF packages, notifications, and reports.
+    Multi-tenant transportation revenue recovery API. Milestones 1 and 2
+    cover authentication, organizations, members, invitations, the
+    dashboard overview, carriers, shipments, CSV import and export,
+    shipment events, event categories, and evidence. Later milestones add
+    claims, deadlines, PDF packages, notifications, and reports.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -18,6 +19,10 @@ tags:
   - name: Members
   - name: Invitations
   - name: Dashboard
+  - name: Carriers
+  - name: Shipments
+  - name: Events
+  - name: Evidence
 paths:
   /auth/register:
     post:
@@ -537,6 +542,689 @@ paths:
                 $ref: "#/components/schemas/Message"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /carriers:
+    get:
+      tags: [Carriers]
+      summary: List carriers (requires view-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated carriers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Carrier"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Carriers]
+      summary: Create a carrier (requires create-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 255 }
+                contact_name: { type: string, maxLength: 255, nullable: true }
+                contact_email: { type: string, format: email, maxLength: 255, nullable: true }
+                contact_phone: { type: string, maxLength: 255, nullable: true }
+                dot_number: { type: string, maxLength: 255, nullable: true }
+                notes: { type: string, maxLength: 5000, nullable: true }
+      responses:
+        "201":
+          description: Carrier created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Carrier"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /carriers/{carrier}:
+    put:
+      tags: [Carriers]
+      summary: Update a carrier (requires edit-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: carrier
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 255 }
+                contact_name: { type: string, maxLength: 255, nullable: true }
+                contact_email: { type: string, format: email, maxLength: 255, nullable: true }
+                contact_phone: { type: string, maxLength: 255, nullable: true }
+                dot_number: { type: string, maxLength: 255, nullable: true }
+                notes: { type: string, maxLength: 5000, nullable: true }
+      responses:
+        "200":
+          description: Carrier updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Carrier"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments:
+    get:
+      tags: [Shipments]
+      summary: List shipments (requires view-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: search
+          in: query
+          description: Matches reference, broker, and driver name
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ShipmentStatus"
+        - name: carrier_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date_from
+          in: query
+          description: Pickup appointment on or after this date
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Pickup appointment on or before this date
+          schema: { type: string, format: date }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at, pickup_appointment, delivery_appointment, status]
+        - name: direction
+          in: query
+          schema: { type: string, enum: [asc, desc] }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated shipments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Shipment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Shipments]
+      summary: Create a shipment (requires create-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentInput"
+      responses:
+        "201":
+          description: Shipment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Shipment"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/export:
+    get:
+      tags: [Shipments]
+      summary: Export the filtered shipment list as CSV (requires export-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ShipmentStatus"
+        - name: carrier_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /shipments/import/preview:
+    post:
+      tags: [Shipments]
+      summary: Preview a CSV import without creating shipments (requires import-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file, max 5 MB, max 1000 rows
+                mapping:
+                  type: string
+                  description: JSON object of exact header text to shipment field name
+      responses:
+        "200":
+          description: Preview with per-row validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportPreview"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/import/confirm:
+    post:
+      tags: [Shipments]
+      summary: Confirm a previewed import (requires import-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preview_token]
+              properties:
+                preview_token: { type: string }
+                row_indexes:
+                  type: array
+                  items: { type: integer, minimum: 1 }
+                  description: 1-based rows to import; omit to import all valid rows
+      responses:
+        "200":
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportResult"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/{shipment}:
+    get:
+      tags: [Shipments]
+      summary: Show one shipment (requires view-shipments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Shipment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Shipment"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Shipments]
+      summary: Update a shipment (requires edit-shipments)
+      description: >
+        Status changes must follow the transition map (forward one step,
+        or any non-archived status to archived). Archived shipments
+        return 403.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentInput"
+      responses:
+        "200":
+          description: Shipment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Shipment"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/{shipment}/archive:
+    post:
+      tags: [Shipments]
+      summary: Archive a shipment (requires archive-shipments)
+      description: One-way; archived shipments are read-only.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Shipment archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Shipment"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /shipments/{shipment}/events:
+    get:
+      tags: [Events]
+      summary: List events for a shipment (requires view-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShipmentEvent"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Events]
+      summary: Record an event (requires create-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentEventInput"
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShipmentEvent"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /event-categories:
+    get:
+      tags: [Events]
+      summary: List visible event categories (requires view-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: System categories plus the organization's custom ones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventCategory"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Events]
+      summary: Add a custom event category (requires create-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string, maxLength: 255 }
+                description: { type: string, maxLength: 1000, nullable: true }
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EventCategory"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /events/{event}:
+    get:
+      tags: [Events]
+      summary: Show one event (requires view-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShipmentEvent"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Events]
+      summary: Update an event (requires edit-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ShipmentEventInput"
+                - type: object
+                  properties:
+                    status:
+                      $ref: "#/components/schemas/ShipmentEventStatus"
+      responses:
+        "200":
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShipmentEvent"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Events]
+      summary: Delete an event (requires delete-events)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Event deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /evidence:
+    get:
+      tags: [Evidence]
+      summary: List evidence files (requires view-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: shipment_event_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: document_category
+          in: query
+          schema:
+            $ref: "#/components/schemas/EvidenceDocumentCategory"
+        - name: verification_status
+          in: query
+          schema:
+            $ref: "#/components/schemas/EvidenceVerificationStatus"
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated evidence files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EvidenceFile"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Evidence]
+      summary: Upload an evidence file (requires upload-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, shipment_id, document_category]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Max 20 MB; pdf, jpg, jpeg, png, webp, doc, docx, xls, xlsx, csv, txt
+                shipment_id: { type: string, format: uuid }
+                shipment_event_id: { type: string, format: uuid }
+                document_category:
+                  $ref: "#/components/schemas/EvidenceDocumentCategory"
+                description: { type: string, maxLength: 2000 }
+      responses:
+        "201":
+          description: Evidence uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceFile"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /evidence/{evidence}:
+    get:
+      tags: [Evidence]
+      summary: Show one evidence record (requires view-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evidence metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceFile"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Evidence]
+      summary: Delete an evidence file and its stored object (requires delete-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evidence deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /evidence/{evidence}/download:
+    get:
+      tags: [Evidence]
+      summary: Download a file, or preview it inline with ?preview=1 (requires view-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: preview
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: File bytes, or a redirect to a short-lived S3 signed URL
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /evidence/{evidence}/verification:
+    put:
+      tags: [Evidence]
+      summary: Set the verification status (requires verify-evidence)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verification_status]
+              properties:
+                verification_status:
+                  $ref: "#/components/schemas/EvidenceVerificationStatus"
+      responses:
+        "200":
+          description: Verification status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceFile"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 components:
   securitySchemes:
     bearerAuth:
@@ -686,6 +1374,11 @@ components:
             members_active: { type: integer }
             members_inactive: { type: integer }
             invitations_pending: { type: integer }
+            shipments_total: { type: integer }
+            shipments_with_events: { type: integer }
+            events_open: { type: integer }
+            events_total: { type: integer }
+            evidence_total: { type: integer }
     PaginationMeta:
       type: object
       properties:
@@ -693,3 +1386,210 @@ components:
         last_page: { type: integer }
         per_page: { type: integer }
         total: { type: integer }
+    Carrier:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        contact_name: { type: string, nullable: true }
+        contact_email: { type: string, format: email, nullable: true }
+        contact_phone: { type: string, nullable: true }
+        dot_number: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ShipmentStatus:
+      type: string
+      enum: [draft, planned, in_transit, delivered, completed, archived]
+    Shipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        internal_reference: { type: string }
+        external_load_reference: { type: string, nullable: true }
+        broker_or_customer_name: { type: string }
+        carrier_id: { type: string, format: uuid, nullable: true }
+        carrier:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        driver_name: { type: string, nullable: true }
+        driver_contact: { type: string, nullable: true }
+        pickup_location: { type: string, nullable: true }
+        delivery_location: { type: string, nullable: true }
+        pickup_appointment: { type: string, format: date-time, nullable: true }
+        delivery_appointment: { type: string, format: date-time, nullable: true }
+        actual_arrival_at: { type: string, format: date-time, nullable: true }
+        actual_departure_at: { type: string, format: date-time, nullable: true }
+        base_rate: { type: string, nullable: true, description: Decimal string, e.g. "1450.00" }
+        currency: { type: string }
+        status:
+          $ref: "#/components/schemas/ShipmentStatus"
+        status_label: { type: string }
+        notes: { type: string, nullable: true }
+        created_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        events_count: { type: integer }
+        evidence_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ShipmentInput:
+      type: object
+      required: [internal_reference, broker_or_customer_name]
+      properties:
+        internal_reference: { type: string, maxLength: 255 }
+        external_load_reference: { type: string, maxLength: 255, nullable: true }
+        broker_or_customer_name: { type: string, maxLength: 255 }
+        carrier_id: { type: string, format: uuid, nullable: true }
+        driver_name: { type: string, maxLength: 255, nullable: true }
+        driver_contact: { type: string, maxLength: 255, nullable: true }
+        pickup_location: { type: string, maxLength: 500, nullable: true }
+        delivery_location: { type: string, maxLength: 500, nullable: true }
+        pickup_appointment: { type: string, format: date-time, nullable: true }
+        delivery_appointment: { type: string, format: date-time, nullable: true }
+        actual_arrival_at: { type: string, format: date-time, nullable: true }
+        actual_departure_at: { type: string, format: date-time, nullable: true }
+        base_rate: { type: number, minimum: 0, nullable: true }
+        currency: { type: string, minLength: 3, maxLength: 3, nullable: true }
+        status:
+          $ref: "#/components/schemas/ShipmentStatus"
+        notes: { type: string, maxLength: 5000, nullable: true }
+    ImportPreview:
+      type: object
+      properties:
+        preview_token: { type: string }
+        summary:
+          type: object
+          properties:
+            total: { type: integer }
+            valid: { type: integer }
+            invalid: { type: integer }
+            duplicate: { type: integer }
+        columns:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              data: { type: object, description: Mapped shipment fields }
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+              is_duplicate: { type: boolean }
+              valid: { type: boolean }
+    ImportResult:
+      type: object
+      properties:
+        imported: { type: integer }
+        skipped: { type: integer }
+        skipped_rows:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              reason: { type: string }
+    EventCategory:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        label: { type: string }
+        description: { type: string, nullable: true }
+        is_system: { type: boolean }
+    ShipmentEventStatus:
+      type: string
+      enum: [potential, under_review, dismissed]
+    ShipmentEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        shipment_id: { type: string, format: uuid }
+        event_category_id: { type: string, format: uuid }
+        category:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            slug: { type: string }
+            label: { type: string }
+        event_date: { type: string, format: date }
+        start_time: { type: string, nullable: true, description: HH:MM }
+        end_time: { type: string, nullable: true, description: HH:MM }
+        duration_minutes: { type: integer, nullable: true }
+        location: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        estimated_amount: { type: string, nullable: true, description: Decimal string }
+        currency: { type: string }
+        notes: { type: string, nullable: true }
+        reported_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        status:
+          $ref: "#/components/schemas/ShipmentEventStatus"
+        status_label: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ShipmentEventInput:
+      type: object
+      required: [event_category_id, event_date]
+      properties:
+        event_category_id: { type: string, format: uuid }
+        event_date: { type: string, format: date }
+        start_time: { type: string, pattern: "^\\d{2}:\\d{2}$", nullable: true }
+        end_time: { type: string, pattern: "^\\d{2}:\\d{2}$", nullable: true }
+        duration_minutes: { type: integer, minimum: 0, maximum: 10080, nullable: true }
+        location: { type: string, maxLength: 500, nullable: true }
+        description: { type: string, maxLength: 5000, nullable: true }
+        estimated_amount: { type: number, minimum: 0, nullable: true }
+        currency: { type: string, minLength: 3, maxLength: 3, nullable: true }
+        notes: { type: string, maxLength: 5000, nullable: true }
+    EvidenceDocumentCategory:
+      type: string
+      enum:
+        [bill_of_lading, proof_of_delivery, rate_confirmation,
+         arrival_departure_record, appointment_confirmation,
+         broker_communication, driver_photo, receipt, lumper_receipt, other]
+    EvidenceVerificationStatus:
+      type: string
+      enum: [pending, verified, rejected]
+    EvidenceFile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        shipment_id: { type: string, format: uuid }
+        shipment_event_id: { type: string, format: uuid, nullable: true }
+        document_category:
+          $ref: "#/components/schemas/EvidenceDocumentCategory"
+        document_category_label: { type: string }
+        original_filename: { type: string }
+        mime_type: { type: string }
+        file_size: { type: integer }
+        uploaded_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        description: { type: string, nullable: true }
+        verification_status:
+          $ref: "#/components/schemas/EvidenceVerificationStatus"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }

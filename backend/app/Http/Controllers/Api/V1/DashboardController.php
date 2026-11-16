@@ -10,9 +10,9 @@ use Illuminate\Http\Request;
 /**
  * Organization overview for the dashboard.
  *
- * Milestone 1 only reports what exists: members and invitations.
- * Shipment, claim, deadline, and financial figures arrive with their
- * modules and must never be invented here.
+ * Only reports what exists: members, invitations, and (from Milestone
+ * 2) shipments, events, and evidence. Claim, deadline, and financial
+ * figures arrive with their modules and must never be invented here.
  */
 class DashboardController extends Controller
 {
@@ -39,6 +39,11 @@ class DashboardController extends Controller
                     'members_active' => $organization->activeMembers()->count(),
                     'members_inactive' => $organization->members()->where('status', 'inactive')->count(),
                     'invitations_pending' => $organization->pendingInvitations()->count(),
+                    'shipments_total' => $organization->shipments()->count(),
+                    'shipments_with_events' => $organization->shipments()->whereHas('events')->count(),
+                    'events_open' => $organization->shipmentEvents()->where('status', 'potential')->count(),
+                    'events_total' => $organization->shipmentEvents()->count(),
+                    'evidence_total' => $organization->evidenceFiles()->count(),
                 ],
             ],
         ]);

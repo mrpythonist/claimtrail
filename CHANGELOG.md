@@ -5,7 +5,7 @@ Keep a Changelog, and the project follows semantic versioning.
 
 ## [1.0.1] - Unreleased
 
-Phase 1, in progress. Milestones 0 and 1 are complete.
+Phase 1, in progress. Milestones 0, 1, and 2 are complete.
 
 ### Added
 
@@ -31,6 +31,32 @@ Phase 1, in progress. Milestones 0 and 1 are complete.
 - Milestone 1: documentation (README, architecture, database, API,
   OpenAPI, security, development, scope, roadmap) and this changelog.
 - Milestone 1: 51 backend feature tests and 16 frontend tests.
+- Milestone 2: carriers (list, create, update) and shipments (CRUD,
+  forward-only status transitions, archiving, search, filters, sorting,
+  pagination) with tenant isolation and permission checks.
+- Milestone 2: CSV import in two steps (preview with per-row validation
+  errors and duplicate detection, then confirm from the server-side
+  preview) and streaming CSV export honoring the current filters.
+- Milestone 2: shipment events with seven system categories, custom
+  organization categories, duration computed from start and end times,
+  and potential/under-review/dismissed statuses.
+- Milestone 2: evidence uploads (type and size validation, private
+  storage, authorized download and inline preview, categorization,
+  verification status) with a permission-gated evidence library.
+- Milestone 2: dashboard counts for shipments, shipments with events,
+  open events, and evidence. Frontend pages for shipments, shipment
+  detail with events and evidence, CSV import, and the evidence library.
+- Milestone 2: two new permissions (`delete-events`, `verify-evidence`)
+  and shipment export for the billing role, all in the central map.
+- Milestone 2: 51 new backend feature tests and 21 new frontend tests
+  (102 backend and 37 frontend in total).
+
+### Fixed
+
+- Milestone 2: the organization middleware now clears the resolved
+  organization at the start of every request, and membership lookups
+  bypass the tenant scope, so a stale organization cannot leak into a
+  later request in long-running processes or tests.
 
 ### Notes
 

@@ -57,4 +57,36 @@ class Organization extends Model
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now());
     }
+
+    /**
+     * Carriers registered in this organization.
+     */
+    public function carriers(): HasMany
+    {
+        return $this->hasMany(Carrier::class);
+    }
+
+    /**
+     * Shipments belonging to this organization.
+     */
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(Shipment::class);
+    }
+
+    /**
+     * Shipment events belonging to this organization.
+     */
+    public function shipmentEvents(): HasMany
+    {
+        return $this->hasMany(ShipmentEvent::class);
+    }
+
+    /**
+     * Evidence files belonging to this organization.
+     */
+    public function evidenceFiles(): HasMany
+    {
+        return $this->hasMany(EvidenceFile::class);
+    }
 }

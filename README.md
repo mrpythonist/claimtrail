@@ -12,25 +12,35 @@ ClaimTrail never guarantees that a charge is recoverable. Contractual
 eligibility and submission requirements are configured and verified by the
 customer.
 
-## Current status: Milestone 1 (foundation)
+## Current status: Milestone 2 (shipments, events, evidence)
 
-This repository is at Phase 1, v1.0.1, Milestone 1. What exists today:
+This repository is at Phase 1, v1.0.1, Milestone 2. What exists today:
 
 - User registration, login, logout, password reset, and email verification
   (Laravel Sanctum token auth for the Next.js frontend).
 - Multi-tenant organizations with strict data isolation, member invitations,
   member activation and deactivation, and organization switching.
 - Role-based access control with six roles and one central permission map.
+- Shipments: full CRUD, forward-only status transitions, archiving, search,
+  filters, sorting, pagination, CSV import with preview and duplicate
+  detection, and CSV export.
+- Shipment events: the seven system categories plus organization custom
+  categories, duration computed from start and end times, and review
+  statuses. Events are potential opportunities only, never automatic
+  qualifications.
+- Evidence: secure upload with type and size validation, private storage,
+  authorized download and inline preview, categorization, and verification
+  status.
 - An application shell with sidebar navigation, organization switcher, and
-  user menu, plus dashboard, organization settings, members, invitations,
-  and profile pages.
+  user menu, plus dashboard, shipments, evidence library, organization
+  settings, members, invitations, and profile pages.
 - A Docker Compose development setup (backend, frontend, PostgreSQL, Redis,
   queue worker).
-- 51 backend feature tests and 16 frontend tests, all passing.
+- 102 backend feature tests and 37 frontend tests, all passing.
 
-What is not built yet: shipments, events, evidence uploads, claims, evidence
-readiness, deadlines, PDF claim packages, audit trail, notifications, and
-reports. See `docs/PHASE-1-SCOPE.md` for the full milestone plan.
+What is not built yet: claims, evidence readiness, deadlines, PDF claim
+packages, audit trail, notifications, and reports. See
+`docs/PHASE-1-SCOPE.md` for the full milestone plan.
 
 ## Stack
 
@@ -85,8 +95,8 @@ npm run dev                  # http://localhost:3000
 ## Tests
 
 ```sh
-cd backend && php artisan test     # 51 feature tests, SQLite in-memory
-cd frontend && npm test            # 16 component and validation tests
+cd backend && php artisan test     # 102 feature tests, SQLite in-memory
+cd frontend && npm test            # 37 component and validation tests
 cd frontend && npm run build       # production build, includes type check
 ```
 

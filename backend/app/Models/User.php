@@ -62,12 +62,18 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * The user's membership in an organization, or null.
+     *
+     * Bypasses the tenant scope: this lookup names its organization
+     * explicitly, so the resolved current organization must not
+     * filter it out. That matters during organization resolution
+     * itself, when the resolved organization is the one being
+     * checked.
      */
     public function membershipIn(Organization|string $organization): ?OrganizationMember
     {
         $id = $organization instanceof Organization ? $organization->getKey() : $organization;
 
-        return $this->memberships()->where('organization_id', $id)->first();
+        return $this->memberships()->withoutGlobalScope('organization')->where('organization_id', $id)->first();
     }
 
     /**

@@ -62,7 +62,11 @@ npm run dev              # http://localhost:3000
 ## Demo credentials (development only)
 
 After seeding, one demo organization exists (Acme Trucking Co.) with one
-user per role. All demo users share the password `password`.
+user per role, two carriers, three sample shipments, and two sample
+events (detention and lumper on the delivered shipment). No evidence
+rows are seeded: an evidence record without a real file behind it would
+be a broken promise. Upload evidence through the UI or the API instead.
+All demo users share the password `password`.
 
 | Role | Email |
 | ---- | ----- |

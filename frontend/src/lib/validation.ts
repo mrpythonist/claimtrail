@@ -71,3 +71,68 @@ export function validateEmailField(email: string): string | undefined {
   }
   return undefined;
 }
+
+export interface ShipmentForm {
+  internal_reference: string;
+  broker_or_customer_name: string;
+  base_rate: string;
+  currency: string;
+}
+
+export function validateShipmentForm(form: ShipmentForm): FieldErrors {
+  const errors: FieldErrors = {};
+
+  if (!form.internal_reference.trim()) {
+    errors.internal_reference = "Internal reference is required.";
+  }
+
+  if (!form.broker_or_customer_name.trim()) {
+    errors.broker_or_customer_name = "Broker or customer name is required.";
+  }
+
+  if (form.base_rate.trim()) {
+    const amount = Number(form.base_rate.trim());
+    if (Number.isNaN(amount) || amount < 0) {
+      errors.base_rate = "Base rate must be a number of 0 or more.";
+    }
+  }
+
+  if (form.currency.trim() && !/^[A-Za-z]{3}$/.test(form.currency.trim())) {
+    errors.currency = "Currency must be a 3-letter code, for example USD.";
+  }
+
+  return errors;
+}
+
+export interface EventForm {
+  event_category_id: string;
+  event_date: string;
+  start_time: string;
+  end_time: string;
+  estimated_amount: string;
+}
+
+export function validateEventForm(form: EventForm): FieldErrors {
+  const errors: FieldErrors = {};
+
+  if (!form.event_category_id) {
+    errors.event_category_id = "Event category is required.";
+  }
+
+  if (!form.event_date) {
+    errors.event_date = "Event date is required.";
+  }
+
+  if (form.start_time && form.end_time && form.end_time <= form.start_time) {
+    errors.end_time = "End time must be after the start time.";
+  }
+
+  if (form.estimated_amount.trim()) {
+    const amount = Number(form.estimated_amount.trim());
+    if (Number.isNaN(amount) || amount < 0) {
+      errors.estimated_amount = "Estimated amount must be a number of 0 or more.";
+    }
+  }
+
+  return errors;
+}
