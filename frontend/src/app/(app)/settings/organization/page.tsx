@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -99,6 +100,27 @@ function OrganizationForm({ org }: { org: Organization }) {
               </Button>
             )}
           </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Evidence requirements"
+          description="Which documents a claim needs before it is ready to submit."
+        />
+        <CardBody>
+          <p className="text-sm text-slate-600">
+            Requirements are scoped per event type, or apply to every claim.
+            Readiness on each claim is counted against them.
+          </p>
+          <div className="mt-3">
+            <Link
+              href="/settings/evidence-requirements"
+              className="text-sm text-brand-700 hover:underline"
+            >
+              Manage evidence requirements
+            </Link>
+          </div>
         </CardBody>
       </Card>
 

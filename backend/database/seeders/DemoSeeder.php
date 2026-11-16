@@ -2,11 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\ClaimStatus;
 use App\MembershipStatus;
 use App\Models\EventCategory;
 use App\Models\Organization;
 use App\Models\User;
 use App\OrganizationRole;
+use App\Services\ClaimReferenceService;
 use App\ShipmentStatus;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -14,14 +16,21 @@ use Illuminate\Support\Facades\Hash;
 
 /**
  * Development-only demo data: one organization with one user per role,
- * two carriers, three sample shipments, and two sample events.
+ * two carriers, three sample shipments, two sample events, default
+ * evidence requirements, two sample claims, and one sample deadline.
  *
  * All demo users share the password "password". These credentials are
  * documented in docs/DEVELOPMENT.md and must never exist in production.
  * The seeder is idempotent: running it twice does not duplicate users,
- * memberships, carriers, shipments, or events. No evidence rows are
- * seeded: an evidence record without a real file behind it would be
- * a broken promise.
+ * memberships, carriers, shipments, events, requirements, claims, or
+ * deadlines. No evidence rows are seeded: an evidence record without
+ * a real file behind it would be a broken promise. No generated
+ * documents are seeded either: a document row without a PDF behind
+ * it would be the same broken promise.
+ *
+ * The default evidence requirements are illustrative starting points
+ * the customer must verify against their own contracts. They are not
+ * universal rules and never imply a claim is valid.
  */
 class DemoSeeder extends Seeder
 {
@@ -182,6 +191,100 @@ class DemoSeeder extends Seeder
                     'reported_by' => $dispatcher->id,
                 ]
             );
+        }
+
+        $tonu = EventCategory::where('slug', 'tonu')
+            ->whereNull('organization_id')
+            ->first();
+
+        // Illustrative default requirements. A real organization
+        // reviews and changes these in organization settings.
+        $defaultRequirements = [
+            [$detention, 'appointment_confirmation'],
+            [$detention, 'arrival_departure_record'],
+            [$detention, 'broker_communication'],
+            [$lumper, 'lumper_receipt'],
+            [$tonu, 'broker_communication'],
+        ];
+
+        foreach ($defaultRequirements as [$category, $documentCategory]) {
+            if ($category === null) {
+                continue;
+            }
+
+            $organization->evidenceRequirements()->firstOrCreate(
+                [
+                    'event_category_id' => $category->getKey(),
+                    'document_category' => $documentCategory,
+                ],
+                [
+                    'is_required' => true,
+                    'notes' => 'Seeded default. Verify against your contracts.',
+                    'created_by' => $owner->id,
+                ]
+            );
+        }
+
+        $references = app(ClaimReferenceService::class);
+        $billing = User::where('email', 'billing@demo.claimtrail.test')->firstOrFail();
+
+        $detentionEvent = $detention !== null
+            ? $shipment->events()->where('event_category_id', $detention->getKey())->first()
+            : null;
+
+        $detentionClaim = null;
+
+        if ($detentionEvent !== null) {
+            $detentionClaim = $organization->claims()
+                ->where('shipment_event_id', $detentionEvent->getKey())
+                ->first();
+
+            if ($detentionClaim === null) {
+                $detentionClaim = $organization->claims()->create([
+                    'claim_reference' => $references->nextReference($organization),
+                    'shipment_id' => $shipment->getKey(),
+                    'shipment_event_id' => $detentionEvent->getKey(),
+                    'claim_category' => 'detention',
+                    'description' => 'Detention at the Kansas City receiver, four hours past the appointment.',
+                    'requested_amount' => 250.00,
+                    'currency' => 'USD',
+                    'status' => ClaimStatus::UnderReview,
+                    'created_by' => $billing->id,
+                    'updated_by' => $billing->id,
+                ]);
+            }
+        }
+
+        $lumperEvent = $lumper !== null
+            ? $shipment->events()->where('event_category_id', $lumper->getKey())->first()
+            : null;
+
+        if ($lumperEvent !== null && $organization->claims()
+            ->where('shipment_event_id', $lumperEvent->getKey())
+            ->doesntExist()) {
+            $organization->claims()->create([
+                'claim_reference' => $references->nextReference($organization),
+                'shipment_id' => $shipment->getKey(),
+                'shipment_event_id' => $lumperEvent->getKey(),
+                'claim_category' => 'lumper',
+                'description' => 'Lumper fee paid at the receiver.',
+                'requested_amount' => 180.00,
+                'currency' => 'USD',
+                'status' => ClaimStatus::Potential,
+                'created_by' => $billing->id,
+                'updated_by' => $billing->id,
+            ]);
+        }
+
+        if ($detentionClaim !== null && $detentionClaim->deadlines()->doesntExist()) {
+            $detentionClaim->deadlines()->create([
+                'organization_id' => $organization->getKey(),
+                'deadline_at' => now()->addDays(14),
+                'timezone' => 'America/Chicago',
+                'source_reference' => 'Rate confirmation BRK-88412, section 4.',
+                'reminder_days_before' => [7, 3, 1],
+                'status' => 'upcoming',
+            ]);
         }
     }
 }

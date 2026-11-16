@@ -91,7 +91,7 @@ Other errors return `{"message": "..."}` with the appropriate status:
 
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
-| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, and evidence counts. No claim or financial figures exist yet. |
+| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, evidence, claim, and deadline counts. No financial figures exist yet (Milestone 4). |
 
 ### Members (tenant-scoped)
 
@@ -190,6 +190,118 @@ Document categories: `bill_of_lading`, `proof_of_delivery`,
 `rate_confirmation`, `arrival_departure_record`,
 `appointment_confirmation`, `broker_communication`, `driver_photo`,
 `receipt`, `lumper_receipt`, `other`.
+
+### Claims (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/claims` | Yes + org header | Paginated claims (15 per page, max 100). Query: `search` (reference, description, broker reference, shipment reference or broker), `status`, `claim_category`, `shipment_id`, `sort` (`created_at`, `requested_amount`, `status`, `submission_deadline_at`), `direction`, `page`. Requires `view-claims`. |
+| POST | `/claims` | Yes + org header | Create a claim. Body: `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `claim_category` (inherited from the event when omitted), `description`, `requested_amount` (required, greater than zero), `currency` (default `USD`), `internal_notes`, `external_broker_reference`, `submission_deadline_at` (201). The reference is generated per organization (`CLM-YYYY-NNNN`). Requires `create-claims`. |
+| GET | `/claims/{claim}` | Yes + org header | One claim with shipment, event, active deadline, creator, updater, evidence count, and allowed transitions. Requires `view-claims`. |
+| PUT | `/claims/{claim}` | Yes + org header | Update a claim. Amount, currency, category, and event link are frozen once the claim is submitted; notes and the broker reference stay editable until the claim is paid or closed. Status never changes here: use the transition endpoint. Requires `edit-claims`. |
+| POST | `/claims/{claim}/transition` | Yes + org header | Move the claim to `to_status`. Body may include `reason`, `accepted_amount`, `rejection_reason`, `submitted_at`. See the transition rules below. The permission depends on the target (see below). |
+| POST | `/claims/{claim}/record-payment` | Yes + org header | Record a payment and move an accepted or partially accepted claim to `paid`. Body: `recovered_amount` (required, greater than zero), `payment_date` (required), optional `payment_reference`, `reason`. Requires `record-claim-payments`. This is the only route to `paid`. |
+| GET | `/claims/{claim}/history` | Yes + org header | Append-only status history, oldest first. Requires `view-claims`. |
+| GET | `/claims/{claim}/evidence` | Yes + org header | Evidence files attached to the claim. Requires `view-claims`. |
+| POST | `/claims/{claim}/evidence` | Yes + org header | Attach an evidence file. Body: `evidence_file_id`. The file must belong to the claim's shipment (201). Requires `attach-claim-evidence`. |
+| DELETE | `/claims/{claim}/evidence/{evidence}` | Yes + org header | Detach an evidence file. The file itself is not deleted. Requires `attach-claim-evidence`. |
+
+Claim statuses: `potential`, `evidence_required`, `under_review`,
+`ready_to_submit`, `submitted`, `accepted`, `partially_accepted`,
+`rejected`, `paid`, `closed`. Claim categories match the event
+category slugs: `detention`, `layover`, `tonu`, `lumper`,
+`additional_stop`, `additional_miles`, `other`.
+
+Transition map: `potential` to `evidence_required`, `under_review`,
+`closed`; `evidence_required` to `under_review`, `closed`;
+`under_review` to `ready_to_submit`, `evidence_required`, `closed`;
+`ready_to_submit` to `submitted`, `under_review`, `closed`;
+`submitted` to `accepted`, `partially_accepted`, `rejected`;
+`rejected` to `closed`, `under_review`; `paid` to `closed`; `closed`
+is terminal. Accepted and partially accepted never move by generic
+transition: they move to `paid` only through payment recording.
+
+Per-transition rules: submitting stamps `submitted_at` when none is
+given; accepting needs an explicit `accepted_amount` (never defaulted
+from requested); partial acceptance needs an accepted amount below the
+requested amount; rejecting needs a `rejection_reason`; closing before
+submission needs a `reason`. An invalid transition or missing data
+returns 422.
+
+Transition permissions: submitting needs `submit-claims`; marking
+ready, accepting, partially accepting, and rejecting need
+`review-claims`; the remaining moves need `edit-claims`. Moving to
+`paid` through this endpoint is always rejected (403).
+
+Financial fields are kept separate on purpose: `requested_amount` is
+what was asked, `accepted_amount` is what the broker agreed, and
+`recovered_amount` is the cash actually received. Never present one as
+another.
+
+### Evidence readiness (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/claims/{claim}/readiness` | Yes + org header | Live readiness breakdown: `required`, `optional`, `collected`, `missing`, `optional_collected` (value/label pairs), `readiness_percentage`, `readiness_status` (`not_started`, `partial`, `ready`), `has_requirements`, `is_overridden`, `disclaimer`, and `snapshots` (the latest snapshot rows). Requires `view-claims`. |
+| POST | `/claims/{claim}/readiness/override` | Yes + org header | Override the assessment with a mandatory `reason`. Records the reviewer and reason on the snapshot rows and writes a history entry. Requires `review-claims`. |
+
+Readiness counts required document categories against the evidence
+attached to the claim. A claim with no configured requirements reports
+100 percent with `has_requirements: false`. Readiness is informational
+only: it never certifies that a claim is valid or will be accepted.
+Snapshots are rewritten when a claim is marked ready to submit;
+override information survives re-snapshots.
+
+### Evidence requirements (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/evidence-requirements` | Yes + org header | The organization's requirements, global first. Requires `view-claims`. |
+| POST | `/evidence-requirements` | Yes + org header | Create a requirement. Body: `event_category_id` (nullable: null means every event type), `document_category` (required), optional `is_required` (default true), `notes` (201). Requires `manage-evidence-requirements`. |
+| PUT | `/evidence-requirements/{requirement}` | Yes + org header | Update a requirement. Requires `manage-evidence-requirements`. |
+| DELETE | `/evidence-requirements/{requirement}` | Yes + org header | Delete a requirement. Requires `manage-evidence-requirements`. |
+
+A requirement is unique per organization, event category, and document
+category. Seeded defaults (detention needs appointment confirmation,
+arrival/departure record, and broker communication; lumper needs a
+lumper receipt; TONU needs broker communication) are illustrative
+starting points the customer must verify, not contractual rules.
+
+### Deadlines (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/deadlines` | Yes + org header | Active deadlines (25 per page). Query: `status`, `upcoming_days` (deadline within that many days), `page`. Requires `view-deadlines`. |
+| GET | `/deadlines/{deadline}` | Yes + org header | One deadline with its claim. Requires `view-deadlines`. |
+| PUT | `/deadlines/{deadline}` | Yes + org header | Update `deadline_at`, `timezone`, `source_reference`, `reminder_days_before`. Superseded rows cannot be edited. Requires `manage-deadlines`. |
+| POST | `/claims/{claim}/deadline` | Yes + org header | Set the deadline for a claim (201). Body: `deadline_at` (required), `timezone` (required, a real IANA identifier), optional `source_reference`, `reminder_days_before` (array of integers 0-90). Setting a deadline when one is active supersedes the old row and creates a new one. Requires `manage-deadlines`. |
+
+Deadline statuses: `upcoming`, `due_soon`, `overdue`, `met`, `missed`.
+Statuses are recomputed hourly by
+`claimtrail:refresh-deadline-statuses` and on every create/update, in
+the deadline's own timezone: submitted on time is `met`, submitted late
+is `missed`, closed without submission after the deadline is `missed`,
+past deadline unsubmitted is `overdue`, inside the reminder window
+(largest reminder, or 7 days) is `due_soon`, otherwise `upcoming`.
+Deadlines are customer-supplied only: the system never infers one from
+an event type. No notification is sent in Milestone 3; the refresh
+command logs the counts and the API exposes them. Delivery arrives in
+Milestone 4.
+
+### Claim packages (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| POST | `/claims/{claim}/package` | Yes + org header | Generate (or regenerate) the claim package PDF. Body: optional `include_notes` (default false). Creates a queued document record and dispatches the rendering job (202). Requires `generate-claim-packages`. |
+| GET | `/claims/{claim}/package` | Yes + org header | The latest generated document for the claim, or `data: null` when none exists. Requires `view-claims`. |
+| GET | `/documents/{document}/download` | Yes + org header | Download the PDF. Returns 409 while the document is still queued or failed. On S3 this redirects to a 5-minute signed URL. Requires `view-claims`. |
+
+The package contains the claim reference, organization and shipment
+details, event details and timeline, requested and accepted amounts,
+and an evidence index (filenames, categories, verification status;
+originals are referenced, not embedded). Internal notes are included
+only when `include_notes` is true. The footer states the package is
+supporting evidence, not a guarantee of acceptance.
 
 ## Example: register, create an organization, invite someone
 

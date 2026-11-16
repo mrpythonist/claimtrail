@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CarrierController;
+use App\Http\Controllers\Api\V1\ClaimController;
+use App\Http\Controllers\Api\V1\ClaimDeadlineController;
+use App\Http\Controllers\Api\V1\ClaimPackageController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
+use App\Http\Controllers\Api\V1\EvidenceRequirementController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
@@ -95,6 +99,33 @@ Route::prefix('v1')->group(function () {
             Route::get('/evidence/{evidence}/download', [EvidenceFileController::class, 'download']);
             Route::put('/evidence/{evidence}/verification', [EvidenceFileController::class, 'verify']);
             Route::delete('/evidence/{evidence}', [EvidenceFileController::class, 'destroy']);
+
+            Route::get('/claims', [ClaimController::class, 'index']);
+            Route::post('/claims', [ClaimController::class, 'store']);
+            Route::get('/claims/{claim}', [ClaimController::class, 'show']);
+            Route::put('/claims/{claim}', [ClaimController::class, 'update']);
+            Route::post('/claims/{claim}/transition', [ClaimController::class, 'transition']);
+            Route::post('/claims/{claim}/record-payment', [ClaimController::class, 'recordPayment']);
+            Route::get('/claims/{claim}/history', [ClaimController::class, 'history']);
+            Route::get('/claims/{claim}/evidence', [ClaimController::class, 'evidence']);
+            Route::post('/claims/{claim}/evidence', [ClaimController::class, 'attachEvidence']);
+            Route::delete('/claims/{claim}/evidence/{evidence}', [ClaimController::class, 'detachEvidence']);
+            Route::get('/claims/{claim}/readiness', [ClaimController::class, 'readiness']);
+            Route::post('/claims/{claim}/readiness/override', [ClaimController::class, 'overrideReadiness']);
+
+            Route::get('/evidence-requirements', [EvidenceRequirementController::class, 'index']);
+            Route::post('/evidence-requirements', [EvidenceRequirementController::class, 'store']);
+            Route::put('/evidence-requirements/{requirement}', [EvidenceRequirementController::class, 'update']);
+            Route::delete('/evidence-requirements/{requirement}', [EvidenceRequirementController::class, 'destroy']);
+
+            Route::get('/deadlines', [ClaimDeadlineController::class, 'index']);
+            Route::get('/deadlines/{deadline}', [ClaimDeadlineController::class, 'show']);
+            Route::put('/deadlines/{deadline}', [ClaimDeadlineController::class, 'update']);
+            Route::post('/claims/{claim}/deadline', [ClaimDeadlineController::class, 'store']);
+
+            Route::post('/claims/{claim}/package', [ClaimPackageController::class, 'store']);
+            Route::get('/claims/{claim}/package', [ClaimPackageController::class, 'show']);
+            Route::get('/documents/{document}/download', [ClaimPackageController::class, 'download']);
         });
     });
 });

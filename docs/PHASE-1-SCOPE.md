@@ -11,14 +11,14 @@ which of the 14 specified modules are done and which are still to come.
 | 1 | Authentication | M1 | Done |
 | 2 | Multi-tenant organizations | M1 | Done |
 | 3 | Role-based access control | M1 | Done |
-| 4 | Dashboard | M1 (overview) / M2 (shipments) / M4 (full metrics) | Partial: member, invitation, shipment, event, and evidence counts; no claim or financial figures yet |
+| 4 | Dashboard | M1 (overview) / M2 (shipments) / M3 (claims, deadlines) / M4 (full metrics) | Partial: member, invitation, shipment, event, evidence, claim, and deadline counts; no financial figures yet |
 | 5 | Shipment management | M2 | Done |
 | 6 | Shipment events | M2 | Done |
 | 7 | Evidence management | M2 | Done |
-| 8 | Claim management | M3 | Not started |
-| 9 | Evidence requirements and readiness | M3 | Not started |
-| 10 | Deadline management | M3 | Not started |
-| 11 | Claim package generation (PDF) | M3 | Not started |
+| 8 | Claim management | M3 | Done |
+| 9 | Evidence requirements and readiness | M3 | Done |
+| 10 | Deadline management | M3 | Done (notification delivery in M4) |
+| 11 | Claim package generation (PDF) | M3 | Done |
 | 12 | Claim history and audit trail | M4 | Not started |
 | 13 | Notifications | M4 | Not started |
 | 14 | Basic reporting | M4 | Not started |
@@ -84,22 +84,58 @@ which of the 14 specified modules are done and which are still to come.
 - Known gaps: no carrier deletion, no unarchive, no evidence link to
   claims yet (claims arrive in Milestone 3), no browser end-to-end tests.
 
-## Milestone 3: claims, readiness, deadlines, PDF (planned)
+## Milestone 3: claims, readiness, deadlines, PDF (done)
 
-- Claim CRUD with the 10-status workflow and controlled transitions.
-- Evidence requirements per organization, readiness calculation and
-  overrides with audit records.
-- Deadline tracking with timezones and reminder schedules.
-- PDF claim package generation (queued, downloadable, regenerable).
-- Financial recording: requested, accepted, and actually recovered
-  amounts kept separate.
+- Claim CRUD with per-organization references (CLM-YYYY-NNNN) and the
+  10-status workflow. Transitions are enforced by one service with
+  per-transition data rules: submission stamps submitted_at, acceptance
+  needs an explicit accepted amount, partial acceptance needs an amount
+  below requested, rejection needs a reason, closing early needs a
+  reason, and paid is reachable only through payment recording.
+- Append-only claim status history (every transition and payment writes
+  a row). Evidence attach/detach through a pivot, same-shipment only.
+- Requested, accepted, and recovered amounts kept separate. Accepted is
+  never defaulted from requested; recovered is set only by payment
+  recording. Submitted claims freeze amount, currency, category, and
+  event link.
+- Evidence requirements per organization (global or per event category,
+  required or optional) with seeded illustrative defaults. Live
+  readiness calculation (required, collected, missing, percentage,
+  status) with snapshots on review and on marking ready. Overrides
+  record the reviewer and reason, plus a history entry. Readiness is
+  informational only and never certifies a claim.
+- Deadlines: customer-supplied only, with timezone and reminder
+  schedule. One active row per claim; superseded rows kept. Hourly
+  refresh command recomputes upcoming, due soon, overdue, met, and
+  missed in the deadline's own timezone. No notification is sent in
+  this milestone: the command logs the counts and the API exposes
+  them; delivery is Milestone 4 work.
+- PDF claim packages: queued generation (dompdf) onto the private disk,
+  with organization and shipment info, event details and timeline,
+  amounts, an evidence index (originals referenced, not embedded), and
+  a footer disclaimer. Authorized download, regeneration, and an
+  explicit include-notes option (default off).
+- Claim role mapping corrected to the specification: dispatchers do not
+  create claims, billing staff do not review claims, operations
+  managers submit claims. Two new permissions: `attach-claim-evidence`,
+  `manage-evidence-requirements`.
+- Pages: claims list, create, detail, edit, review, deadlines overview,
+  evidence requirements management. Dashboard extended with claim and
+  deadline counts.
+- Tests: 54 new backend feature tests (156 total), production build
+  verified, lint clean.
+- Known gaps: no carrier deletion, no unarchive, no create-category UI
+  (all Milestone 2 gaps, unchanged); S3 package download is code-only
+  with no live bucket; deadline notifications are not wired yet.
 
 ## Milestone 4: audit, notifications, reports (planned)
 
 - Append-only audit trail for shipments, events, evidence, claims,
-  deadlines, membership, and admin actions.
+  deadlines, membership, and admin actions. Claim status history from
+  Milestone 3 feeds into it; the trail itself is the new work.
 - In-app and email notifications with preferences, read state, and
-  idempotent delivery.
+  idempotent delivery. Deadline reminders plug into the refresh command
+  and the reminder schedules stored in Milestone 3.
 - Reports: claims by status and event type, potential/submitted/accepted/
   recovered/rejected/outstanding value, recovery history over time.
   Date filters and CSV export.

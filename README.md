@@ -12,9 +12,9 @@ ClaimTrail never guarantees that a charge is recoverable. Contractual
 eligibility and submission requirements are configured and verified by the
 customer.
 
-## Current status: Milestone 2 (shipments, events, evidence)
+## Current status: Milestone 3 (claims, readiness, deadlines, PDF)
 
-This repository is at Phase 1, v1.0.1, Milestone 2. What exists today:
+This repository is at Phase 1, v1.0.1, Milestone 3. What exists today:
 
 - User registration, login, logout, password reset, and email verification
   (Laravel Sanctum token auth for the Next.js frontend).
@@ -31,16 +31,29 @@ This repository is at Phase 1, v1.0.1, Milestone 2. What exists today:
 - Evidence: secure upload with type and size validation, private storage,
   authorized download and inline preview, categorization, and verification
   status.
+- Claims: full CRUD with per-organization references (CLM-YYYY-NNNN), the
+  10-status workflow with controlled transitions, append-only status
+  history, evidence attach/detach, and separate requested, accepted, and
+  recovered amounts. Payment is recorded separately from acceptance.
+- Evidence readiness: configurable per-organization requirements,
+  live readiness calculation with snapshots, and overrides that record
+  the reviewer and reason. Readiness is informational only and never
+  certifies a claim.
+- Deadlines: customer-supplied submission deadlines with timezones and
+  reminder schedules, recomputed hourly (upcoming, due soon, overdue,
+  met, missed). Deadlines are never inferred from event types.
+- Claim packages: queued PDF generation (dompdf) with an evidence index
+  and timeline, authorized download, and regeneration. Internal notes
+  are excluded unless explicitly requested.
 - An application shell with sidebar navigation, organization switcher, and
-  user menu, plus dashboard, shipments, evidence library, organization
-  settings, members, invitations, and profile pages.
+  user menu, plus dashboard, shipments, claims, deadlines, evidence
+  library, organization settings, members, invitations, and profile pages.
 - A Docker Compose development setup (backend, frontend, PostgreSQL, Redis,
   queue worker).
-- 102 backend feature tests and 37 frontend tests, all passing.
+- 156 backend feature tests and 74 frontend tests, all passing.
 
-What is not built yet: claims, evidence readiness, deadlines, PDF claim
-packages, audit trail, notifications, and reports. See
-`docs/PHASE-1-SCOPE.md` for the full milestone plan.
+What is not built yet: audit trail, notifications, and reports
+(Milestone 4). See `docs/PHASE-1-SCOPE.md` for the full milestone plan.
 
 ## Stack
 
@@ -95,7 +108,7 @@ npm run dev                  # http://localhost:3000
 ## Tests
 
 ```sh
-cd backend && php artisan test     # 102 feature tests, SQLite in-memory
+cd backend && php artisan test     # 156 feature tests, SQLite in-memory
 cd frontend && npm test            # 37 component and validation tests
 cd frontend && npm run build       # production build, includes type check
 ```

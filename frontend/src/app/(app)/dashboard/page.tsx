@@ -16,14 +16,6 @@ import type { DashboardData, Organization } from "@/lib/types";
 
 const UPCOMING_MODULES = [
   {
-    title: "Claims",
-    description: "Claim workflow from potential opportunity through submission and payment.",
-  },
-  {
-    title: "Deadlines",
-    description: "Submission deadlines and reminders, configured per claim.",
-  },
-  {
     title: "Reports",
     description: "Recovery by status, event type, and period, with CSV export.",
   },
@@ -251,11 +243,98 @@ function DashboardContent({ org }: { org: Organization }) {
         </Card>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Open claims</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.claims_open}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {data.counts.claims_total} claims in total
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Ready to submit</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.claims_ready}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              <Link href="/claims" className="text-brand-700 hover:underline">
+                View claims
+              </Link>
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Submitted claims</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.claims_submitted}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Waiting on the broker
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Paid claims</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.claims_paid}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Payment recorded
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Upcoming deadlines</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.deadlines_upcoming}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              <Link href="/deadlines" className="text-brand-700 hover:underline">
+                View deadlines
+              </Link>
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Deadlines due soon</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.deadlines_due_soon}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Needs attention this week
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-500">Overdue deadlines</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900">
+              {data.counts.deadlines_overdue}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Past the submission date
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold text-slate-900">What comes next</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Shipments, events, and evidence are live. The modules below arrive
-          in later milestones.
+          Shipments, events, evidence, claims, and deadlines are live. The
+          module below arrives in a later milestone.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {UPCOMING_MODULES.map((module) => (

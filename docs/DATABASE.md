@@ -200,24 +200,196 @@ Indexes `(organization_id, shipment_id)`,
 `(organization_id, document_category)`, and
 `(organization_id, verification_status)`.
 
-There is no `claim_id` column yet. Claims arrive in Milestone 3, and
-that milestone's migration adds a nullable claim reference.
+Evidence links to claims through the `claim_evidence` pivot (Milestone
+3), not through a `claim_id` column: one file can support several
+claims, which a single foreign key could not represent.
+
+## Tables in Milestone 3
+
+### claim_sequences
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | bigint, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| year | smallint | Calendar year of the sequence |
+| last_number | unsigned int, default 0 | Last issued number for that year |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, year)`. `ClaimReferenceService` locks the row
+(`lockForUpdate`) inside a transaction before incrementing, so two
+concurrent claims never share a reference. References look like
+`CLM-2026-0001`.
+
+### claims
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_reference | string | Unique per organization, generated |
+| shipment_id | uuid, FK to shipments, cascade on delete | |
+| shipment_event_id | uuid, FK to shipment_events, nullable, null on delete | |
+| claim_category | string | One of the `ClaimCategory` values |
+| description | text, nullable | |
+| requested_amount | decimal(12,2) | Required, greater than zero |
+| currency | string(3), default `USD` | |
+| accepted_amount | decimal(12,2), nullable | Set only on acceptance, never defaulted |
+| recovered_amount | decimal(12,2), nullable | Actual cash received, set only by payment recording |
+| internal_notes | text, nullable | Excluded from claim packages unless explicitly requested |
+| external_broker_reference | string, nullable | |
+| submission_deadline_at | datetime, nullable | Simple field on the claim; the full deadline record is in `claim_deadlines` |
+| submitted_at | timestamp, nullable | Stamped on submission |
+| approved_at | timestamp, nullable | Stamped on acceptance |
+| rejected_at | timestamp, nullable | Stamped on rejection |
+| paid_at | timestamp, nullable | Set by payment recording |
+| rejection_reason | text, nullable | Required when rejecting |
+| payment_reference | string, nullable | |
+| status | string, default `potential` | The ten `ClaimStatus` values |
+| created_by | bigint, FK to users, nullable, null on delete | |
+| updated_by | bigint, FK to users, nullable, null on delete | |
+| created_at, updated_at | timestamps | |
+
+Constraints and indexes:
+
+- Unique `(organization_id, claim_reference)`.
+- Index `(organization_id, status)`, `(organization_id, shipment_id)`,
+  `(organization_id, claim_category)`.
+
+Transitions are enforced in the application
+(`ClaimTransitionService` plus the `ClaimStatus` map). Paid is
+reachable only through the record-payment endpoint, never through a
+generic status change. The three money columns are kept separate on
+purpose: requested is what was asked, accepted is what the broker
+agreed, recovered is what was actually paid.
+
+### claim_status_histories
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| from_status | string, nullable | Null for the first entry of a claim |
+| to_status | string | |
+| changed_by | bigint, FK to users, nullable, null on delete | |
+| reason | text, nullable | |
+| metadata | json, nullable | Amounts in effect at the transition |
+| created_at, updated_at | timestamps | |
+
+Append-only: no update or delete endpoints exist. Index
+`(organization_id, claim_id)` and `(claim_id, created_at)`. Readiness
+overrides also write a row here (same from and to status, with an
+`action` of `readiness_override` in metadata) until the full audit
+trail arrives in Milestone 4.
+
+### claim_evidence
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | bigint, PK | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| evidence_file_id | uuid, FK to evidence_files, cascade on delete | |
+| attached_by | bigint, FK to users, nullable, null on delete | |
+| created_at, updated_at | timestamps | |
+
+Unique `(claim_id, evidence_file_id)`. The API additionally requires
+the evidence to belong to the claim's shipment.
+
+### evidence_requirements
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| event_category_id | uuid, FK to event_categories, nullable, null on delete | Null means the requirement applies to every event type |
+| document_category | string | One of the `EvidenceDocumentCategory` values |
+| is_required | boolean, default true | False means optional (informational only) |
+| notes | text, nullable | |
+| created_by | bigint, FK to users, nullable, null on delete | |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, event_category_id, document_category)`.
+Because unique indexes treat nulls as distinct, duplicate global
+requirements (null category) are prevented in application validation,
+not by the constraint. Index `(organization_id, event_category_id)`.
+
+### claim_requirements
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| document_category | string | One of the `EvidenceDocumentCategory` values |
+| is_required | boolean, default true | |
+| is_fulfilled | boolean, default false | |
+| evidence_file_id | uuid, FK to evidence_files, nullable, null on delete | The file that fulfils this row, if any |
+| snapshot_at | datetime | When the snapshot was taken |
+| overridden_by | bigint, FK to users, nullable, null on delete | |
+| override_reason | text, nullable | |
+| overridden_at | datetime, nullable | |
+| created_at, updated_at | timestamps | |
+
+Unique `(claim_id, document_category)`. Snapshots are rewritten when
+readiness is checked during review and when a claim is marked ready to
+submit; override information survives re-snapshots.
+
+### claim_deadlines
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| deadline_at | datetime | Customer-supplied, never inferred |
+| timezone | string | IANA timezone; status is judged in this timezone |
+| source_reference | text, nullable | Where the customer got the deadline |
+| reminder_days_before | json, nullable | Array of integers, 0 to 90 |
+| status | string, default `upcoming` | `upcoming`, `due_soon`, `overdue`, `met`, `missed` |
+| superseded_at | datetime, nullable | Set when a newer deadline replaces this row |
+| created_at, updated_at | timestamps | |
+
+Indexes `(organization_id, status)`, `(organization_id, deadline_at)`,
+`(claim_id, superseded_at)`. One active (non-superseded) row per claim
+is enforced in the application.
+
+### generated_documents
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| document_type | string, default `claim_package` | |
+| storage_key | string, nullable | Null until the job renders the PDF |
+| disk | string, nullable | `private` locally, `s3` in production |
+| file_size | unsigned bigint, nullable | Bytes |
+| generated_by | bigint, FK to users, nullable, null on delete | |
+| includes_internal_notes | boolean, default false | |
+| status | string, default `queued` | `queued`, `ready`, `failed` |
+| error_message | text, nullable | Set when rendering fails |
+| generated_at | datetime, nullable | |
+| created_at, updated_at | timestamps | |
+
+Indexes `(organization_id, claim_id)` and `(claim_id, status)`.
 
 ## Conventions
 
 - UUID primary keys for organizations, invitations, carriers, shipments,
-  events, categories, and evidence files, because those ids appear in
-  URLs, headers, and emails. Internal join rows (memberships) use
-  auto-increment ids.
+  events, categories, evidence files, claims, claim histories,
+  requirements, deadlines, and generated documents, because those ids
+  appear in URLs, headers, and emails. Internal join rows (memberships,
+  claim evidence links, claim sequences) use auto-increment ids.
 - Foreign keys with explicit delete behavior on every relationship.
 - `organization_id` on every tenant-owned table, with an index.
 - Money is stored as `decimal(12,2)` with a `currency` column, never as
   a float. Amounts in Milestone 2 (`base_rate`, `estimated_amount`) are
-  estimates or agreed rates, never recovered revenue.
+  estimates or agreed rates, never recovered revenue. Claim amounts keep
+  requested, accepted, and recovered in separate columns for the same
+  reason.
 
 ## Tables planned for later milestones
 
-Evidence requirements, claim requirements, claims, claim evidence,
-claim status histories, claim deadlines, notifications, notification
-preferences, audit logs, generated documents. See `docs/PHASE-1-SCOPE.md`
-for the milestone each one belongs to.
+Notifications, notification preferences, audit logs. See
+`docs/PHASE-1-SCOPE.md` for the milestone each one belongs to.

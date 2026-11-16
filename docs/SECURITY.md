@@ -1,9 +1,9 @@
 # Security
 
 ClaimTrail stores commercially sensitive transportation records. This
-document lists the controls in place in Milestones 1 and 2 and the review
-work that is still open. Having controls does not mean the product is
-compliant with any regulation; no compliance is claimed.
+document lists the controls in place in Milestones 1, 2, and 3 and the
+review work that is still open. Having controls does not mean the
+product is compliant with any regulation; no compliance is claimed.
 
 ## Controls in place
 
@@ -70,6 +70,34 @@ compliant with any regulation; no compliance is claimed.
   permission-gated (`upload-evidence`, `view-evidence`,
   `verify-evidence`, `delete-evidence`).
 
+### Claims and money (Milestone 3)
+
+- Claim status changes go through one service (`ClaimTransitionService`)
+  that enforces the transition map and the per-transition data rules.
+  Controllers never assign a claim status directly.
+- Payment is the only route to `paid`: the transition endpoint rejects
+  moves to paid, and payment recording requires an accepted claim, a
+  payment date, and a recovered amount greater than zero.
+- Accepted amounts are never defaulted from requested amounts, and
+  recovered amounts are never set automatically. The three figures are
+  separate columns and separate API fields.
+- A claim's amount, currency, category, and event link are frozen once
+  the claim is submitted. Closed and paid claims are immutable.
+- Evidence can only be attached to a claim from the claim's own
+  shipment, and only within the same organization.
+- Claim references are generated per organization from a locked
+  sequence counter, so concurrent claims cannot collide.
+
+### Generated documents (Milestone 3)
+
+- Claim package PDFs are stored on the private disk under generated
+  keys and served only through the authorized download route, with the
+  same S3 signed-URL behavior as evidence downloads.
+- Internal notes are excluded from packages unless the requester
+  explicitly asks for them.
+- The package states in its footer that it is supporting evidence, not
+  a guarantee of acceptance.
+
 ### Secrets
 
 - No secrets are committed. `.env` files are git-ignored; only
@@ -90,10 +118,12 @@ product handles real customer data.
 3. **Security headers.** No Content-Security-Policy, HSTS, or similar
    headers are configured yet. Add them at the nginx or Next.js config
    level before production.
-4. **Audit trail.** There is no append-only audit trail yet. It arrives
-   in Milestone 4. Until then, membership and invitation changes are not
-   recorded beyond database timestamps, and the only deletion record is
-   a log line when an evidence file is deleted.
+4. **Audit trail.** There is no full append-only audit trail yet. It
+   arrives in Milestone 4. Until then, membership and invitation
+   changes are not recorded beyond database timestamps, the only
+   deletion record is a log line when an evidence file is deleted, and
+   claim status changes are recorded only in `claim_status_histories`
+   (which is append-only but covers claims, not the whole product).
 5. **Upload scanning.** Uploaded files are type-checked by content but
    not scanned for malware. Add antivirus scanning before the product
    handles uploads from untrusted users.

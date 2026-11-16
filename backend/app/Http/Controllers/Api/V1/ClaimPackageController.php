@@ -1,0 +1,145 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\GeneratedDocumentStatus;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\GeneratedDocumentResource;
+use App\Jobs\GenerateClaimPackage;
+use App\Models\Claim;
+use App\Models\GeneratedDocument;
+use App\Models\Organization;
+use App\Services\ClaimPackageService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class ClaimPackageController extends Controller
+{
+    /**
+     * Generate (or regenerate) the claim package PDF.
+     *
+     * The request creates a queued document record and dispatches the
+     * rendering job. Internal notes are excluded unless the caller
+     * explicitly asks for them. Regenerating supersedes nothing
+     * immediately: the previous ready document stays downloadable
+     * until the new one is ready.
+     */
+    public function store(Request $request, Claim $claim): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        if ($claim->organization_id !== $organization->getKey()) {
+            abort(404);
+        }
+
+        Gate::authorize('generatePackage', $claim);
+
+        $validated = $request->validate([
+            'include_notes' => ['sometimes', 'boolean'],
+        ]);
+
+        $document = GeneratedDocument::create([
+            'organization_id' => $organization->getKey(),
+            'claim_id' => $claim->getKey(),
+            'generated_by' => $request->user()->id,
+            'includes_internal_notes' => $validated['include_notes'] ?? false,
+            'status' => GeneratedDocumentStatus::Queued,
+        ]);
+
+        GenerateClaimPackage::dispatch($document->getKey());
+
+        return response()->json([
+            'data' => new GeneratedDocumentResource($document->fresh()->load('generator')),
+        ], 202);
+    }
+
+    /**
+     * The latest generated document for a claim, if any.
+     */
+    public function show(Request $request, Claim $claim): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        if ($claim->organization_id !== $organization->getKey()) {
+            abort(404);
+        }
+
+        Gate::authorize('view', $claim);
+
+        $document = $claim->documents()->with('generator')->first();
+
+        if ($document === null) {
+            return response()->json([
+                'data' => null,
+                'message' => 'No claim package has been generated for this claim yet.',
+            ]);
+        }
+
+        return response()->json([
+            'data' => new GeneratedDocumentResource($document),
+        ]);
+    }
+
+    /**
+     * Download a generated claim package PDF.
+     *
+     * Access is authorized on every request. On the local disk the
+     * file streams through this response; on S3 the client is
+     * redirected to a short-lived signed URL. There is no permanent
+     * public URL for any generated document.
+     */
+    public function download(
+        Request $request,
+        GeneratedDocument $document,
+        ClaimPackageService $packages,
+    ): BinaryFileResponse|RedirectResponse|StreamedResponse {
+        $organization = $this->organization($request);
+
+        if ($document->organization_id !== $organization->getKey()) {
+            abort(404);
+        }
+
+        Gate::authorize('view', $document);
+
+        if (! $document->isReady()) {
+            abort(409, 'The claim package is not ready to download yet.');
+        }
+
+        $disk = Storage::disk($document->disk);
+
+        if (! $disk->exists($document->storage_key)) {
+            Log::warning('Generated document missing from storage.', [
+                'document_id' => $document->getKey(),
+                'organization_id' => $organization->getKey(),
+            ]);
+
+            abort(404, 'The file is no longer available.');
+        }
+
+        $filename = $packages->fileName($document->claim);
+
+        if ($document->disk === 's3') {
+            return redirect()->away($disk->temporaryUrl(
+                $document->storage_key,
+                now()->addMinutes(5),
+                ['ResponseContentDisposition' => 'attachment; filename="'.$filename.'"']
+            ));
+        }
+
+        return $disk->download($document->storage_key, $filename);
+    }
+
+    /**
+     * The organization resolved by the ResolveOrganization middleware.
+     */
+    protected function organization(Request $request): Organization
+    {
+        return $request->attributes->get('organization');
+    }
+}

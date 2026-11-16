@@ -83,6 +83,14 @@ export interface DashboardData {
     events_open: number;
     events_total: number;
     evidence_total: number;
+    claims_total: number;
+    claims_open: number;
+    claims_ready: number;
+    claims_submitted: number;
+    claims_paid: number;
+    deadlines_upcoming: number;
+    deadlines_due_soon: number;
+    deadlines_overdue: number;
   };
 }
 
@@ -234,4 +242,167 @@ export interface ImportConfirmResult {
   imported: number;
   skipped: number;
   skipped_rows: { index: number; reason: string }[];
+}
+
+export type ClaimStatus =
+  | "potential"
+  | "evidence_required"
+  | "under_review"
+  | "ready_to_submit"
+  | "submitted"
+  | "accepted"
+  | "partially_accepted"
+  | "rejected"
+  | "paid"
+  | "closed";
+
+export type ClaimCategory =
+  | "detention"
+  | "layover"
+  | "tonu"
+  | "lumper"
+  | "additional_stop"
+  | "additional_miles"
+  | "other";
+
+export interface Claim {
+  id: string;
+  organization_id: string;
+  claim_reference: string;
+  shipment_id: string;
+  shipment: {
+    id: string;
+    internal_reference: string;
+    broker_or_customer_name: string;
+    status: string;
+  } | null;
+  shipment_event_id: string | null;
+  event: {
+    id: string;
+    event_date: string;
+    description: string | null;
+  } | null;
+  claim_category: ClaimCategory;
+  claim_category_label: string;
+  description: string | null;
+  requested_amount: string;
+  accepted_amount: string | null;
+  recovered_amount: string | null;
+  currency: string;
+  internal_notes: string | null;
+  external_broker_reference: string | null;
+  submission_deadline_at: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  paid_at: string | null;
+  rejection_reason: string | null;
+  payment_reference: string | null;
+  status: ClaimStatus;
+  status_label: string;
+  allowed_transitions: { value: string; label: string }[];
+  created_by: { id: number; name: string } | null;
+  updated_by: { id: number; name: string } | null;
+  evidence_count: number;
+  active_deadline: ClaimDeadline | null;
+  latest_document: GeneratedDocument | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClaimStatusHistory {
+  id: string;
+  claim_id: string;
+  from_status: string | null;
+  to_status: string;
+  changed_by: { id: number; name: string } | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export type ReadinessStatus = "not_started" | "partial" | "ready";
+
+export interface Readiness {
+  claim_id: string;
+  required: { value: string; label: string }[];
+  optional: { value: string; label: string }[];
+  collected: { value: string; label: string }[];
+  missing: { value: string; label: string }[];
+  optional_collected: { value: string; label: string }[];
+  readiness_percentage: number;
+  readiness_status: ReadinessStatus;
+  readiness_status_label: string;
+  has_requirements: boolean;
+  is_overridden: boolean;
+  disclaimer: string;
+  snapshots: {
+    document_category: string;
+    document_category_label: string;
+    is_required: boolean;
+    is_fulfilled: boolean;
+    evidence_file_id: string | null;
+    snapshot_at: string;
+    overridden_by: { id: number; name: string } | null;
+    override_reason: string | null;
+    overridden_at: string | null;
+  }[];
+}
+
+export interface EvidenceRequirement {
+  id: string;
+  organization_id: string;
+  event_category_id: string | null;
+  event_category: { id: string; slug: string; label: string } | null;
+  document_category: DocumentCategory;
+  document_category_label: string;
+  is_required: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DeadlineStatus =
+  | "upcoming"
+  | "due_soon"
+  | "overdue"
+  | "met"
+  | "missed";
+
+export interface ClaimDeadline {
+  id: string;
+  organization_id: string;
+  claim_id: string;
+  claim: {
+    id: string;
+    claim_reference: string;
+    status: string;
+    status_label: string;
+  };
+  deadline_at: string;
+  timezone: string;
+  source_reference: string | null;
+  reminder_days_before: number[];
+  status: DeadlineStatus;
+  status_label: string;
+  superseded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type GeneratedDocumentStatus = "queued" | "ready" | "failed";
+
+export interface GeneratedDocument {
+  id: string;
+  claim_id: string;
+  document_type: string;
+  document_type_label: string;
+  file_size: number | null;
+  generated_by: { id: number; name: string } | null;
+  includes_internal_notes: boolean;
+  status: GeneratedDocumentStatus;
+  status_label: string;
+  error_message: string | null;
+  generated_at: string | null;
+  created_at: string;
 }

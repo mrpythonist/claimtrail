@@ -20,7 +20,7 @@ Laravel API (port 8000)
   |-- PostgreSQL (organizations, users, members, invitations, ...)
   |-- Redis (queues, cache)
   |-- Queue worker (invitation emails, verification emails, later: reminders)
-  |-- Local disk / S3-compatible storage (evidence files, from Milestone 2)
+  |-- Local disk / S3-compatible storage (evidence files from Milestone 2, generated claim packages from Milestone 3)
 ```
 
 In production the backend should run behind nginx with PHP-FPM instead of
@@ -163,13 +163,13 @@ from them instead of inventing new patterns.
 | Identity and auth | AuthController, Sanctum | auth pages, AuthProvider | Done (M1) |
 | Organizations and tenancy | Organization models, middleware, trait | settings, org switcher | Done (M1) |
 | RBAC | Permission enum, config map, gates, policy | permissions.ts | Done (M1) |
-| Shipments | Milestone 2 | Milestone 2 | Planned |
-| Events | Milestone 2 | Milestone 2 | Planned |
-| Evidence | Milestone 2 | Milestone 2 | Planned |
-| Claims | Milestone 3 | Milestone 3 | Planned |
-| Readiness | Milestone 3 | Milestone 3 | Planned |
-| Deadlines | Milestone 3 | Milestone 3 | Planned |
-| PDF packages | Milestone 3 | Milestone 3 | Planned |
+| Shipments | ShipmentController, ShipmentRules, ShipmentCsvImporter | shipments pages, ShipmentForm | Done (M2) |
+| Events | ShipmentEventController, EventCategory | events on shipment detail, EventForm | Done (M2) |
+| Evidence | EvidenceFileController, private disk | evidence library, upload | Done (M2) |
+| Claims | ClaimController, ClaimTransitionService, ClaimReferenceService | claims pages, review page | Done (M3) |
+| Readiness | ReadinessService, EvidenceRequirement | readiness panel, requirements settings | Done (M3) |
+| Deadlines | ClaimDeadlineController, DeadlineStatusService, hourly command | deadlines overview | Done (M3) |
+| PDF packages | ClaimPackageController, GenerateClaimPackage job, dompdf | package section on claim detail | Done (M3) |
 | Audit trail | Milestone 4 | Milestone 4 | Planned |
 | Notifications | Milestone 4 | Milestone 4 | Planned |
 | Reports | Milestone 4 | Milestone 4 | Planned |

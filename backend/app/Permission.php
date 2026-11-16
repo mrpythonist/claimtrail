@@ -45,8 +45,12 @@ enum Permission: string
     case ReviewClaims = 'review-claims';
     case SubmitClaims = 'submit-claims';
     case RecordClaimPayments = 'record-claim-payments';
+    case AttachClaimEvidence = 'attach-claim-evidence';
     case ViewClaims = 'view-claims';
     case GenerateClaimPackages = 'generate-claim-packages';
+
+    // Evidence requirements (enforced from Milestone 3)
+    case ManageEvidenceRequirements = 'manage-evidence-requirements';
 
     // Deadlines (enforced from Milestone 3)
     case ManageDeadlines = 'manage-deadlines';

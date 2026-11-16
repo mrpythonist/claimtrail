@@ -9,15 +9,18 @@ import { Badge } from "@/components/ui/Badge";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Shipments", href: "/shipments" },
+  { label: "Claims", href: "/claims" },
+  { label: "Deadlines", href: "/deadlines" },
   { label: "Evidence", href: "/evidence" },
   { label: "Members", href: "/settings/members" },
   { label: "Organization", href: "/settings/organization" },
+  { label: "Evidence Requirements", href: "/settings/evidence-requirements" },
   { label: "Profile", href: "/settings/profile" },
 ];
 
 // Modules that arrive in later milestones. Shown as plain text, not links,
 // so nothing in the navigation pretends to work before it exists.
-const UPCOMING_ITEMS = ["Claims", "Deadlines", "Reports"];
+const UPCOMING_ITEMS = ["Reports"];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();

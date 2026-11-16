@@ -3,11 +3,12 @@ info:
   title: ClaimTrail API
   version: 1.0.1
   description: >
-    Multi-tenant transportation revenue recovery API. Milestones 1 and 2
-    cover authentication, organizations, members, invitations, the
+    Multi-tenant transportation revenue recovery API. Milestones 1, 2,
+    and 3 cover authentication, organizations, members, invitations, the
     dashboard overview, carriers, shipments, CSV import and export,
-    shipment events, event categories, and evidence. Later milestones add
-    claims, deadlines, PDF packages, notifications, and reports.
+    shipment events, event categories, evidence, claims, evidence
+    readiness, deadlines, and claim package PDFs. Milestone 4 adds the
+    audit trail, notifications, and reports.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -23,6 +24,10 @@ tags:
   - name: Shipments
   - name: Events
   - name: Evidence
+  - name: Claims
+  - name: Readiness
+  - name: Deadlines
+  - name: Documents
 paths:
   /auth/register:
     post:
@@ -1225,6 +1230,651 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /claims:
+    get:
+      tags: [Claims]
+      summary: List claims (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimStatus"
+        - name: claim_category
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimCategory"
+        - name: shipment_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at, requested_amount, status, submission_deadline_at]
+        - name: direction
+          in: query
+          schema: { type: string, enum: [asc, desc] }
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: per_page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated claims
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Claim"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Claims]
+      summary: Create a claim (requires create-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimInput"
+      responses:
+        "201":
+          description: Claim created with a generated reference
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}:
+    get:
+      tags: [Claims]
+      summary: Show one claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Claim with shipment, event, active deadline, and allowed transitions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Claims]
+      summary: Update a claim (requires edit-claims)
+      description: >
+        Amount, currency, category, and event link are frozen once the
+        claim is submitted. Status never changes here; use the transition
+        endpoint.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimInput"
+      responses:
+        "200":
+          description: Claim updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/transition:
+    post:
+      tags: [Claims]
+      summary: Move a claim to a new status
+      description: >
+        The permission depends on the target: submit-claims for
+        submitted, review-claims for ready_to_submit, accepted,
+        partially_accepted, and rejected, edit-claims for the rest.
+        Moving to paid is always rejected here; use record-payment.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimTransitionInput"
+      responses:
+        "200":
+          description: Claim transitioned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/record-payment:
+    post:
+      tags: [Claims]
+      summary: Record a payment and move the claim to paid (requires record-claim-payments)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Payment recorded, claim paid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/history:
+    get:
+      tags: [Claims]
+      summary: List the append-only status history of a claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Status history, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClaimStatusHistory"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /claims/{claim}/evidence:
+    get:
+      tags: [Claims]
+      summary: List evidence attached to a claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Attached evidence files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EvidenceFile"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Claims]
+      summary: Attach an evidence file to a claim (requires attach-claim-evidence)
+      description: The evidence must belong to the claim's shipment.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence_file_id]
+              properties:
+                evidence_file_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Evidence attached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceFile"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/evidence/{evidence}:
+    delete:
+      tags: [Claims]
+      summary: Detach an evidence file from a claim (requires attach-claim-evidence)
+      description: Only the link is removed; the file itself is not deleted.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evidence detached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /claims/{claim}/readiness:
+    get:
+      tags: [Readiness]
+      summary: Compute the live readiness breakdown for a claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Readiness breakdown with the latest snapshot rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Readiness"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /claims/{claim}/readiness/override:
+    post:
+      tags: [Readiness]
+      summary: Override the readiness assessment with an explanation (requires review-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Readiness overridden; the recomputed breakdown is returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Readiness"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/deadline:
+    post:
+      tags: [Deadlines]
+      summary: Set the deadline for a claim (requires manage-deadlines)
+      description: >
+        Upsert: setting a deadline when one is active supersedes the old
+        row and creates a new one. Deadlines are customer-supplied only.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimDeadlineInput"
+      responses:
+        "201":
+          description: Deadline set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimDeadline"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/package:
+    get:
+      tags: [Documents]
+      summary: The latest generated document for a claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Latest document, or null when none exists yet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/GeneratedDocument"
+                  message: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Documents]
+      summary: Generate or regenerate the claim package PDF (requires generate-claim-packages)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                include_notes:
+                  type: boolean
+                  default: false
+                  description: Include internal notes in the package. Default false.
+      responses:
+        "202":
+          description: Generation queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/GeneratedDocument"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /evidence-requirements:
+    get:
+      tags: [Readiness]
+      summary: List the organization's evidence requirements (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated requirements, global first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EvidenceRequirement"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Readiness]
+      summary: Create an evidence requirement (requires manage-evidence-requirements)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceRequirementInput"
+      responses:
+        "201":
+          description: Requirement created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceRequirement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /evidence-requirements/{requirement}:
+    put:
+      tags: [Readiness]
+      summary: Update an evidence requirement (requires manage-evidence-requirements)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: requirement
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceRequirementInput"
+      responses:
+        "200":
+          description: Requirement updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceRequirement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Readiness]
+      summary: Delete an evidence requirement (requires manage-evidence-requirements)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: requirement
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Requirement deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /deadlines:
+    get:
+      tags: [Deadlines]
+      summary: List active deadlines (requires view-deadlines)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeadlineStatus"
+        - name: upcoming_days
+          in: query
+          schema: { type: integer, description: Only deadlines within this many days }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated deadlines, earliest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClaimDeadline"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /deadlines/{deadline}:
+    get:
+      tags: [Deadlines]
+      summary: Show one deadline (requires view-deadlines)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: deadline
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deadline with its claim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimDeadline"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Deadlines]
+      summary: Update a deadline (requires manage-deadlines)
+      description: Superseded rows cannot be edited.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: deadline
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimDeadlineInput"
+      responses:
+        "200":
+          description: Deadline updated with its status recomputed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimDeadline"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /documents/{document}/download:
+    get:
+      tags: [Documents]
+      summary: Download a generated claim package PDF (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: document
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: PDF bytes, or a redirect to a short-lived S3 signed URL
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The document is still queued or failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
 components:
   securitySchemes:
     bearerAuth:
@@ -1379,6 +2029,14 @@ components:
             events_open: { type: integer }
             events_total: { type: integer }
             evidence_total: { type: integer }
+            claims_total: { type: integer }
+            claims_open: { type: integer }
+            claims_ready: { type: integer }
+            claims_submitted: { type: integer }
+            claims_paid: { type: integer }
+            deadlines_upcoming: { type: integer }
+            deadlines_due_soon: { type: integer }
+            deadlines_overdue: { type: integer }
     PaginationMeta:
       type: object
       properties:
@@ -1593,3 +2251,283 @@ components:
           $ref: "#/components/schemas/EvidenceVerificationStatus"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    ClaimStatus:
+      type: string
+      enum:
+        [potential, evidence_required, under_review, ready_to_submit,
+         submitted, accepted, partially_accepted, rejected, paid, closed]
+    ClaimCategory:
+      type: string
+      enum:
+        [detention, layover, tonu, lumper, additional_stop,
+         additional_miles, other]
+    Claim:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        claim_reference: { type: string, description: "Per-organization reference, e.g. CLM-2026-0001" }
+        shipment_id: { type: string, format: uuid }
+        shipment:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            internal_reference: { type: string }
+            broker_or_customer_name: { type: string }
+            status: { type: string }
+        shipment_event_id: { type: string, format: uuid, nullable: true }
+        event:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            event_date: { type: string, format: date }
+            description: { type: string, nullable: true }
+        claim_category:
+          $ref: "#/components/schemas/ClaimCategory"
+        claim_category_label: { type: string }
+        description: { type: string, nullable: true }
+        requested_amount: { type: string, description: Decimal string }
+        accepted_amount: { type: string, nullable: true, description: Decimal string, set only on acceptance }
+        recovered_amount: { type: string, nullable: true, description: Decimal string, set only by payment recording }
+        currency: { type: string }
+        internal_notes: { type: string, nullable: true }
+        external_broker_reference: { type: string, nullable: true }
+        submission_deadline_at: { type: string, format: date-time, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        rejected_at: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        rejection_reason: { type: string, nullable: true }
+        payment_reference: { type: string, nullable: true }
+        status:
+          $ref: "#/components/schemas/ClaimStatus"
+        status_label: { type: string }
+        allowed_transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string }
+              label: { type: string }
+        created_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        updated_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        evidence_count: { type: integer }
+        active_deadline:
+          $ref: "#/components/schemas/ClaimDeadline"
+        latest_document:
+          $ref: "#/components/schemas/GeneratedDocument"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ClaimInput:
+      type: object
+      required: [shipment_id, requested_amount]
+      properties:
+        shipment_id: { type: string, format: uuid }
+        shipment_event_id: { type: string, format: uuid, nullable: true }
+        claim_category:
+          $ref: "#/components/schemas/ClaimCategory"
+        description: { type: string, maxLength: 5000, nullable: true }
+        requested_amount: { type: number, minimum: 0.01 }
+        currency: { type: string, minLength: 3, maxLength: 3, nullable: true }
+        internal_notes: { type: string, maxLength: 5000, nullable: true }
+        external_broker_reference: { type: string, maxLength: 255, nullable: true }
+        submission_deadline_at: { type: string, format: date-time, nullable: true }
+    ClaimTransitionInput:
+      type: object
+      required: [to_status]
+      properties:
+        to_status:
+          $ref: "#/components/schemas/ClaimStatus"
+        reason: { type: string, maxLength: 2000, nullable: true, description: Required when closing before submission }
+        accepted_amount:
+          type: number
+          minimum: 0.01
+          nullable: true
+          description: Required when accepting; must be below requested when partially accepting
+        rejection_reason: { type: string, maxLength: 2000, nullable: true, description: Required when rejecting }
+        submitted_at: { type: string, format: date-time, nullable: true, description: Stamped automatically on submission when omitted }
+    PaymentInput:
+      type: object
+      required: [recovered_amount, payment_date]
+      properties:
+        recovered_amount: { type: number, minimum: 0.01 }
+        payment_date: { type: string, format: date }
+        payment_reference: { type: string, maxLength: 255, nullable: true }
+        reason: { type: string, maxLength: 2000, nullable: true }
+    ClaimStatusHistory:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        from_status: { type: string, nullable: true }
+        to_status: { type: string }
+        changed_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        reason: { type: string, nullable: true }
+        metadata: { type: object, nullable: true }
+        created_at: { type: string, format: date-time }
+    Readiness:
+      type: object
+      properties:
+        claim_id: { type: string, format: uuid }
+        required:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLabel"
+        optional:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLabel"
+        collected:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLabel"
+        missing:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLabel"
+        optional_collected:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLabel"
+        readiness_percentage: { type: integer, minimum: 0, maximum: 100 }
+        readiness_status: { type: string, enum: [not_started, partial, ready] }
+        readiness_status_label: { type: string }
+        has_requirements: { type: boolean }
+        is_overridden: { type: boolean }
+        disclaimer: { type: string }
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimRequirement"
+    CategoryLabel:
+      type: object
+      properties:
+        value: { type: string }
+        label: { type: string }
+    ClaimRequirement:
+      type: object
+      properties:
+        document_category:
+          $ref: "#/components/schemas/EvidenceDocumentCategory"
+        document_category_label: { type: string }
+        is_required: { type: boolean }
+        is_fulfilled: { type: boolean }
+        evidence_file_id: { type: string, format: uuid, nullable: true }
+        snapshot_at: { type: string, format: date-time }
+        overridden_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        override_reason: { type: string, nullable: true }
+        overridden_at: { type: string, format: date-time, nullable: true }
+    EvidenceRequirement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        event_category_id: { type: string, format: uuid, nullable: true }
+        event_category:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            slug: { type: string }
+            label: { type: string }
+        document_category:
+          $ref: "#/components/schemas/EvidenceDocumentCategory"
+        document_category_label: { type: string }
+        is_required: { type: boolean }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EvidenceRequirementInput:
+      type: object
+      required: [document_category]
+      properties:
+        event_category_id: { type: string, format: uuid, nullable: true, description: Null means every event type }
+        document_category:
+          $ref: "#/components/schemas/EvidenceDocumentCategory"
+        is_required: { type: boolean, default: true }
+        notes: { type: string, maxLength: 2000, nullable: true }
+    DeadlineStatus:
+      type: string
+      enum: [upcoming, due_soon, overdue, met, missed]
+    ClaimDeadline:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        claim:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            claim_reference: { type: string }
+            status: { type: string }
+            status_label: { type: string }
+        deadline_at: { type: string, format: date-time }
+        timezone: { type: string }
+        source_reference: { type: string, nullable: true }
+        reminder_days_before:
+          type: array
+          items: { type: integer }
+        status:
+          $ref: "#/components/schemas/DeadlineStatus"
+        status_label: { type: string }
+        superseded_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ClaimDeadlineInput:
+      type: object
+      required: [deadline_at, timezone]
+      properties:
+        deadline_at: { type: string, format: date-time }
+        timezone: { type: string, description: IANA timezone identifier }
+        source_reference: { type: string, maxLength: 2000, nullable: true }
+        reminder_days_before:
+          type: array
+          maxItems: 10
+          items: { type: integer, minimum: 0, maximum: 90 }
+    GeneratedDocumentStatus:
+      type: string
+      enum: [queued, ready, failed]
+    GeneratedDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        document_type: { type: string }
+        document_type_label: { type: string }
+        file_size: { type: integer, nullable: true }
+        generated_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        includes_internal_notes: { type: boolean }
+        status:
+          $ref: "#/components/schemas/GeneratedDocumentStatus"
+        status_label: { type: string }
+        error_message: { type: string, nullable: true }
+        generated_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }

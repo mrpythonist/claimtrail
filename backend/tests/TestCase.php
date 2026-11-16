@@ -2,9 +2,14 @@
 
 namespace Tests;
 
+use App\ClaimCategory;
+use App\ClaimStatus;
+use App\EvidenceDocumentCategory;
 use App\MembershipStatus;
 use App\Models\Carrier;
+use App\Models\Claim;
 use App\Models\EventCategory;
+use App\Models\EvidenceFile;
 use App\Models\Organization;
 use App\Models\OrganizationMember;
 use App\Models\Shipment;
@@ -118,6 +123,40 @@ abstract class TestCase extends BaseTestCase
             'organization_id' => $shipment->organization_id,
             'event_category_id' => $this->systemCategory()->getKey(),
             'event_date' => now()->toDateString(),
+        ], $attributes));
+    }
+
+    /**
+     * Create a claim for a shipment.
+     */
+    protected function createClaim(Organization $organization, Shipment $shipment, array $attributes = []): Claim
+    {
+        return $organization->claims()->create(array_merge([
+            'claim_reference' => 'CLM-TEST-'.Str::upper(Str::random(8)),
+            'shipment_id' => $shipment->getKey(),
+            'claim_category' => ClaimCategory::Detention,
+            'requested_amount' => 250.00,
+            'currency' => 'USD',
+            'status' => ClaimStatus::Potential,
+        ], $attributes));
+    }
+
+    /**
+     * Create an evidence file record without touching storage.
+     *
+     * Only the metadata row is created; tests that download the file
+     * must put bytes on the (fake) disk themselves.
+     */
+    protected function createEvidence(Organization $organization, Shipment $shipment, array $attributes = []): EvidenceFile
+    {
+        return $organization->evidenceFiles()->create(array_merge([
+            'shipment_id' => $shipment->getKey(),
+            'document_category' => EvidenceDocumentCategory::BillOfLading,
+            'original_filename' => 'test.pdf',
+            'storage_key' => 'evidence/test/'.Str::uuid().'.pdf',
+            'disk' => 'private',
+            'mime_type' => 'application/pdf',
+            'file_size' => 1234,
         ], $attributes));
     }
 }

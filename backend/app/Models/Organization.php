@@ -89,4 +89,36 @@ class Organization extends Model
     {
         return $this->hasMany(EvidenceFile::class);
     }
+
+    /**
+     * Claims belonging to this organization.
+     */
+    public function claims(): HasMany
+    {
+        return $this->hasMany(Claim::class);
+    }
+
+    /**
+     * Evidence requirements configured by this organization.
+     */
+    public function evidenceRequirements(): HasMany
+    {
+        return $this->hasMany(EvidenceRequirement::class);
+    }
+
+    /**
+     * Claim deadlines belonging to this organization.
+     */
+    public function claimDeadlines(): HasMany
+    {
+        return $this->hasMany(ClaimDeadline::class);
+    }
+
+    /**
+     * Generated documents belonging to this organization.
+     */
+    public function generatedDocuments(): HasMany
+    {
+        return $this->hasMany(GeneratedDocument::class);
+    }
 }

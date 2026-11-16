@@ -5,7 +5,7 @@ Keep a Changelog, and the project follows semantic versioning.
 
 ## [1.0.1] - Unreleased
 
-Phase 1, in progress. Milestones 0, 1, and 2 are complete.
+Phase 1, in progress. Milestones 0, 1, 2, and 3 are complete.
 
 ### Added
 
@@ -50,6 +50,36 @@ Phase 1, in progress. Milestones 0, 1, and 2 are complete.
   and shipment export for the billing role, all in the central map.
 - Milestone 2: 51 new backend feature tests and 21 new frontend tests
   (102 backend and 37 frontend in total).
+- Milestone 3: claims (CRUD, per-organization references CLM-YYYY-NNNN
+  from a locked sequence counter, 10-status workflow with controlled
+  transitions enforced by one service, append-only status history,
+  evidence attach/detach through a pivot, payment recording as the only
+  route to paid). Requested, accepted, and recovered amounts are kept
+  separate; accepted is never defaulted from requested.
+- Milestone 3: evidence requirements per organization (global or per
+  event category, required or optional) with seeded illustrative
+  defaults, live readiness calculation with snapshots, and overrides
+  that record the reviewer and reason. Readiness is informational only.
+- Milestone 3: claim deadlines (customer-supplied, with timezone and
+  reminder schedule, one active row per claim, superseded rows kept),
+  hourly status refresh command (`claimtrail:refresh-deadline-statuses`)
+  with upcoming, due soon, overdue, met, and missed states. No deadline
+  is ever inferred from an event type.
+- Milestone 3: claim package PDFs (barryvdh/laravel-dompdf) generated
+  by a queued job onto the private disk, with an evidence index and a
+  status timeline, authorized download, and regeneration. Internal
+  notes are excluded unless explicitly requested.
+- Milestone 3: two new permissions (`attach-claim-evidence`,
+  `manage-evidence-requirements`) in the central map. The claim role
+  mapping was corrected to the specification: dispatchers no longer
+  create claims, billing staff no longer review claims, and operations
+  managers gained claim submission. See `config/permissions.php`.
+- Milestone 3: dashboard counts for claims and deadlines. Frontend
+  pages for claims list, create, detail, edit, review, deadlines, and
+  evidence requirements management.
+- Milestone 3: 54 new backend feature tests (156 total, 545
+  assertions) and 37 new frontend tests (74 total): claim form
+  validation, claim form component, and readiness panel component.
 
 ### Fixed
 
