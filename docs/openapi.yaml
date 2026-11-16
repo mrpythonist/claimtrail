@@ -4,11 +4,11 @@ info:
   version: 1.0.1
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
-    and 3 cover authentication, organizations, members, invitations, the
-    dashboard overview, carriers, shipments, CSV import and export,
-    shipment events, event categories, evidence, claims, evidence
-    readiness, deadlines, and claim package PDFs. Milestone 4 adds the
-    audit trail, notifications, and reports.
+    3, and 4 cover authentication, organizations, members, invitations,
+    the dashboard, carriers, shipments, CSV import and export, shipment
+    events, event categories, evidence, claims, evidence readiness,
+    deadlines, claim package PDFs, the audit trail, notifications, and
+    reports.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -28,6 +28,9 @@ tags:
   - name: Readiness
   - name: Deadlines
   - name: Documents
+  - name: Audit
+  - name: Notifications
+  - name: Reports
 paths:
   /auth/register:
     post:
@@ -340,9 +343,22 @@ paths:
   /dashboard:
     get:
       tags: [Dashboard]
-      summary: Organization overview (member and invitation counts)
+      summary: Organization overview (counts, financials, upcoming deadlines)
       parameters:
         - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          description: Filter shipment and claim created_at (inclusive)
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Filter shipment and claim created_at (inclusive)
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          description: Adds a claims_filtered section for this claim status
+          schema:
+            $ref: "#/components/schemas/ClaimStatus"
       responses:
         "200":
           description: Overview
@@ -355,6 +371,7 @@ paths:
                     $ref: "#/components/schemas/Dashboard"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /members:
     get:
       tags: [Members]
@@ -1875,6 +1892,300 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Message"
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: List audit rows (requires view-audit-logs)
+      description: >
+        Append-only audit trail, newest first. There are no store,
+        update, or delete routes for audit rows.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: entity_type
+          in: query
+          description: Subject entity type, e.g. Shipment, Claim
+          schema: { type: string }
+        - name: action
+          in: query
+          description: Action, e.g. shipment.created, claim.status_changed
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          description: User id of the actor (system rows have no actor)
+          schema: { type: integer }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 25, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Audit rows with pagination meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List the member's own notifications
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: unread
+          in: query
+          description: Set to 1 to show unread rows only
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 25, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Notifications with pagination meta and unread_count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  meta:
+                    allOf:
+                      - $ref: "#/components/schemas/PaginationMeta"
+                      - type: object
+                        properties:
+                          unread_count: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: The member's unread notification count
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      unread_count: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark every unread notification read
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Number of rows marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      marked_read: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notifications/{notification}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark one notification read
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: notification
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The notification, now read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notification-preferences:
+    get:
+      tags: [Notifications]
+      summary: The member's notification preferences for all event types
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: One entry per event type, defaults included
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationPreference"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Notifications]
+      summary: Save notification preferences for one or more event types
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preferences]
+              properties:
+                preferences:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [event_type, in_app, email]
+                    properties:
+                      event_type:
+                        $ref: "#/components/schemas/NotificationType"
+                      in_app: { type: boolean }
+                      email: { type: boolean }
+      responses:
+        "200":
+          description: The full preference list after the update
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationPreference"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reports/summary:
+    get:
+      tags: [Reports]
+      summary: Report summary (requires view-reports)
+      description: >
+        Counts by claim status and event type, and the six money
+        figures (potential, submitted, accepted, recovered, rejected,
+        outstanding), each grouped by currency and never mixed. See
+        docs/API.md for the financial definitions.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          description: Filter claim and event created_at (inclusive)
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Filter claim and event created_at (inclusive)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReportSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reports/recovery-history:
+    get:
+      tags: [Reports]
+      summary: Recovered money per month per currency (requires view-reports)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          description: First paid_at date (inclusive). Defaults to 12 months back.
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Last paid_at date (inclusive). Defaults to today.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: One entry per month that has recovered money
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RecoveryHistoryMonth"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reports/export:
+    get:
+      tags: [Reports]
+      summary: Export the summary and per-claim rows as CSV (requires export-reports)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          description: Filter claim created_at (inclusive)
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Filter claim created_at (inclusive)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: CSV with a summary section then one row per claim
+          content:
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 components:
   securitySchemes:
     bearerAuth:
@@ -2026,17 +2337,85 @@ components:
             invitations_pending: { type: integer }
             shipments_total: { type: integer }
             shipments_with_events: { type: integer }
+            shipments_with_opportunities: { type: integer, description: Shipments with at least one event in potential status }
             events_open: { type: integer }
             events_total: { type: integer }
             evidence_total: { type: integer }
             claims_total: { type: integer }
-            claims_open: { type: integer }
+            claims_open: { type: integer, description: potential, evidence_required, under_review, ready_to_submit }
+            claims_open_opportunities: { type: integer, description: potential, evidence_required, under_review }
+            claims_awaiting_evidence: { type: integer }
             claims_ready: { type: integer }
-            claims_submitted: { type: integer }
+            claims_submitted: { type: integer, description: Status submitted only }
+            claims_approved: { type: integer, description: accepted plus partially_accepted }
+            claims_rejected: { type: integer }
             claims_paid: { type: integer }
+            claims_closed: { type: integer }
             deadlines_upcoming: { type: integer }
             deadlines_due_soon: { type: integer }
             deadlines_overdue: { type: integer }
+            deadlines_next_14_days: { type: integer }
+        claims_by_status:
+          type: array
+          description: One entry per claim status, zero-filled
+          items:
+            type: object
+            properties:
+              status:
+                $ref: "#/components/schemas/ClaimStatus"
+              label: { type: string }
+              count: { type: integer }
+        financials:
+          type: object
+          description: Per-currency money figures. Potential is estimated money, never recovered.
+          properties:
+            potential:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            submitted:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            accepted:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            recovered:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+        upcoming_deadlines:
+          type: array
+          description: Next five active deadlines due within 14 days, soonest first
+          items:
+            type: object
+            properties:
+              deadline_id: { type: string, format: uuid }
+              claim_id: { type: string, format: uuid }
+              claim_reference: { type: string }
+              deadline_at: { type: string, format: date-time }
+              status: { type: string, enum: [upcoming, due_soon, overdue, met, missed] }
+              status_label: { type: string }
+        filters:
+          type: object
+          properties:
+            date_from: { type: string, format: date, nullable: true }
+            date_to: { type: string, format: date, nullable: true }
+            status:
+              $ref: "#/components/schemas/ClaimStatus"
+        claims_filtered:
+          type: object
+          description: Present only when a status filter is given
+          properties:
+            status:
+              $ref: "#/components/schemas/ClaimStatus"
+            label: { type: string }
+            count: { type: integer }
+            requested_amounts:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
     PaginationMeta:
       type: object
       properties:
@@ -2531,3 +2910,135 @@ components:
         error_message: { type: string, nullable: true }
         generated_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [user, system] }
+        actor:
+          type: object
+          nullable: true
+          description: Null for system rows
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        action: { type: string, description: e.g. shipment.created, claim.status_changed }
+        entity_type: { type: string, description: e.g. Shipment, Claim }
+        entity_id: { type: string, format: uuid }
+        before:
+          type: object
+          nullable: true
+          description: Changed scalar fields before the change
+          additionalProperties: true
+        after:
+          type: object
+          nullable: true
+          description: Changed scalar fields after the change
+          additionalProperties: true
+        correlation_id: { type: string, nullable: true }
+        ip_address: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    NotificationType:
+      type: string
+      enum:
+        [claim.created, claim.evidence_missing, claim.ready_for_review,
+         deadline.upcoming, deadline.overdue, claim.submitted,
+         claim.accepted, claim.rejected, payment.recorded,
+         organization.invitation]
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        type_label: { type: string }
+        title: { type: string }
+        body: { type: string }
+        data:
+          type: object
+          nullable: true
+          description: Entity links such as claim_id and shipment_id
+          additionalProperties: true
+        is_unread: { type: boolean }
+        read_at: { type: string, format: date-time, nullable: true }
+        email_sent_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    NotificationPreference:
+      type: object
+      properties:
+        event_type:
+          $ref: "#/components/schemas/NotificationType"
+        label: { type: string }
+        in_app: { type: boolean }
+        email: { type: boolean }
+    MoneyAmount:
+      type: object
+      description: One money figure in one currency. Currencies are never mixed.
+      properties:
+        currency: { type: string, description: ISO currency code, e.g. USD }
+        amount: { type: string, description: Two-decimal money string, e.g. "250.00" }
+    ReportSummary:
+      type: object
+      properties:
+        counts_by_status:
+          type: array
+          description: One entry per claim status, zero-filled
+          items:
+            type: object
+            properties:
+              status:
+                $ref: "#/components/schemas/ClaimStatus"
+              label: { type: string }
+              count: { type: integer }
+        counts_by_event_type:
+          type: array
+          description: One entry per claim category, zero-filled
+          items:
+            type: object
+            properties:
+              category:
+                $ref: "#/components/schemas/ClaimCategory"
+              label: { type: string }
+              count: { type: integer }
+        money:
+          type: object
+          description: Six figures, each a per-currency breakdown. See docs/API.md for definitions.
+          properties:
+            potential:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            submitted:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            accepted:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            recovered:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            rejected:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+            outstanding:
+              type: array
+              items:
+                $ref: "#/components/schemas/MoneyAmount"
+        filters:
+          type: object
+          properties:
+            date_from: { type: string, format: date, nullable: true }
+            date_to: { type: string, format: date, nullable: true }
+    RecoveryHistoryMonth:
+      type: object
+      properties:
+        month: { type: string, description: YYYY-MM }
+        amounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyAmount"

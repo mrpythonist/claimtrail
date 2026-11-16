@@ -65,10 +65,13 @@ After seeding, one demo organization exists (Acme Trucking Co.) with one
 user per role, two carriers, three sample shipments, and two sample
 events (detention and lumper on the delivered shipment), plus five
 default evidence requirements, two sample claims (one under review, one
-potential), and one sample deadline. No evidence rows are seeded: an
-evidence record without a real file behind it would be a broken promise.
-Upload evidence through the UI or the API instead. No generated
-documents are seeded either, for the same reason.
+potential), one sample deadline, and two sample notifications for the
+demo owner (both about the detention claim: created, and missing
+evidence). No evidence rows are seeded: an evidence record without a
+real file behind it would be a broken promise. Upload evidence through
+the UI or the API instead. No generated documents are seeded either,
+for the same reason. No audit rows are seeded: the audit trail records
+only actions that really happened.
 All demo users share the password `password`.
 
 | Role | Email |
@@ -102,7 +105,7 @@ to the code they cover (`__tests__` directories).
 php artisan migrate              # run migrations
 php artisan migrate:fresh --seed # rebuild the dev database with demo data
 php artisan queue:work           # process queued mail and claim package jobs locally
-php artisan claimtrail:refresh-deadline-statuses   # recompute deadline statuses
+php artisan claimtrail:refresh-deadline-statuses   # recompute deadline statuses and notify about due soon and overdue deadlines (at most once per deadline per day per type)
 php artisan route:list --path=api
 
 # Frontend

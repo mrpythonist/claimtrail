@@ -4,28 +4,46 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
-import { Badge } from "@/components/ui/Badge";
+import { apiFetch } from "@/lib/api";
+import { canViewAuditLogs, canViewReports } from "@/lib/permissions";
+import type { OrganizationRole } from "@/lib/types";
 
-const NAV_ITEMS = [
+interface NavItem {
+  label: string;
+  href: string;
+  /** When set, the item only shows for roles the check passes for. */
+  visibleFor?: (role: OrganizationRole | null | undefined) => boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Shipments", href: "/shipments" },
   { label: "Claims", href: "/claims" },
   { label: "Deadlines", href: "/deadlines" },
   { label: "Evidence", href: "/evidence" },
+  { label: "Notifications", href: "/notifications" },
+  { label: "Reports", href: "/reports", visibleFor: canViewReports },
+  { label: "Audit Logs", href: "/audit-logs", visibleFor: canViewAuditLogs },
   { label: "Members", href: "/settings/members" },
   { label: "Organization", href: "/settings/organization" },
   { label: "Evidence Requirements", href: "/settings/evidence-requirements" },
   { label: "Profile", href: "/settings/profile" },
 ];
 
-// Modules that arrive in later milestones. Shown as plain text, not links,
-// so nothing in the navigation pretends to work before it exists.
-const UPCOMING_ITEMS = ["Reports"];
-
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({
+  onNavigate,
+  unreadCount,
+}: {
+  onNavigate?: () => void;
+  unreadCount: number;
+}) {
   const pathname = usePathname();
   const { organizations, currentOrg, selectOrganization } = useAuth();
   const router = useRouter();
+  const myRole = currentOrg?.current_user_role;
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.visibleFor || item.visibleFor(myRole),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -79,41 +97,36 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4">
         <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {visibleItems.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const showBadge =
+              item.href === "/notifications" && unreadCount > 0;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  className={`block rounded-md px-3 py-2 text-sm font-medium ${
+                  className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                     active
                       ? "bg-brand-800 text-white"
                       : "text-brand-100 hover:bg-brand-900 hover:text-white"
                   }`}
                 >
                   {item.label}
+                  {showBadge && (
+                    <span
+                      aria-label={`${unreadCount} unread notifications`}
+                      className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-semibold text-brand-950"
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             );
           })}
-        </ul>
-
-        <p className="mt-6 px-3 text-xs font-medium uppercase tracking-wide text-brand-300">
-          Later milestones
-        </p>
-        <ul className="mt-2 space-y-1">
-          {UPCOMING_ITEMS.map((item) => (
-            <li
-              key={item}
-              className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-brand-300"
-            >
-              {item}
-              <Badge tone="neutral">Soon</Badge>
-            </li>
-          ))}
         </ul>
       </nav>
 
@@ -127,10 +140,37 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, currentOrg, logout } = useAuth();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Unread badge: refetched on every navigation and on organization
+  // switch. No websockets in Phase 1, so the count can lag until the
+  // next navigation. A failed fetch hides the badge rather than
+  // breaking the shell.
+  useEffect(() => {
+    if (!currentOrg) {
+      // No organization: nothing to count. The badge starts at zero
+      // and stays there until an organization is selected.
+      return;
+    }
+    let cancelled = false;
+    apiFetch<{ data: { unread_count: number } }>("/notifications/unread-count", {
+      orgId: currentOrg.id,
+    })
+      .then((response) => {
+        if (!cancelled) setUnreadCount(response.data.unread_count);
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, currentOrg]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -147,7 +187,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-slate-50">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-brand-950 md:block">
-        <SidebarContent />
+        <SidebarContent unreadCount={unreadCount} />
       </aside>
 
       {/* Mobile sidebar drawer */}
@@ -159,7 +199,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             role="presentation"
           />
           <aside className="absolute inset-y-0 left-0 w-64 bg-brand-950">
-            <SidebarContent onNavigate={() => setSidebarOpen(false)} />
+            <SidebarContent
+              onNavigate={() => setSidebarOpen(false)}
+              unreadCount={unreadCount}
+            />
           </aside>
         </div>
       )}

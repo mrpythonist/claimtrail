@@ -3,15 +3,16 @@
 namespace App\Console\Commands;
 
 use App\Services\DeadlineStatusService;
+use App\Support\Correlation;
 use Illuminate\Console\Command;
 
 /**
  * Recomputes every active claim deadline status.
  *
- * Scheduled hourly in routes/console.php. Notification delivery for
- * upcoming and overdue deadlines is a Milestone 4 concern; until then
- * this command logs the counts so the scheduler output shows the
- * state of play.
+ * Scheduled hourly in routes/console.php. Due-soon and overdue
+ * deadlines notify the organization's members (one notification
+ * per deadline per day). Each run gets a fresh correlation id so
+ * its audit rows can be traced back to the run.
  */
 class RefreshDeadlineStatuses extends Command
 {
@@ -34,6 +35,8 @@ class RefreshDeadlineStatuses extends Command
      */
     public function handle(DeadlineStatusService $service): int
     {
+        app(Correlation::class)->fresh();
+
         $result = $service->refreshAll();
 
         $this->info(sprintf(

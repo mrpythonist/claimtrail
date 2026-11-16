@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { NotificationPreferences } from "@/components/settings/NotificationPreferences";
 import { apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { FieldErrors } from "@/lib/validation";
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, currentOrg, refreshUser } = useAuth();
   // The app layout only renders this page once the user is loaded, so
   // initializing from the user directly is safe and needs no effect.
   const [name, setName] = useState(user?.name ?? "");
@@ -244,6 +245,22 @@ export default function ProfilePage() {
             </form>
           </CardBody>
         </Card>
+
+        {currentOrg ? (
+          <NotificationPreferences key={currentOrg.id} org={currentOrg} />
+        ) : (
+          <Card>
+            <CardHeader
+              title="Notification preferences"
+              description="Notification settings are per organization."
+            />
+            <CardBody>
+              <p className="text-sm text-slate-600">
+                Join or create an organization to set which events notify you.
+              </p>
+            </CardBody>
+          </Card>
+        )}
       </div>
     </div>
   );

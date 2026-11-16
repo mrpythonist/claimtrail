@@ -12,9 +12,9 @@ ClaimTrail never guarantees that a charge is recoverable. Contractual
 eligibility and submission requirements are configured and verified by the
 customer.
 
-## Current status: Milestone 3 (claims, readiness, deadlines, PDF)
+## Current status: Milestone 4 (audit trail, notifications, reports, full dashboard)
 
-This repository is at Phase 1, v1.0.1, Milestone 3. What exists today:
+This repository is at Phase 1, v1.0.1, Milestone 4. What exists today:
 
 - User registration, login, logout, password reset, and email verification
   (Laravel Sanctum token auth for the Next.js frontend).
@@ -45,15 +45,33 @@ This repository is at Phase 1, v1.0.1, Milestone 3. What exists today:
 - Claim packages: queued PDF generation (dompdf) with an evidence index
   and timeline, authorized download, and regeneration. Internal notes
   are excluded unless explicitly requested.
-- An application shell with sidebar navigation, organization switcher, and
-  user menu, plus dashboard, shipments, claims, deadlines, evidence
-  library, organization settings, members, invitations, and profile pages.
+- Audit trail: append-only audit log for shipments, events, evidence,
+  claims, deadlines, membership, invitations, and package generation,
+  with correlation ids, actor (user or system), and before/after
+  values for changed fields only. No update or delete endpoints exist.
+- Notifications: in-app and email notifications for claim events,
+  evidence gaps, deadlines, payments, and invitations, with per-member
+  per-event preferences, read state, and dedupe keys so a repeated job
+  run cannot notify twice about the same event.
+- Reports: claims by status and event type, potential, submitted,
+  accepted, recovered, rejected, and outstanding value grouped by
+  currency (never mixed), recovery history by month, and CSV export.
+- Full dashboard: opportunity, evidence, readiness, submission, and
+  deadline counts, upcoming deadlines, and per-currency financials,
+  with date and status filters. Potential money is labeled estimated,
+  never recovered.
+- An application shell with sidebar navigation, organization switcher,
+  user menu, and an unread notification badge, plus dashboard,
+  shipments, claims, deadlines, evidence library, notifications,
+  reports, audit log, organization settings, members, invitations, and
+  profile pages.
 - A Docker Compose development setup (backend, frontend, PostgreSQL, Redis,
   queue worker).
-- 156 backend feature tests and 74 frontend tests, all passing.
+- 196 backend feature tests and 105 frontend tests, all passing.
 
-What is not built yet: audit trail, notifications, and reports
-(Milestone 4). See `docs/PHASE-1-SCOPE.md` for the full milestone plan.
+What is not built yet: the Milestone 5 hardening pass (full test pass,
+security review, release). See `docs/PHASE-1-SCOPE.md` for the full
+milestone plan.
 
 ## Stack
 
@@ -108,8 +126,8 @@ npm run dev                  # http://localhost:3000
 ## Tests
 
 ```sh
-cd backend && php artisan test     # 156 feature tests, SQLite in-memory
-cd frontend && npm test            # 37 component and validation tests
+cd backend && php artisan test     # 196 feature tests, SQLite in-memory
+cd frontend && npm test            # 105 component and validation tests
 cd frontend && npm run build       # production build, includes type check
 ```
 

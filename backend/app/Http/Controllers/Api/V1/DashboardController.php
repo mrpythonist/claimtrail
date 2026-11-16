@@ -2,30 +2,47 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\ClaimStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Organization overview for the dashboard.
  *
- * Only reports what exists: members, invitations, shipments, events,
- * evidence, and (from Milestone 3) claims and deadlines. Financial
- * figures arrive with the reporting module in Milestone 4 and must
- * never be invented here.
+ * Counts, money, and upcoming deadlines come from DashboardService.
+ * Money figures are per currency and labeled estimated, submitted,
+ * approved, or recovered; potential money is estimated money and is
+ * never presented as recovered. Only real data is reported: an
+ * empty organization shows zeros and empty lists, not placeholders.
  */
 class DashboardController extends Controller
 {
-    public function show(Request $request): JsonResponse
+    public function show(Request $request, DashboardService $dashboard): JsonResponse
     {
         /** @var Organization $organization */
         $organization = $request->attributes->get('organization');
         $user = $request->user();
         $membership = $user->membershipIn($organization);
 
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'status' => ['nullable', 'string', Rule::in(ClaimStatus::values())],
+        ]);
+
+        $overview = $dashboard->overview(
+            $organization,
+            $validated['date_from'] ?? null,
+            $validated['date_to'] ?? null,
+            isset($validated['status']) ? ClaimStatus::from($validated['status']) : null,
+        );
+
         return response()->json([
-            'data' => [
+            'data' => array_merge([
                 'organization' => [
                     'id' => $organization->id,
                     'name' => $organization->name,
@@ -35,30 +52,7 @@ class DashboardController extends Controller
                 ],
                 'current_user_role' => $membership?->role->value,
                 'member_since' => $membership?->joined_at?->toISOString(),
-                'counts' => [
-                    'members_total' => $organization->members()->count(),
-                    'members_active' => $organization->activeMembers()->count(),
-                    'members_inactive' => $organization->members()->where('status', 'inactive')->count(),
-                    'invitations_pending' => $organization->pendingInvitations()->count(),
-                    'shipments_total' => $organization->shipments()->count(),
-                    'shipments_with_events' => $organization->shipments()->whereHas('events')->count(),
-                    'events_open' => $organization->shipmentEvents()->where('status', 'potential')->count(),
-                    'events_total' => $organization->shipmentEvents()->count(),
-                    'evidence_total' => $organization->evidenceFiles()->count(),
-                    'claims_total' => $organization->claims()->count(),
-                    'claims_open' => $organization->claims()->whereIn('status', [
-                        'potential', 'evidence_required', 'under_review', 'ready_to_submit',
-                    ])->count(),
-                    'claims_ready' => $organization->claims()->where('status', 'ready_to_submit')->count(),
-                    'claims_submitted' => $organization->claims()->whereIn('status', [
-                        'submitted', 'accepted', 'partially_accepted',
-                    ])->count(),
-                    'claims_paid' => $organization->claims()->where('status', 'paid')->count(),
-                    'deadlines_upcoming' => $organization->claimDeadlines()->active()->where('status', 'upcoming')->count(),
-                    'deadlines_due_soon' => $organization->claimDeadlines()->active()->where('status', 'due_soon')->count(),
-                    'deadlines_overdue' => $organization->claimDeadlines()->active()->where('status', 'overdue')->count(),
-                ],
-            ],
+            ], $overview),
         ]);
     }
 }

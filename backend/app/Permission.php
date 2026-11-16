@@ -60,6 +60,9 @@ enum Permission: string
     case ViewReports = 'view-reports';
     case ExportReports = 'export-reports';
 
+    // Audit trail (enforced from Milestone 4)
+    case ViewAuditLogs = 'view-audit-logs';
+
     /**
      * Every permission value, for validation and documentation.
      *

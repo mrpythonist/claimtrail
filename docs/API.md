@@ -31,6 +31,15 @@ member. Responses:
   deliberate, so organization ids cannot be probed.
 - Inactive member: `404`, same as a non-member.
 
+## Correlation ids
+
+Every API request gets a correlation id. Send one with the
+`X-Correlation-Id` header (any sane string up to 64 characters) or let
+the server generate a UUID. The id is echoed back on the response in
+the same header and recorded on every audit row written during the
+request, so a single request's trail can be followed end to end. The
+hourly deadline refresh command sets a fresh id per run.
+
 ## Errors
 
 Validation failures return `422` with Laravel's standard shape:
@@ -91,7 +100,7 @@ Other errors return `{"message": "..."}` with the appropriate status:
 
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
-| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, evidence, claim, and deadline counts. No financial figures exist yet (Milestone 4). |
+| GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, evidence, claim, and deadline counts, upcoming deadlines, claims by status, and per-currency financials (potential, submitted, accepted, recovered). Query: `date_from`, `date_to` (filter created_at of shipments and claims), `status` (adds a `claims_filtered` section with that status's count and requested amounts). `claims_submitted` counts status `submitted` only; accepted and partially accepted claims are under `claims_approved`. Potential money is labeled estimated, never recovered. |
 
 ### Members (tenant-scoped)
 
@@ -184,7 +193,7 @@ non-archived status; the create endpoint only accepts `draft` and
 | GET | `/evidence/{evidence}` | Yes + org header | One evidence record's metadata. The storage key is never exposed. Requires `view-evidence`. |
 | GET | `/evidence/{evidence}/download` | Yes + org header | Download the file. Add `?preview=1` to serve it inline (for images and PDFs). On S3 this redirects to a 5-minute signed URL. Requires `view-evidence`. |
 | PUT | `/evidence/{evidence}/verification` | Yes + org header | Set `verification_status` (`pending`, `verified`, `rejected`). Requires `verify-evidence`. |
-| DELETE | `/evidence/{evidence}` | Yes + org header | Delete the record and the stored file. Requires `delete-evidence`. The deletion is written to the application log; the full audit trail arrives in Milestone 4. |
+| DELETE | `/evidence/{evidence}` | Yes + org header | Delete the record and the stored file. Requires `delete-evidence`. The deletion is written to the application log and to the audit trail. |
 
 Document categories: `bill_of_lading`, `proof_of_delivery`,
 `rate_confirmation`, `arrival_departure_record`,
@@ -284,9 +293,10 @@ is `missed`, closed without submission after the deadline is `missed`,
 past deadline unsubmitted is `overdue`, inside the reminder window
 (largest reminder, or 7 days) is `due_soon`, otherwise `upcoming`.
 Deadlines are customer-supplied only: the system never infers one from
-an event type. No notification is sent in Milestone 3; the refresh
-command logs the counts and the API exposes them. Delivery arrives in
-Milestone 4.
+an event type. The refresh command notifies members with `view-claims`
+about due soon and overdue deadlines (at most once per deadline per
+day per type, through the notification dedupe keys) and logs the
+counts. Met, missed, and far-future upcoming deadlines do not notify.
 
 ### Claim packages (tenant-scoped)
 
@@ -302,6 +312,83 @@ and an evidence index (filenames, categories, verification status;
 originals are referenced, not embedded). Internal notes are included
 only when `include_notes` is true. The footer states the package is
 supporting evidence, not a guarantee of acceptance.
+
+### Audit trail (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/audit-logs` | Yes + org header | Paginated audit rows, newest first (25 per page). Query: `entity_type` (e.g. `Shipment`, `Claim`), `action` (e.g. `shipment.created`, `claim.status_changed`), `actor_id`, `date_from`, `date_to`, `page`. Requires `view-audit-logs` (owner, admin, operations manager). |
+
+Each row records the organization, the actor (`user` with a user id, or
+`system` for queue and console work), the action, the subject entity
+type and id, `before` and `after` values holding only the changed
+scalar fields, the correlation id, the request IP, and `created_at`.
+There is no `updated_at`: the trail is append-only, with no update or
+delete endpoints, and the model cancels updates and deletes in code.
+Passwords, tokens, storage keys, and internal notes are never written
+to audit rows. Claim status changes write one explicit
+`claim.status_changed` row per transition (with from and to status);
+the observer skips claim status so a transition is never recorded
+twice. Payment recording writes `claim.payment_recorded`, and package
+generation writes `claim_package.generated` with the member who
+requested the package as the actor.
+
+### Notifications (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/notifications` | Yes + org header | The member's own notifications, newest first (25 per page). Query: `unread=1` for unread only, `page`. The `meta` block carries `unread_count` alongside the pagination fields. |
+| GET | `/notifications/unread-count` | Yes + org header | `{ "data": { "unread_count": n } }`, for the badge in the app shell. |
+| POST | `/notifications/{notification}/read` | Yes + org header | Mark one notification read. Another member's notification, or one from another organization, returns 404. |
+| POST | `/notifications/read-all` | Yes + org header | Mark every unread notification read. Returns `{ "data": { "marked_read": n } }`. |
+| GET | `/notification-preferences` | Yes + org header | The member's preferences for all ten event types, each with `in_app` and `email` booleans. A missing row means both channels on. |
+| PUT | `/notification-preferences` | Yes + org header | Save preferences for one or more event types. Body: `preferences`, an array (at least one entry) of `{ event_type, in_app, email }`; `event_type` must be one of the ten types and both channel flags are required per entry. Returns the full preference list. |
+
+Notification types: `claim.created`, `claim.evidence_missing`,
+`claim.ready_for_review`, `deadline.upcoming`, `deadline.overdue`,
+`claim.submitted`, `claim.accepted`, `claim.rejected`,
+`payment.recorded`, `organization.invitation`. Claim events notify
+members with `view-claims` except the actor. Evidence-missing
+notifications are sent at most once per claim per day; deadline
+notifications at most once per deadline per day per type. Each
+notification row carries a `data` payload with entity links
+(`claim_id`, `shipment_id`, and friends) so the frontend can link
+into the underlying record.
+
+Delivery honors preferences per recipient per event type: in-app off
+means no row, email off means no mail. Email goes through a queued
+mailable (3 tries, backoff 60/300/900 seconds). Invitation
+notifications are created only for users who already have an account;
+an invitation to an unknown email sends the invitation email only and
+no notification row. There is no SMS or WhatsApp delivery.
+
+### Reports (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/reports/summary` | Yes + org header | Counts by claim status, counts by event type, and the six money figures per currency. Query: `date_from`, `date_to` (filter created_at of claims and events). Requires `view-reports`. |
+| GET | `/reports/recovery-history` | Yes + org header | Recovered amounts per month per currency over the filtered range (default: last 12 months). Query: `date_from`, `date_to`. Requires `view-reports`. |
+| GET | `/reports/export` | Yes + org header | The summary plus one row per claim as a streaming CSV download, honoring the same date filters. Requires `export-reports`. |
+
+Financial definitions (the single source is `ReportService`; the same
+figures feed the dashboard). Every figure is grouped by currency:
+amounts in different currencies are never added together, and there is
+no conversion and no invented rate.
+
+- **Potential**: sum of `requested_amount` on claims in `potential`,
+  `evidence_required`, `under_review`, or `ready_to_submit`. Estimated
+  only, never presented as recovered.
+- **Submitted**: sum of `requested_amount` on claims in `submitted`,
+  `accepted`, `partially_accepted`, `rejected`, or `paid`, plus claims
+  in `closed` that have a `submitted_at` timestamp. A claim closed
+  without submission counts nowhere.
+- **Accepted**: sum of `accepted_amount` on claims in `accepted`,
+  `partially_accepted`, or `paid`.
+- **Recovered**: sum of `recovered_amount` on claims in `paid` only.
+- **Rejected**: sum of `requested_amount` on claims in `rejected`.
+- **Outstanding**: accepted minus recovered, floored at 0, computed per
+  claim over claims in `accepted`, `partially_accepted`, or `paid`,
+  then summed per currency.
 
 ## Example: register, create an organization, invite someone
 

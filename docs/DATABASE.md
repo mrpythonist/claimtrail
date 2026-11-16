@@ -280,8 +280,9 @@ agreed, recovered is what was actually paid.
 Append-only: no update or delete endpoints exist. Index
 `(organization_id, claim_id)` and `(claim_id, created_at)`. Readiness
 overrides also write a row here (same from and to status, with an
-`action` of `readiness_override` in metadata) until the full audit
-trail arrives in Milestone 4.
+`action` of `readiness_override` in metadata). The full audit trail in
+`audit_logs` (Milestone 4) covers claim status changes too, with the
+transition service writing one explicit row per change.
 
 ### claim_evidence
 
@@ -374,11 +375,103 @@ is enforced in the application.
 
 Indexes `(organization_id, claim_id)` and `(claim_id, status)`.
 
+## Tables in Milestone 4
+
+### audit_logs
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| actor_type | string | `user` or `system` |
+| actor_id | bigint, FK to users, nullable, null on delete | Null for system rows |
+| action | string | e.g. `shipment.created`, `claim.status_changed`, `member.added` |
+| entity_type | string | e.g. `Shipment`, `Claim`, `GeneratedDocument` |
+| entity_id | string | UUID of the subject row, stored as a string |
+| before | json, nullable | Changed scalar fields before the change |
+| after | json, nullable | Changed scalar fields after the change |
+| correlation_id | string, nullable | Request correlation id, when one exists |
+| ip_address | string, nullable | Request IP, null for console and queue work |
+| created_at | timestamp | No `updated_at`: the table is append-only |
+
+Indexes `(organization_id, created_at)`, `(organization_id, entity_type)`,
+`(organization_id, action)`, and `(organization_id, actor_id)`.
+
+Append-only by design: there are no update or delete endpoints, and
+the model cancels updates and deletes in code. The `before` and `after`
+payloads hold only changed scalar fields; passwords, tokens, storage
+keys, and internal notes are never written (see
+`AuditService::sanitize`). Claim status is excluded from the observer
+payloads because the transition service writes one explicit
+`claim.status_changed` row per change.
+
+### notifications
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| user_id | bigint, FK to users, cascade on delete | The recipient |
+| type | string | One of the `NotificationType` values |
+| title | string | |
+| body | text | |
+| data | json, nullable | Entity links (claim_id, shipment_id, and friends) |
+| dedupe_key | string, nullable | Stable key per event, e.g. `claim.evidence_missing:<claim uuid>:2026-11-16` or `deadline.overdue:<deadline uuid>:2026-11-16` |
+| read_at | timestamp, nullable | Set when the member marks the row read |
+| email_sent_at | timestamp, nullable | Set when the email for this row is sent |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, user_id, dedupe_key)` where a dedupe key is
+present, so a repeated job run cannot create a second row for the same
+event. Indexes `(organization_id, user_id, read_at)` for the unread
+count and `(organization_id, user_id, created_at)` for the list.
+
+### notification_preferences
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| user_id | bigint, FK to users, cascade on delete | |
+| event_type | string | One of the `NotificationType` values |
+| in_app | boolean, default true | |
+| email | boolean, default true | |
+| created_at, updated_at | timestamps | |
+
+Unique `(user_id, organization_id, event_type)`. A missing row means
+both channels on: preferences are only stored when a member changes
+one. The notification service reads the row (or the default) per
+recipient per event type before creating an in-app row or queueing an
+email.
+
+## Reports: financial definitions
+
+`ReportService` is the single source for the money figures used by the
+reports endpoints and the dashboard. Every figure is grouped by
+currency; amounts in different currencies are never added together,
+and there is no conversion.
+
+- **Potential**: sum of `requested_amount` on claims in `potential`,
+  `evidence_required`, `under_review`, or `ready_to_submit`. Estimated
+  only, never presented as recovered.
+- **Submitted**: sum of `requested_amount` on claims in `submitted`,
+  `accepted`, `partially_accepted`, `rejected`, or `paid`, plus claims
+  in `closed` that have a `submitted_at` timestamp. A claim closed
+  without submission counts nowhere.
+- **Accepted**: sum of `accepted_amount` on claims in `accepted`,
+  `partially_accepted`, or `paid`.
+- **Recovered**: sum of `recovered_amount` on claims in `paid` only.
+- **Rejected**: sum of `requested_amount` on claims in `rejected`.
+- **Outstanding**: accepted minus recovered, floored at 0, computed per
+  claim over claims in `accepted`, `partially_accepted`, or `paid`,
+  then summed per currency.
+
 ## Conventions
 
 - UUID primary keys for organizations, invitations, carriers, shipments,
   events, categories, evidence files, claims, claim histories,
-  requirements, deadlines, and generated documents, because those ids
+  requirements, deadlines, generated documents, audit logs,
+  notifications, and notification preferences, because those ids
   appear in URLs, headers, and emails. Internal join rows (memberships,
   claim evidence links, claim sequences) use auto-increment ids.
 - Foreign keys with explicit delete behavior on every relationship.
@@ -391,5 +484,4 @@ Indexes `(organization_id, claim_id)` and `(claim_id, status)`.
 
 ## Tables planned for later milestones
 
-Notifications, notification preferences, audit logs. See
-`docs/PHASE-1-SCOPE.md` for the milestone each one belongs to.
+None. Milestone 5 (hardening and release) adds no new tables.

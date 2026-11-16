@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CarrierController;
 use App\Http\Controllers\Api\V1\ClaimController;
@@ -10,16 +11,21 @@ use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\EvidenceRequirementController;
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\NotificationPreferenceController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function () {
+// Every API request gets a correlation id, echoed back on the
+// response and recorded on audit rows written during the request.
+Route::prefix('v1')->middleware('correlation')->group(function () {
     // Public authentication endpoints. Tight rate limits apply because
     // these are the unauthenticated entry points.
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
@@ -126,6 +132,24 @@ Route::prefix('v1')->group(function () {
             Route::post('/claims/{claim}/package', [ClaimPackageController::class, 'store']);
             Route::get('/claims/{claim}/package', [ClaimPackageController::class, 'show']);
             Route::get('/documents/{document}/download', [ClaimPackageController::class, 'download']);
+
+            // Audit trail: read-only by design. There are no store,
+            // update, or delete routes for audit rows.
+            Route::get('/audit-logs', [AuditLogController::class, 'index']);
+
+            // The member's own notifications. The fixed unread-count
+            // path must come before any /notifications/{id} route.
+            Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+            Route::get('/notifications', [NotificationController::class, 'index']);
+            Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+            Route::post('/notifications/{notification}/read', [NotificationController::class, 'read']);
+
+            Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+            Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+
+            Route::get('/reports/summary', [ReportController::class, 'summary']);
+            Route::get('/reports/recovery-history', [ReportController::class, 'recoveryHistory']);
+            Route::get('/reports/export', [ReportController::class, 'export']);
         });
     });
 });

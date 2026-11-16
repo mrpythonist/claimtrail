@@ -13,9 +13,11 @@ use App\Models\EvidenceFile;
 use App\Models\Organization;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
+use App\NotificationType;
 use App\Permission;
 use App\Services\ClaimReferenceService;
 use App\Services\ClaimTransitionService;
+use App\Services\NotificationService;
 use App\Services\ReadinessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -88,7 +90,7 @@ class ClaimController extends Controller
      * When no category is given and the claim has an event, the
      * category is inherited from the event.
      */
-    public function store(Request $request, ClaimReferenceService $references): JsonResponse
+    public function store(Request $request, ClaimReferenceService $references, NotificationService $notifications): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -143,6 +145,24 @@ class ClaimController extends Controller
             'created_by' => $request->user()->id,
             'updated_by' => $request->user()->id,
         ]));
+
+        // The audit row for the creation comes from the observer.
+        // The notification is sent here, not from the observer, so
+        // seed data and test helpers never notify anyone.
+        $notifications->notify(
+            $organization,
+            $notifications->membersWithPermission($organization, Permission::ViewClaims, $request->user()),
+            NotificationType::ClaimCreated,
+            'New claim '.$claim->claim_reference,
+            'A new '.$claim->claim_category->label().' claim was created for '.$claim->currency.' '.number_format((float) $claim->requested_amount, 2).'.',
+            [
+                'claim_id' => (string) $claim->getKey(),
+                'claim_reference' => $claim->claim_reference,
+                'shipment_id' => (string) $claim->shipment_id,
+            ],
+            null,
+            $request->user(),
+        );
 
         return response()->json([
             'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator'])),

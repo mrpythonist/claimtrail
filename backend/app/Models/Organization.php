@@ -121,4 +121,28 @@ class Organization extends Model
     {
         return $this->hasMany(GeneratedDocument::class);
     }
+
+    /**
+     * Audit rows belonging to this organization.
+     */
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
+    /**
+     * Notifications belonging to this organization.
+     */
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Notification preferences set in this organization.
+     */
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
 }

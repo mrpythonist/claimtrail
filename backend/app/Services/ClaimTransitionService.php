@@ -6,6 +6,8 @@ use App\ClaimStatus;
 use App\Models\Claim;
 use App\Models\ClaimStatusHistory;
 use App\Models\User;
+use App\NotificationType;
+use App\Permission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,11 +22,19 @@ use Illuminate\Validation\ValidationException;
  * Payment is deliberately outside this service's transition method:
  * moving to paid happens only through recordPayment(), which requires
  * a payment date and a recovered amount.
+ *
+ * Each transition also writes one audit row and notifies the
+ * organization's members (except the actor) about the outcome.
+ * The model observer is suspended during a transition so the same
+ * change is not audited twice; notifications go out after the
+ * transaction commits, so a rolled-back transition never notifies.
  */
 class ClaimTransitionService
 {
     public function __construct(
         protected ReadinessService $readiness,
+        protected AuditService $audit,
+        protected NotificationService $notifications,
     ) {}
 
     /**
@@ -59,7 +69,7 @@ class ClaimTransitionService
         $updates = $this->transitionUpdates($claim, $target, $data);
         $reason = $data['reason'] ?? $data['rejection_reason'] ?? null;
 
-        return DB::transaction(function () use ($claim, $from, $target, $user, $updates, $reason, $data) {
+        $result = $this->audit->withoutAuditing(fn () => DB::transaction(function () use ($claim, $from, $target, $user, $updates, $reason, $data) {
             $claim->update(array_merge($updates, [
                 'updated_by' => $user->id,
             ]));
@@ -74,6 +84,25 @@ class ClaimTransitionService
                 'metadata' => $this->historyMetadata($claim, $target, $data),
             ]);
 
+            $after = ['status' => $target->value];
+
+            if (isset($data['accepted_amount'])) {
+                $after['accepted_amount'] = number_format((float) $data['accepted_amount'], 2, '.', '');
+            }
+
+            if ($reason !== null) {
+                $after['reason'] = $reason;
+            }
+
+            $this->audit->record(
+                $claim->organization,
+                'claim.status_changed',
+                $claim,
+                $user,
+                ['status' => $from->value],
+                $after,
+            );
+
             // Marking a claim ready to submit freezes a readiness
             // snapshot: the review decision is judged against the
             // evidence that was attached at that moment.
@@ -82,7 +111,11 @@ class ClaimTransitionService
             }
 
             return $claim->fresh();
-        });
+        }));
+
+        $this->notifyTransition($result, $from, $target, $user);
+
+        return $result;
     }
 
     /**
@@ -122,7 +155,7 @@ class ClaimTransitionService
 
         $from = $claim->status;
 
-        return DB::transaction(function () use ($claim, $from, $user, $data, $recovered, $paymentDate) {
+        $result = $this->audit->withoutAuditing(fn () => DB::transaction(function () use ($claim, $from, $user, $data, $recovered, $paymentDate) {
             $claim->update([
                 'status' => ClaimStatus::Paid,
                 'recovered_amount' => $recovered,
@@ -145,8 +178,129 @@ class ClaimTransitionService
                 ],
             ]);
 
+            $this->audit->record(
+                $claim->organization,
+                'claim.payment_recorded',
+                $claim,
+                $user,
+                ['status' => $from->value, 'recovered_amount' => null],
+                [
+                    'status' => ClaimStatus::Paid->value,
+                    'recovered_amount' => number_format((float) $recovered, 2, '.', ''),
+                    'currency' => $claim->currency,
+                    'payment_reference' => $data['payment_reference'] ?? null,
+                ],
+            );
+
             return $claim->fresh();
-        });
+        }));
+
+        $this->notifications->notify(
+            $result->organization,
+            $this->notifications->membersWithPermission($result->organization, Permission::ViewClaims, $user),
+            NotificationType::PaymentRecorded,
+            'Payment recorded for '.$result->claim_reference,
+            'A payment of '.$result->currency.' '.number_format((float) $result->recovered_amount, 2).' was recorded for claim '.$result->claim_reference.'.',
+            $this->notificationData($result),
+            null,
+            $user,
+        );
+
+        return $result;
+    }
+
+    /**
+     * Notify members about a transition outcome.
+     *
+     * Only outcomes the team needs to act on notify: ready for
+     * review, submitted, accepted (including partially accepted),
+     * rejected, and missing evidence. Routine moves (potential to
+     * under review, closing) stay quiet apart from the audit row.
+     */
+    protected function notifyTransition(Claim $claim, ClaimStatus $from, ClaimStatus $target, User $actor): void
+    {
+        $organization = $claim->organization;
+        $recipients = $this->notifications->membersWithPermission($organization, Permission::ViewClaims, $actor);
+        $data = $this->notificationData($claim);
+
+        $notify = fn (NotificationType $type, string $title, string $body, ?string $dedupeKey = null) => $this->notifications->notify(
+            $organization, $recipients, $type, $title, $body, $data, $dedupeKey, $actor,
+        );
+
+        match ($target) {
+            ClaimStatus::ReadyToSubmit => $notify(
+                NotificationType::ClaimReadyForReview,
+                'Claim '.$claim->claim_reference.' is ready to submit',
+                'Claim '.$claim->claim_reference.' ('.$claim->currency.' '.number_format((float) $claim->requested_amount, 2).') is ready for submission.',
+            ),
+            ClaimStatus::Submitted => $notify(
+                NotificationType::ClaimSubmitted,
+                'Claim '.$claim->claim_reference.' was submitted',
+                'Claim '.$claim->claim_reference.' was submitted to the broker.',
+            ),
+            ClaimStatus::Accepted => $notify(
+                NotificationType::ClaimAccepted,
+                'Claim '.$claim->claim_reference.' was accepted',
+                'Claim '.$claim->claim_reference.' was accepted for '.$claim->currency.' '.number_format((float) $claim->accepted_amount, 2).'.',
+            ),
+            ClaimStatus::PartiallyAccepted => $notify(
+                NotificationType::ClaimAccepted,
+                'Claim '.$claim->claim_reference.' was partially accepted',
+                'Claim '.$claim->claim_reference.' was partially accepted for '.$claim->currency.' '.number_format((float) $claim->accepted_amount, 2).' of '.$claim->currency.' '.number_format((float) $claim->requested_amount, 2).' requested.',
+            ),
+            ClaimStatus::Rejected => $notify(
+                NotificationType::ClaimRejected,
+                'Claim '.$claim->claim_reference.' was rejected',
+                'Claim '.$claim->claim_reference.' was rejected'.($claim->rejection_reason !== null ? ': '.$claim->rejection_reason : '.'),
+            ),
+            ClaimStatus::EvidenceRequired => $this->notifyEvidenceMissing($claim, $actor),
+            ClaimStatus::UnderReview => $this->notifyEvidenceMissing($claim, $actor),
+            default => null,
+        };
+    }
+
+    /**
+     * Notify members that a claim is missing required evidence.
+     *
+     * Fires when a claim moves to evidence required or into review
+     * with gaps still open. Deduped per claim per day: a claim
+     * that bounces between review states does not spam the team.
+     */
+    protected function notifyEvidenceMissing(Claim $claim, User $actor): void
+    {
+        $computed = $this->readiness->compute($claim->fresh());
+        $missing = $computed['missing'];
+
+        if (empty($missing)) {
+            return;
+        }
+
+        $labels = implode(', ', array_column($missing, 'label'));
+
+        $this->notifications->notify(
+            $claim->organization,
+            $this->notifications->membersWithPermission($claim->organization, Permission::ViewClaims, $actor),
+            NotificationType::ClaimEvidenceMissing,
+            'Claim '.$claim->claim_reference.' is missing evidence',
+            'Claim '.$claim->claim_reference.' still needs: '.$labels.'.',
+            $this->notificationData($claim),
+            'claim.evidence_missing:'.$claim->getKey().':'.now()->toDateString(),
+            $actor,
+        );
+    }
+
+    /**
+     * Entity links carried on claim notifications.
+     *
+     * @return array<string, string>
+     */
+    protected function notificationData(Claim $claim): array
+    {
+        return [
+            'claim_id' => (string) $claim->getKey(),
+            'claim_reference' => $claim->claim_reference,
+            'shipment_id' => (string) $claim->shipment_id,
+        ];
     }
 
     /**

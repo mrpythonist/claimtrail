@@ -8,7 +8,10 @@ use App\Mail\OrganizationInvitationMail;
 use App\MembershipStatus;
 use App\Models\Organization;
 use App\Models\OrganizationInvitation;
+use App\Models\User;
+use App\NotificationType;
 use App\OrganizationRole;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -49,7 +52,7 @@ class OrganizationInvitationController extends Controller
      * Only an owner can invite another owner. The raw token is sent in
      * the email; only its hash is stored.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, NotificationService $notifications): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -93,6 +96,31 @@ class OrganizationInvitationController extends Controller
         ]);
 
         Mail::to($email)->send(new OrganizationInvitationMail($invitation, $rawToken));
+
+        // When the invited address already has an account, the
+        // invitee also gets an in-app notification. No account yet
+        // means no in-app row: the invitation email is the only
+        // contact until they register. No second email is sent here;
+        // the invitation email above is the email for this event.
+        $invitee = User::where('email', $email)->first();
+
+        if ($invitee !== null) {
+            $notifications->notify(
+                $organization,
+                [$invitee],
+                NotificationType::OrganizationInvitation,
+                'You were invited to join '.$organization->name,
+                $request->user()->name.' invited you to join '.$organization->name.' on ClaimTrail as '.$invitation->role->label().'.',
+                [
+                    'organization_id' => (string) $organization->getKey(),
+                    'invitation_id' => (string) $invitation->getKey(),
+                ],
+                'invitation:'.$invitation->getKey(),
+                $request->user(),
+                requireMembership: false,
+                sendEmail: false,
+            );
+        }
 
         return response()->json([
             'data' => new OrganizationInvitationResource($invitation),

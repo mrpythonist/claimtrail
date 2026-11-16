@@ -1,8 +1,8 @@
 # Security
 
 ClaimTrail stores commercially sensitive transportation records. This
-document lists the controls in place in Milestones 1, 2, and 3 and the
-review work that is still open. Having controls does not mean the
+document lists the controls in place in Milestones 1, 2, 3, and 4 and
+the review work that is still open. Having controls does not mean the
 product is compliant with any regulation; no compliance is claimed.
 
 ## Controls in place
@@ -98,6 +98,37 @@ product is compliant with any regulation; no compliance is claimed.
 - The package states in its footer that it is supporting evidence, not
   a guarantee of acceptance.
 
+### Audit trail (Milestone 4)
+
+- Audit rows are append-only: there are no update or delete endpoints,
+  and the model cancels updates and deletes in code.
+- The `before` and `after` payloads hold only changed scalar fields.
+  Passwords, tokens, storage keys, file contents, and internal notes
+  are never written (`AuditService::sanitize` drops them by key).
+- Every row records the organization, the actor (user or system), the
+  action, the subject, the correlation id, and the request IP. The
+  correlation id lets one request's trail be followed end to end.
+- The audit list requires `view-audit-logs` (owner, admin, operations
+  manager) and is scoped to the resolved organization.
+- Audit rows are not seeded and are never fabricated: the trail records
+  only actions that really happened.
+
+### Notifications (Milestone 4)
+
+- A member can only read their own notification rows; another member's
+  row, or a row from another organization, returns 404.
+- Dedupe keys (unique per organization and user) stop a repeated job
+  run from notifying twice about the same event, in-app and by email.
+- Email goes through a queued mailable with bounded retries (3 tries,
+  backoff 60/300/900 seconds) and failed-job logging. The email body
+  carries only the notification title, body, and a deep link; it never
+  carries file contents or internal notes.
+- Invitation notifications are created only for users who already have
+  an account, so an invitation to an unknown email cannot be used to
+  probe whether an address is registered.
+- Notification emails respect per-member per-event preferences, so a
+  member who turns a channel off stops receiving it.
+
 ### Secrets
 
 - No secrets are committed. `.env` files are git-ignored; only
@@ -118,26 +149,20 @@ product handles real customer data.
 3. **Security headers.** No Content-Security-Policy, HSTS, or similar
    headers are configured yet. Add them at the nginx or Next.js config
    level before production.
-4. **Audit trail.** There is no full append-only audit trail yet. It
-   arrives in Milestone 4. Until then, membership and invitation
-   changes are not recorded beyond database timestamps, the only
-   deletion record is a log line when an evidence file is deleted, and
-   claim status changes are recorded only in `claim_status_histories`
-   (which is append-only but covers claims, not the whole product).
-5. **Upload scanning.** Uploaded files are type-checked by content but
+4. **Upload scanning.** Uploaded files are type-checked by content but
    not scanned for malware. Add antivirus scanning before the product
    handles uploads from untrusted users.
-6. **Penetration test.** No external security review has been done.
-7. **Legal documents.** The privacy policy and terms of service are
+5. **Penetration test.** No external security review has been done.
+6. **Legal documents.** The privacy policy and terms of service are
    placeholders marked for legal review.
-8. **Dependency scanning.** No automated vulnerability scanning is wired
+7. **Dependency scanning.** No automated vulnerability scanning is wired
    up yet (Dependabot or equivalent, plus `composer audit` / `npm audit`
    in CI).
-9. **Backups and deletion.** No backup, retention, or account-deletion
+8. **Backups and deletion.** No backup, retention, or account-deletion
    procedures exist yet.
-10. **Production secrets.** The Docker Compose defaults are development
-    values. Production needs generated secrets managed outside the
-    repository.
+9. **Production secrets.** The Docker Compose defaults are development
+   values. Production needs generated secrets managed outside the
+   repository.
 
 ## Reporting a vulnerability
 

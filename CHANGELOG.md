@@ -5,7 +5,8 @@ Keep a Changelog, and the project follows semantic versioning.
 
 ## [1.0.1] - Unreleased
 
-Phase 1, in progress. Milestones 0, 1, 2, and 3 are complete.
+Phase 1, in progress. Milestones 0, 1, 2, 3, and 4 are complete. Only
+Milestone 5 (hardening and release) remains.
 
 ### Added
 
@@ -80,6 +81,56 @@ Phase 1, in progress. Milestones 0, 1, 2, and 3 are complete.
 - Milestone 3: 54 new backend feature tests (156 total, 545
   assertions) and 37 new frontend tests (74 total): claim form
   validation, claim form component, and readiness panel component.
+- Milestone 4: append-only audit trail (`audit_logs`) for shipments,
+  events, evidence, claims, deadlines, membership, and invitations,
+  written by model observers plus explicit calls for claim status
+  changes, payment recording, and package generation. A correlation id
+  middleware honors or generates `X-Correlation-Id`, echoes it on the
+  response, and records it on audit rows. One new permission
+  (`view-audit-logs`: owner, admin, operations manager). No update or
+  delete routes exist, and the model cancels updates and deletes.
+- Milestone 4: notifications (`notifications`,
+  `notification_preferences`) for claim created, evidence missing,
+  ready for review, deadline upcoming and overdue, claim submitted,
+  accepted, and rejected, payment recorded, and organization
+  invitation. Per-member per-event in-app and email preferences, read
+  state, unread count, and dedupe keys (unique per organization and
+  user) so repeated runs cannot notify twice. Email goes through a
+  queued mailable with 3 tries and backoff. The deadline refresh
+  command now notifies instead of only logging counts. Invitation
+  notifications go only to users who already have an account; unknown
+  emails get the invitation email only.
+- Milestone 4: reports (`ReportService`) with explicit financial
+  definitions: potential, submitted, accepted, recovered, rejected,
+  and outstanding, every figure grouped by currency and never mixed.
+  Endpoints for a summary, recovery history by month, and a streaming
+  CSV export. The `view-reports` and `export-reports` permissions were
+  already in the central map and are now enforced by these endpoints.
+- Milestone 4: full dashboard (`DashboardService`): opportunity,
+  evidence, readiness, submission, approval, rejection, payment, and
+  deadline counts, upcoming deadlines, and per-currency financials,
+  with date and status filters. Potential money is labeled estimated,
+  never recovered.
+- Milestone 4: frontend pages for notifications (list, unread filter,
+  mark read, mark all read), reports (date filters, per-currency money
+  tables, CSS-bar breakdowns, CSV export), and the audit log (filters,
+  before/after viewer); a rebuilt dashboard; an unread badge in the
+  app shell that polls on navigation; and a notification preferences
+  form in profile settings.
+- Milestone 4: 40 new backend feature tests (196 total, 765
+  assertions) and 31 new frontend tests (105 total): audit rows,
+  notification delivery and preferences, report math and CSV export,
+  dashboard counts and filters, reporting helpers, and permission
+  helpers.
+
+### Changed
+
+- Milestone 4: the dashboard `claims_submitted` count now means claims
+  with status `submitted` only. In Milestones 2 and 3 it counted
+  submitted plus accepted plus partially accepted. Accepted and
+  partially accepted claims are now reported under the new
+  `claims_approved` count. The `claims_by_status` breakdown was always
+  per status and is unchanged.
 
 ### Fixed
 

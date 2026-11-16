@@ -8,7 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Claim deadline statuses are recomputed hourly. Notification
-// delivery for upcoming and overdue deadlines is a Milestone 4
-// concern; until then the command logs the counts.
+// Claim deadline statuses are recomputed hourly. Due-soon and
+// overdue deadlines notify the organization's members (one
+// notification per deadline per day).
 Schedule::command('claimtrail:refresh-deadline-statuses')->hourly();

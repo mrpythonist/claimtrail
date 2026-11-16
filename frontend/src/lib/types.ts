@@ -63,6 +63,38 @@ export interface OrganizationInvitation {
   created_at: string;
 }
 
+export interface MoneyAmount {
+  currency: string;
+  amount: string;
+}
+
+export interface DashboardCounts {
+  members_total: number;
+  members_active: number;
+  members_inactive: number;
+  invitations_pending: number;
+  shipments_total: number;
+  shipments_with_events: number;
+  shipments_with_opportunities: number;
+  events_open: number;
+  events_total: number;
+  evidence_total: number;
+  claims_total: number;
+  claims_open: number;
+  claims_open_opportunities: number;
+  claims_awaiting_evidence: number;
+  claims_ready: number;
+  claims_submitted: number;
+  claims_approved: number;
+  claims_rejected: number;
+  claims_paid: number;
+  claims_closed: number;
+  deadlines_upcoming: number;
+  deadlines_due_soon: number;
+  deadlines_overdue: number;
+  deadlines_next_14_days: number;
+}
+
 export interface DashboardData {
   organization: {
     id: string;
@@ -73,25 +105,108 @@ export interface DashboardData {
   };
   current_user_role: OrganizationRole | null;
   member_since: string | null;
-  counts: {
-    members_total: number;
-    members_active: number;
-    members_inactive: number;
-    invitations_pending: number;
-    shipments_total: number;
-    shipments_with_events: number;
-    events_open: number;
-    events_total: number;
-    evidence_total: number;
-    claims_total: number;
-    claims_open: number;
-    claims_ready: number;
-    claims_submitted: number;
-    claims_paid: number;
-    deadlines_upcoming: number;
-    deadlines_due_soon: number;
-    deadlines_overdue: number;
+  counts: DashboardCounts;
+  claims_by_status: { status: string; label: string; count: number }[];
+  financials: {
+    potential: MoneyAmount[];
+    submitted: MoneyAmount[];
+    accepted: MoneyAmount[];
+    recovered: MoneyAmount[];
   };
+  upcoming_deadlines: {
+    deadline_id: string;
+    claim_id: string;
+    claim_reference: string;
+    deadline_at: string;
+    status: string;
+    status_label: string;
+  }[];
+  filters: {
+    date_from: string | null;
+    date_to: string | null;
+    status: string | null;
+  };
+  claims_filtered?: {
+    status: string;
+    label: string;
+    count: number;
+    requested_amounts: MoneyAmount[];
+  };
+}
+
+export type NotificationEventType =
+  | "claim.created"
+  | "claim.evidence_missing"
+  | "claim.ready_for_review"
+  | "deadline.upcoming"
+  | "deadline.overdue"
+  | "claim.submitted"
+  | "claim.accepted"
+  | "claim.rejected"
+  | "payment.recorded"
+  | "organization.invitation";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationEventType;
+  type_label: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown> | null;
+  is_unread: boolean;
+  read_at: string | null;
+  email_sent_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsMeta extends PaginatedMeta {
+  unread_count: number;
+}
+
+export interface NotificationPreference {
+  event_type: NotificationEventType;
+  label: string;
+  in_app: boolean;
+  email: boolean;
+}
+
+export type AuditActorType = "user" | "system";
+
+export interface AuditLog {
+  id: string;
+  organization_id: string;
+  actor_type: AuditActorType;
+  actor: { id: number; name: string } | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  correlation_id: string | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface ReportSummary {
+  counts_by_status: { status: string; label: string; count: number }[];
+  counts_by_event_type: { category: string; label: string; count: number }[];
+  money: {
+    potential: MoneyAmount[];
+    submitted: MoneyAmount[];
+    accepted: MoneyAmount[];
+    recovered: MoneyAmount[];
+    rejected: MoneyAmount[];
+    outstanding: MoneyAmount[];
+  };
+  filters: {
+    date_from: string | null;
+    date_to: string | null;
+  };
+}
+
+export interface RecoveryHistoryMonth {
+  month: string;
+  amounts: MoneyAmount[];
 }
 
 export interface PaginatedMeta {

@@ -4,7 +4,7 @@ import type { ClaimStatus, OrganizationRole } from "./types";
  * The single place in the frontend that maps roles to capabilities.
  *
  * This mirrors the backend role map (config/permissions.php) for the
- * Milestone 1, Milestone 2, and Milestone 3 surface, and is used to
+ * Milestone 1, Milestone 2, Milestone 3, and Milestone 4 surface, and is used to
  * enable or hide controls. It is a usability aid, not a security
  * boundary: the backend enforces every permission and the UI must
  * handle 403 responses gracefully.
@@ -73,6 +73,29 @@ const CLAIM_EVIDENCE_ATTACHERS: OrganizationRole[] = [
 ];
 
 const REQUIREMENT_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+];
+
+// ViewReports in the backend map also covers viewers: they can read
+// reports but cannot export them.
+const REPORT_VIEWERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "billing_staff",
+  "viewer",
+];
+
+const REPORT_EXPORTERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "billing_staff",
+];
+
+const AUDIT_LOG_VIEWERS: OrganizationRole[] = [
   "owner",
   "admin",
   "operations_manager",
@@ -164,6 +187,18 @@ export function canManageEvidenceRequirements(role: OrganizationRole | null | un
 
 export function canManageDeadlines(role: OrganizationRole | null | undefined): boolean {
   return isOneOf(role, CLAIM_CREATORS);
+}
+
+export function canViewReports(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, REPORT_VIEWERS);
+}
+
+export function canExportReports(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, REPORT_EXPORTERS);
+}
+
+export function canViewAuditLogs(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, AUDIT_LOG_VIEWERS);
 }
 
 /**

@@ -7,6 +7,7 @@ use App\MembershipStatus;
 use App\Models\EventCategory;
 use App\Models\Organization;
 use App\Models\User;
+use App\NotificationType;
 use App\OrganizationRole;
 use App\Services\ClaimReferenceService;
 use App\ShipmentStatus;
@@ -22,11 +23,16 @@ use Illuminate\Support\Facades\Hash;
  * All demo users share the password "password". These credentials are
  * documented in docs/DEVELOPMENT.md and must never exist in production.
  * The seeder is idempotent: running it twice does not duplicate users,
- * memberships, carriers, shipments, events, requirements, claims, or
- * deadlines. No evidence rows are seeded: an evidence record without
- * a real file behind it would be a broken promise. No generated
- * documents are seeded either: a document row without a PDF behind
- * it would be the same broken promise.
+ * memberships, carriers, shipments, events, requirements, claims,
+ * deadlines, or notifications. No evidence rows are seeded: an
+ * evidence record without a real file behind it would be a broken
+ * promise. No generated documents are seeded either: a document row
+ * without a PDF behind it would be the same broken promise. No audit
+ * rows are seeded: the audit trail records only actions that really
+ * happened, and seeding is not one of them. Two notifications are
+ * seeded for the demo owner, both about the sample detention claim
+ * (created, and missing evidence): they describe the seeded claim,
+ * which genuinely has no evidence attached.
  *
  * The default evidence requirements are illustrative starting points
  * the customer must verify against their own contracts. They are not
@@ -285,6 +291,48 @@ class DemoSeeder extends Seeder
                 'reminder_days_before' => [7, 3, 1],
                 'status' => 'upcoming',
             ]);
+        }
+
+        // Two notifications for the demo owner, both about the sample
+        // detention claim. The dedupe keys are stable (no date), so
+        // re-running the seeder does not duplicate them. No audit rows
+        // are seeded: the trail records only actions that happened.
+        if ($detentionClaim !== null) {
+            $reference = $detentionClaim->claim_reference;
+
+            $organization->notifications()->firstOrCreate(
+                [
+                    'user_id' => $owner->id,
+                    'dedupe_key' => 'demo:claim.created:'.$detentionClaim->getKey(),
+                ],
+                [
+                    'type' => NotificationType::ClaimCreated,
+                    'title' => 'New claim created: '.$reference,
+                    'body' => 'Claim '.$reference.' was created for shipment CT-DEMO-001.',
+                    'data' => [
+                        'claim_id' => (string) $detentionClaim->getKey(),
+                        'claim_reference' => $reference,
+                        'shipment_id' => (string) $shipment->getKey(),
+                    ],
+                ]
+            );
+
+            $organization->notifications()->firstOrCreate(
+                [
+                    'user_id' => $owner->id,
+                    'dedupe_key' => 'demo:claim.evidence_missing:'.$detentionClaim->getKey(),
+                ],
+                [
+                    'type' => NotificationType::ClaimEvidenceMissing,
+                    'title' => 'Claim '.$reference.' is missing evidence',
+                    'body' => 'Claim '.$reference.' still needs: Appointment confirmation, Arrival/departure record, Broker communication.',
+                    'data' => [
+                        'claim_id' => (string) $detentionClaim->getKey(),
+                        'claim_reference' => $reference,
+                        'shipment_id' => (string) $shipment->getKey(),
+                    ],
+                ]
+            );
         }
     }
 }

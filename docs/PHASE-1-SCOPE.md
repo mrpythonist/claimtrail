@@ -11,17 +11,17 @@ which of the 14 specified modules are done and which are still to come.
 | 1 | Authentication | M1 | Done |
 | 2 | Multi-tenant organizations | M1 | Done |
 | 3 | Role-based access control | M1 | Done |
-| 4 | Dashboard | M1 (overview) / M2 (shipments) / M3 (claims, deadlines) / M4 (full metrics) | Partial: member, invitation, shipment, event, evidence, claim, and deadline counts; no financial figures yet |
+| 4 | Dashboard | M1 (overview) / M2 (shipments) / M3 (claims, deadlines) / M4 (full metrics) | Done: full counts, upcoming deadlines, per-currency financials, date and status filters |
 | 5 | Shipment management | M2 | Done |
 | 6 | Shipment events | M2 | Done |
 | 7 | Evidence management | M2 | Done |
 | 8 | Claim management | M3 | Done |
 | 9 | Evidence requirements and readiness | M3 | Done |
-| 10 | Deadline management | M3 | Done (notification delivery in M4) |
+| 10 | Deadline management | M3 | Done (deadline notifications delivered in M4) |
 | 11 | Claim package generation (PDF) | M3 | Done |
-| 12 | Claim history and audit trail | M4 | Not started |
-| 13 | Notifications | M4 | Not started |
-| 14 | Basic reporting | M4 | Not started |
+| 12 | Claim history and audit trail | M4 | Done |
+| 13 | Notifications | M4 | Done |
+| 14 | Basic reporting | M4 | Done |
 
 ## Milestone 0: environment probe (done)
 
@@ -128,19 +128,48 @@ which of the 14 specified modules are done and which are still to come.
   (all Milestone 2 gaps, unchanged); S3 package download is code-only
   with no live bucket; deadline notifications are not wired yet.
 
-## Milestone 4: audit, notifications, reports (planned)
+## Milestone 4: audit, notifications, reports (done)
 
 - Append-only audit trail for shipments, events, evidence, claims,
-  deadlines, membership, and admin actions. Claim status history from
-  Milestone 3 feeds into it; the trail itself is the new work.
-- In-app and email notifications with preferences, read state, and
-  idempotent delivery. Deadline reminders plug into the refresh command
-  and the reminder schedules stored in Milestone 3.
-- Reports: claims by status and event type, potential/submitted/accepted/
-  recovered/rejected/outstanding value, recovery history over time.
-  Date filters and CSV export.
-- Full dashboard metrics.
-- Integration testing, security review, final verification.
+  deadlines, membership, invitations, and package generation. Model
+  observers write created/updated/deleted rows with changed fields
+  only; the claim transition service writes explicit status and
+  payment rows; the package job writes a generation row. A correlation
+  id middleware honors or generates `X-Correlation-Id` and records it
+  on audit rows. One new permission: `view-audit-logs` (owner, admin,
+  operations manager). No update or delete routes exist, and the model
+  cancels updates and deletes in code.
+- In-app and email notifications with per-member per-event
+  preferences, read state, unread count, and dedupe keys so repeated
+  runs cannot notify twice. Triggers: claim created, evidence missing
+  (once per claim per day), ready for review, submitted, accepted,
+  rejected, payment recorded, deadline upcoming and overdue from the
+  refresh command (once per deadline per day per type), and invitation
+  (existing users only, in-app). Email goes through a queued mailable
+  with 3 tries and backoff. No SMS or WhatsApp.
+- Reports with explicit financial definitions (see `docs/API.md`):
+  potential, submitted, accepted, recovered, rejected, and
+  outstanding, every figure grouped by currency and never mixed.
+  Summary, recovery history by month, and streaming CSV export, all
+  with date filters. The `view-reports` permission (owner, admin,
+  operations manager, billing staff, viewer) and the
+  `export-reports` permission (owner, admin, operations manager,
+  billing staff) are now enforced.
+- Full dashboard: opportunity, evidence, readiness, submission,
+  approval, rejection, payment, and deadline counts, upcoming
+  deadlines, and per-currency financials, with date and status
+  filters. The `claims_submitted` count now means status `submitted`
+  only; accepted and partially accepted claims are reported under the
+  new `claims_approved` count.
+- Pages: notifications, reports, audit log, rebuilt dashboard, unread
+  badge in the app shell (polled on navigation), and notification
+  preferences in profile settings.
+- Tests: 40 new backend feature tests (196 total, 765 assertions)
+  and 31 new frontend tests (105 total), production build verified,
+  lint clean.
+- Known gaps: no carrier deletion, no unarchive, no create-category UI
+  (all Milestone 2 gaps, unchanged); S3 paths are code-only with no
+  live bucket; no browser end-to-end tests.
 
 ## Milestone 5: hardening and release (planned)
 

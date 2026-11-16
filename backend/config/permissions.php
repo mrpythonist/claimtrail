@@ -60,6 +60,7 @@ return [
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
         Permission::ExportReports->value,
+        Permission::ViewAuditLogs->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -90,6 +91,7 @@ return [
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
         Permission::ExportReports->value,
+        Permission::ViewAuditLogs->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
