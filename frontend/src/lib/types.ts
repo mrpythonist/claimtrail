@@ -247,7 +247,7 @@ export type DocumentCategory =
   | "other";
 
 export interface Carrier {
-  id: number;
+  id: string;
   organization_id: string;
   name: string;
   contact_name: string | null;
@@ -260,12 +260,12 @@ export interface Carrier {
 }
 
 export interface Shipment {
-  id: number;
+  id: string;
   organization_id: string;
   internal_reference: string;
   external_load_reference: string | null;
   broker_or_customer_name: string;
-  carrier_id: number | null;
+  carrier_id: string | null;
   driver_name: string | null;
   driver_contact: string | null;
   pickup_location: string | null;
@@ -279,7 +279,7 @@ export interface Shipment {
   status: ShipmentStatus;
   status_label: string;
   notes: string | null;
-  carrier: { id: number; name: string } | null;
+  carrier: { id: string; name: string } | null;
   created_by: { id: number; name: string } | null;
   events_count: number;
   evidence_count: number;
@@ -288,7 +288,7 @@ export interface Shipment {
 }
 
 export interface EventCategory {
-  id: number;
+  id: string;
   slug: string;
   label: string;
   description: string | null;
@@ -296,11 +296,11 @@ export interface EventCategory {
 }
 
 export interface ShipmentEvent {
-  id: number;
+  id: string;
   organization_id: string;
-  shipment_id: number;
-  event_category_id: number;
-  category: { id: number; slug: string; label: string };
+  shipment_id: string;
+  event_category_id: string;
+  category: { id: string; slug: string; label: string };
   event_date: string;
   start_time: string | null;
   end_time: string | null;
@@ -318,10 +318,10 @@ export interface ShipmentEvent {
 }
 
 export interface EvidenceFile {
-  id: number;
+  id: string;
   organization_id: string;
-  shipment_id: number | string;
-  shipment_event_id: number | null;
+  shipment_id: string;
+  shipment_event_id: string | null;
   document_category: DocumentCategory;
   document_category_label: string;
   original_filename: string;

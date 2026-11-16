@@ -23,7 +23,7 @@ const mockedApiFetch = vi.mocked(apiFetch);
 
 const SHIPMENTS: Shipment[] = [
   {
-    id: 1,
+    id: "11111111-1111-1111-1111-111111111111",
     organization_id: "org-1",
     internal_reference: "LOAD-001",
     external_load_reference: null,
@@ -50,7 +50,7 @@ const SHIPMENTS: Shipment[] = [
     updated_at: "2026-11-10T10:00:00Z",
   },
   {
-    id: 2,
+    id: "22222222-2222-2222-2222-222222222222",
     organization_id: "org-1",
     internal_reference: "LOAD-002",
     external_load_reference: null,
@@ -80,11 +80,11 @@ const SHIPMENTS: Shipment[] = [
 
 const EVENTS: ShipmentEvent[] = [
   {
-    id: 5,
+    id: "55555555-5555-5555-5555-555555555555",
     organization_id: "org-1",
-    shipment_id: 1,
-    event_category_id: 2,
-    category: { id: 2, slug: "layover", label: "Layover" },
+    shipment_id: "11111111-1111-1111-1111-111111111111",
+    event_category_id: "22222222-2222-2222-2222-222222222222",
+    category: { id: "22222222-2222-2222-2222-222222222222", slug: "layover", label: "Layover" },
     event_date: "2026-11-12",
     start_time: null,
     end_time: null,
@@ -107,9 +107,9 @@ function baseClaim(overrides: Partial<Claim> = {}): Claim {
     id: "claim-1",
     organization_id: "org-1",
     claim_reference: "CLM-2026-0001",
-    shipment_id: "1",
+    shipment_id: "11111111-1111-1111-1111-111111111111",
     shipment: {
-      id: "1",
+      id: "11111111-1111-1111-1111-111111111111",
       internal_reference: "LOAD-001",
       broker_or_customer_name: "Acme Brokerage",
       status: "delivered",
@@ -184,7 +184,7 @@ describe("ClaimForm", () => {
   it("rejects a requested amount of zero", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
-    await user.selectOptions(screen.getByLabelText("Shipment"), "1");
+    await user.selectOptions(screen.getByLabelText("Shipment"), "11111111-1111-1111-1111-111111111111");
     await user.type(screen.getByLabelText("Requested amount"), "0");
     await user.click(screen.getByRole("button", { name: "Create claim" }));
     expect(
@@ -196,7 +196,7 @@ describe("ClaimForm", () => {
   it("submits the filled form values", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
-    await user.selectOptions(screen.getByLabelText("Shipment"), "1");
+    await user.selectOptions(screen.getByLabelText("Shipment"), "11111111-1111-1111-1111-111111111111");
     await user.type(screen.getByLabelText("Requested amount"), "250.00");
     await user.type(
       screen.getByLabelText("Description"),
@@ -206,7 +206,7 @@ describe("ClaimForm", () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith({
-      shipment_id: "1",
+      shipment_id: "11111111-1111-1111-1111-111111111111",
       shipment_event_id: null,
       claim_category: "other",
       description: "Waited six hours at the dock.",
@@ -222,13 +222,13 @@ describe("ClaimForm", () => {
     const user = userEvent.setup();
     mockedApiFetch.mockResolvedValue({ data: EVENTS });
     renderForm();
-    await user.selectOptions(screen.getByLabelText("Shipment"), "1");
+    await user.selectOptions(screen.getByLabelText("Shipment"), "11111111-1111-1111-1111-111111111111");
     await waitFor(() => {
       expect(
         screen.getByRole("option", { name: /Layover on/ }),
       ).toBeInTheDocument();
     });
-    await user.selectOptions(screen.getByLabelText("Linked event (optional)"), "5");
+    await user.selectOptions(screen.getByLabelText("Linked event (optional)"), "55555555-5555-5555-5555-555555555555");
     expect(screen.getByLabelText("Category")).toHaveValue("layover");
   });
 

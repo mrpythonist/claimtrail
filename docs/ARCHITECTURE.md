@@ -170,12 +170,12 @@ from them instead of inventing new patterns.
 | Readiness | ReadinessService, EvidenceRequirement | readiness panel, requirements settings | Done (M3) |
 | Deadlines | ClaimDeadlineController, DeadlineStatusService, hourly command | deadlines overview | Done (M3) |
 | PDF packages | ClaimPackageController, GenerateClaimPackage job, dompdf | package section on claim detail | Done (M3) |
-| Audit trail | Milestone 4 | Milestone 4 | Planned |
-| Notifications | Milestone 4 | Milestone 4 | Planned |
-| Reports | Milestone 4 | Milestone 4 | Planned |
-| Dashboard metrics | Milestone 4 | Milestone 4 | Planned |
+| Audit trail | AuditService, AuditLog model, observers, CorrelationIdMiddleware | audit log page, before/after viewer | Done (M4) |
+| Notifications | NotificationService, Notification model, queued mailable | notifications page, preferences form, unread badge | Done (M4) |
+| Reports | ReportService | reports page, CSV export | Done (M4) |
+| Dashboard metrics | DashboardService | rebuilt dashboard | Done (M4) |
 
-## Production notes (not implemented in Milestone 1)
+## Production notes (not implemented in Phase 1)
 
 - Run the backend with PHP-FPM behind nginx, not `php artisan serve`.
 - Use PostgreSQL and Redis services (RDS and ElastiCache, or containers).

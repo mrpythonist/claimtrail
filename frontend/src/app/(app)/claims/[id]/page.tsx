@@ -265,7 +265,7 @@ function ClaimDetailContent({
   const [attaching, setAttaching] = useState(false);
   const [detachTarget, setDetachTarget] = useState<EvidenceFile | null>(null);
   const [detaching, setDetaching] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<number | string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const myRole = org.current_user_role;
   const immutable = claim ? isClaimImmutable(claim.status) : false;

@@ -13,6 +13,10 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
+import {
+  CategoryForm,
+  type CategoryPayload,
+} from "@/components/shipments/CategoryForm";
 import { EventForm, type EventPayload } from "@/components/shipments/EventForm";
 import {
   apiDownload,
@@ -112,6 +116,12 @@ function ShipmentDetailContent({
   const [editingEvent, setEditingEvent] = useState<ShipmentEvent | null>(null);
   const [eventFieldErrors, setEventFieldErrors] = useState<FieldErrors>({});
   const [savingEvent, setSavingEvent] = useState(false);
+
+  // Custom event category state.
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [categoryFieldErrors, setCategoryFieldErrors] = useState<FieldErrors>({});
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
   const [deleteEventTarget, setDeleteEventTarget] = useState<ShipmentEvent | null>(null);
   const [deletingEvent, setDeletingEvent] = useState(false);
 
@@ -126,8 +136,8 @@ function ShipmentDetailContent({
   const [deleteEvidenceTarget, setDeleteEvidenceTarget] =
     useState<EvidenceFile | null>(null);
   const [deletingEvidence, setDeletingEvidence] = useState(false);
-  const [verifyingId, setVerifyingId] = useState<number | null>(null);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const myRole = org.current_user_role;
@@ -243,6 +253,54 @@ function ShipmentDetailContent({
     setShowEventForm(false);
     setEditingEvent(null);
     setEventFieldErrors({});
+  }
+
+  function openAddCategory() {
+    setCategoryFieldErrors({});
+    setCategoryMessage(null);
+    setShowCategoryForm(true);
+  }
+
+  function closeCategoryForm() {
+    setShowCategoryForm(false);
+    setCategoryFieldErrors({});
+    setCategoryMessage(null);
+  }
+
+  async function handleCategorySubmit(payload: CategoryPayload) {
+    setError(null);
+    setCategoryFieldErrors({});
+    setCategoryMessage(null);
+    setSavingCategory(true);
+    try {
+      const response = await apiFetch<{ data: EventCategory }>(
+        "/event-categories",
+        { method: "POST", body: payload, orgId: org.id },
+      );
+      setCategories((current) =>
+        [...current, response.data].sort((a, b) =>
+          a.label.localeCompare(b.label),
+        ),
+      );
+      setNotice(`Category "${response.data.label}" added.`);
+      closeCategoryForm();
+    } catch (err) {
+      if (err instanceof ApiRequestError && Object.keys(err.fields).length > 0) {
+        const mapped: FieldErrors = {};
+        for (const [field, messages] of Object.entries(err.fields)) {
+          mapped[field] = messages[0];
+        }
+        setCategoryFieldErrors(mapped);
+      } else if (err instanceof ApiRequestError) {
+        // Duplicate names and other non-field problems come back as a
+        // plain message; show it on the form, not the page.
+        setCategoryMessage(err.message);
+      } else {
+        showError(err, "Could not add the category.");
+      }
+    } finally {
+      setSavingCategory(false);
+    }
   }
 
   async function handleEventSubmit(payload: EventPayload) {
@@ -527,12 +585,29 @@ function ShipmentDetailContent({
           description="Detention, layover, TONU, lumper, and other charge events for this shipment."
           action={
             canManageEvents(myRole) && !archived ? (
-              <Button size="sm" onClick={openAddEvent}>
-                Add event
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={openAddCategory}>
+                  New category
+                </Button>
+                <Button size="sm" onClick={openAddEvent}>
+                  Add event
+                </Button>
+              </div>
             ) : undefined
           }
         />
+        {showCategoryForm && (
+          <CardBody className="border-b border-slate-200">
+            <CategoryForm
+              submitting={savingCategory}
+              serverErrors={categoryFieldErrors}
+              serverMessage={categoryMessage}
+              submitLabel="Add category"
+              onCancel={closeCategoryForm}
+              onSubmit={handleCategorySubmit}
+            />
+          </CardBody>
+        )}
         {showEventForm && (
           <CardBody className="border-b border-slate-200">
             <EventForm

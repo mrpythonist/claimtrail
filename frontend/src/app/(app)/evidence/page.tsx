@@ -55,8 +55,8 @@ function EvidenceContent({ org }: { org: Organization }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [verificationFilter, setVerificationFilter] = useState("");
   const [page, setPage] = useState(1);
-  const [verifyingId, setVerifyingId] = useState<number | null>(null);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EvidenceFile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -194,9 +194,7 @@ function EvidenceContent({ org }: { org: Organization }) {
   }
 
   function shipmentLabel(file: EvidenceFile): string {
-    const shipment = shipments.find(
-      (item) => String(item.id) === String(file.shipment_id),
-    );
+    const shipment = shipments.find((item) => item.id === file.shipment_id);
     return shipment ? shipment.internal_reference : `#${shortId(file.shipment_id)}`;
   }
 

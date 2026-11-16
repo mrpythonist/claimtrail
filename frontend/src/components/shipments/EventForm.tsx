@@ -13,7 +13,7 @@ import type {
 } from "@/lib/types";
 
 export interface EventPayload {
-  event_category_id: number;
+  event_category_id: string;
   event_date: string;
   start_time: string | null;
   end_time: string | null;
@@ -57,7 +57,7 @@ export function EventForm({
   const isEdit = initial !== null;
 
   const [eventCategoryId, setEventCategoryId] = useState(
-    initial?.event_category_id ? String(initial.event_category_id) : "",
+    initial?.event_category_id ?? "",
   );
   const [eventDate, setEventDate] = useState(initial?.event_date ?? "");
   const [startTime, setStartTime] = useState(initial?.start_time ?? "");
@@ -94,7 +94,7 @@ export function EventForm({
     if (Object.keys(formErrors).length > 0) return;
 
     const payload: EventPayload = {
-      event_category_id: Number(eventCategoryId),
+      event_category_id: eventCategoryId,
       event_date: eventDate,
       start_time: startTime || null,
       end_time: endTime || null,

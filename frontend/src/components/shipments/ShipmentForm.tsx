@@ -14,7 +14,7 @@ export interface ShipmentPayload {
   internal_reference: string;
   external_load_reference: string | null;
   broker_or_customer_name: string;
-  carrier_id: number | null;
+  carrier_id: string | null;
   driver_name: string | null;
   driver_contact: string | null;
   pickup_location: string | null;
@@ -70,9 +70,7 @@ export function ShipmentForm({
   const [brokerOrCustomerName, setBrokerOrCustomerName] = useState(
     initial?.broker_or_customer_name ?? "",
   );
-  const [carrierId, setCarrierId] = useState(
-    initial?.carrier_id ? String(initial.carrier_id) : "",
-  );
+  const [carrierId, setCarrierId] = useState(initial?.carrier_id ?? "");
   const [driverName, setDriverName] = useState(initial?.driver_name ?? "");
   const [driverContact, setDriverContact] = useState(initial?.driver_contact ?? "");
   const [pickupLocation, setPickupLocation] = useState(initial?.pickup_location ?? "");
@@ -124,7 +122,7 @@ export function ShipmentForm({
       internal_reference: internalReference.trim(),
       external_load_reference: blankToNull(externalLoadReference),
       broker_or_customer_name: brokerOrCustomerName.trim(),
-      carrier_id: carrierId ? Number(carrierId) : null,
+      carrier_id: carrierId ? carrierId : null,
       driver_name: blankToNull(driverName),
       driver_contact: blankToNull(driverContact),
       pickup_location: blankToNull(pickupLocation),

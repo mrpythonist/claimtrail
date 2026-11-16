@@ -5,9 +5,9 @@ import { EventForm } from "../EventForm";
 import type { EventCategory } from "@/lib/types";
 
 const CATEGORIES: EventCategory[] = [
-  { id: 1, slug: "detention", label: "Detention", description: null, is_system: true },
-  { id: 2, slug: "layover", label: "Layover", description: null, is_system: true },
-  { id: 3, slug: "tonu", label: "TONU", description: null, is_system: true },
+  { id: "11111111-1111-1111-1111-111111111111", slug: "detention", label: "Detention", description: null, is_system: true },
+  { id: "22222222-2222-2222-2222-222222222222", slug: "layover", label: "Layover", description: null, is_system: true },
+  { id: "33333333-3333-3333-3333-333333333333", slug: "tonu", label: "TONU", description: null, is_system: true },
 ];
 
 function renderForm(overrides: Partial<Parameters<typeof EventForm>[0]> = {}) {
@@ -49,7 +49,10 @@ describe("EventForm", () => {
   it("submits the filled form values", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
-    await user.selectOptions(screen.getByLabelText("Event category"), "2");
+    await user.selectOptions(
+      screen.getByLabelText("Event category"),
+      "22222222-2222-2222-2222-222222222222",
+    );
     await user.type(screen.getByLabelText("Event date"), "2026-11-16");
     await user.type(screen.getByLabelText("Start time"), "08:00");
     await user.type(screen.getByLabelText("End time"), "10:30");
@@ -58,7 +61,7 @@ describe("EventForm", () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith({
-      event_category_id: 2,
+      event_category_id: "22222222-2222-2222-2222-222222222222",
       event_date: "2026-11-16",
       start_time: "08:00",
       end_time: "10:30",
@@ -81,11 +84,11 @@ describe("EventForm", () => {
   it("shows a status select when editing an existing event", () => {
     renderForm({
       initial: {
-        id: 7,
+        id: "77777777-7777-7777-7777-777777777777",
         organization_id: "org-1",
-        shipment_id: 3,
-        event_category_id: 1,
-        category: { id: 1, slug: "detention", label: "Detention" },
+        shipment_id: "33333333-3333-3333-3333-333333333333",
+        event_category_id: "11111111-1111-1111-1111-111111111111",
+        category: { id: "11111111-1111-1111-1111-111111111111", slug: "detention", label: "Detention" },
         event_date: "2026-11-16",
         start_time: "08:00",
         end_time: "10:30",

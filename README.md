@@ -12,9 +12,10 @@ ClaimTrail never guarantees that a charge is recoverable. Contractual
 eligibility and submission requirements are configured and verified by the
 customer.
 
-## Current status: Milestone 4 (audit trail, notifications, reports, full dashboard)
+## Current status: Phase 1 complete (v1.0.1)
 
-This repository is at Phase 1, v1.0.1, Milestone 4. What exists today:
+This repository is at Phase 1, v1.0.1. All six milestones (0 to 5) are
+complete. What exists today:
 
 - User registration, login, logout, password reset, and email verification
   (Laravel Sanctum token auth for the Next.js frontend).
@@ -25,9 +26,9 @@ This repository is at Phase 1, v1.0.1, Milestone 4. What exists today:
   filters, sorting, pagination, CSV import with preview and duplicate
   detection, and CSV export.
 - Shipment events: the seven system categories plus organization custom
-  categories, duration computed from start and end times, and review
-  statuses. Events are potential opportunities only, never automatic
-  qualifications.
+  categories (creatable from the shipment detail page), duration
+  computed from start and end times, and review statuses. Events are
+  potential opportunities only, never automatic qualifications.
 - Evidence: secure upload with type and size validation, private storage,
   authorized download and inline preview, categorization, and verification
   status.
@@ -67,11 +68,19 @@ This repository is at Phase 1, v1.0.1, Milestone 4. What exists today:
   profile pages.
 - A Docker Compose development setup (backend, frontend, PostgreSQL, Redis,
   queue worker).
-- 196 backend feature tests and 105 frontend tests, all passing.
+- Security headers on API responses, and JSON 401 responses for
+  unauthenticated API requests with or without a JSON Accept header.
+- 200 backend feature tests (783 assertions) and 110 frontend tests,
+  all passing, plus a scripted end-to-end scenario pass (scenarios A
+  to I from the specification) run live over HTTP against a fresh
+  database: 9 of 9 pass.
 
-What is not built yet: the Milestone 5 hardening pass (full test pass,
-security review, release). See `docs/PHASE-1-SCOPE.md` for the full
-milestone plan.
+Not verified on the build machine (no Docker, PostgreSQL, Redis, or
+browser was available there): Docker builds, migrations against live
+PostgreSQL, the queue worker against live Redis, S3 storage paths,
+invitation and verification emails through a real mailer, and the
+frontend in a real browser. See `docs/PHASE-1-SCOPE.md` for the full
+milestone plan, the feature inventory, and the known limitations.
 
 ## Stack
 
@@ -126,8 +135,8 @@ npm run dev                  # http://localhost:3000
 ## Tests
 
 ```sh
-cd backend && php artisan test     # 196 feature tests, SQLite in-memory
-cd frontend && npm test            # 105 component and validation tests
+cd backend && php artisan test     # 200 feature tests, SQLite in-memory
+cd frontend && npm test            # 110 component and validation tests
 cd frontend && npm run build       # production build, includes type check
 ```
 

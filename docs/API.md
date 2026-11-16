@@ -58,6 +58,10 @@ Other errors return `{"message": "..."}` with the appropriate status:
 `403` (authenticated but not permitted), `404` (not found or not a member),
 `429` (rate limited).
 
+Unauthenticated API requests return JSON `401` even when the request
+has no `Accept: application/json` header. The API never redirects to
+a login page.
+
 ## Rate limits
 
 - Register: 10 requests per minute per IP.

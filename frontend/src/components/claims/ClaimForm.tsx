@@ -75,7 +75,7 @@ export function ClaimForm({
 
   const [shipmentSearch, setShipmentSearch] = useState("");
   const [shipmentId, setShipmentId] = useState(
-    initial ? String(initial.shipment_id) : "",
+    initial ? initial.shipment_id : "",
   );
   const [events, setEvents] = useState<ShipmentEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(
@@ -83,7 +83,7 @@ export function ClaimForm({
   );
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [eventId, setEventId] = useState(
-    initial?.shipment_event_id ? String(initial.shipment_event_id) : "",
+    initial?.shipment_event_id ?? "",
   );
   const [category, setCategory] = useState<ClaimCategory>(
     initial?.claim_category ?? "other",
@@ -148,7 +148,7 @@ export function ClaimForm({
 
   function handleEventChange(value: string) {
     setEventId(value);
-    const event = events.find((item) => String(item.id) === value);
+    const event = events.find((item) => item.id === value);
     const slug = event?.category.slug;
     if (slug && CLAIM_CATEGORIES.some((item) => item.value === slug)) {
       setCategory(slug as ClaimCategory);

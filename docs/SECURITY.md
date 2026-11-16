@@ -1,7 +1,7 @@
 # Security
 
 ClaimTrail stores commercially sensitive transportation records. This
-document lists the controls in place in Milestones 1, 2, 3, and 4 and
+document lists the controls in place in Milestones 1 through 5 and
 the review work that is still open. Having controls does not mean the
 product is compliant with any regulation; no compliance is claimed.
 
@@ -129,10 +129,51 @@ product is compliant with any regulation; no compliance is claimed.
 - Notification emails respect per-member per-event preferences, so a
   member who turns a channel off stops receiving it.
 
+### Mass assignment and SQL (Milestone 5 review)
+
+- Every model restricts mass assignment through `$fillable` (or the
+  `#[Fillable]` attribute on the User model). No model uses
+  `$guarded = []`, and no controller creates a record from raw request
+  data: controllers validate first and pass only validated fields.
+- No user input reaches a raw SQL string. The remaining `selectRaw`,
+  `whereRaw`, and `orderByRaw` calls use static strings or bound
+  parameters. The one place a column name was interpolated
+  (`ReportService::moneyByCurrency`) takes only hardcoded literals
+  from its callers, and now also enforces an allowlist that rejects
+  anything else.
+
+### Security headers (Milestone 5)
+
+- A global middleware (`App\Http\Middleware\SecurityHeaders`) sets
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer`, and a minimal `Permissions-Policy`
+  (camera, microphone, geolocation all disabled) on every API
+  response. No Content-Security-Policy is set on the API: it serves
+  no HTML of its own, so CSP belongs on the Next.js frontend.
+- CORS allows only the configured frontend origin (`FRONTEND_URL`,
+  default `http://localhost:3000`), with credentials disabled. It is
+  never `*` with credentials.
+- The frontend stores the token in `localStorage` and sends it as a
+  Bearer header. The token is never put in a URL and never written
+  to a log.
+
+### Error handling (Milestone 5)
+
+- Unauthenticated API requests return JSON `401` even when the
+  request has no `Accept: application/json` header. The API-only app
+  has no login route, so guests are never redirected (previously this
+  produced a 500). Covered by regression tests.
+- With `APP_DEBUG=false`, Laravel renders only a generic "Server
+  Error" for unexpected exceptions: no stack trace, no SQL, no file
+  paths. `APP_DEBUG` must be `false` in production.
+
 ### Secrets
 
 - No secrets are committed. `.env` files are git-ignored; only
-  `.env.example` files are in the repository.
+  `.env.example` files are in the repository. A full-tree scan in
+  Milestone 5 found no committed keys, passwords, or tokens; the only
+  real `APP_KEY` in the tree is the development `.env` file, which is
+  git-ignored and never pushed.
 - The demo seeder credentials are development-only and documented as such.
 
 ## Open review items
@@ -146,9 +187,10 @@ product handles real customer data.
    which is readable by any script on the page. This is acceptable for
    Milestone 1, but an httpOnly cookie session (Sanctum SPA mode) should
    be evaluated before production.
-3. **Security headers.** No Content-Security-Policy, HSTS, or similar
-   headers are configured yet. Add them at the nginx or Next.js config
-   level before production.
+3. **Security headers.** API responses now carry nosniff, DENY,
+   no-referrer, and a minimal Permissions-Policy (Milestone 5). No
+   Content-Security-Policy or HSTS is configured yet. Add them at the
+   nginx or Next.js config level before production.
 4. **Upload scanning.** Uploaded files are type-checked by content but
    not scanned for malware. Add antivirus scanning before the product
    handles uploads from untrusted users.

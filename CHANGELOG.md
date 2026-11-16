@@ -3,10 +3,9 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
-## [1.0.1] - Unreleased
+## [1.0.1] - 2026-11-16
 
-Phase 1, in progress. Milestones 0, 1, 2, 3, and 4 are complete. Only
-Milestone 5 (hardening and release) remains.
+Phase 1, complete. All milestones (0 to 5) are done.
 
 ### Added
 
@@ -122,6 +121,26 @@ Milestone 5 (hardening and release) remains.
   notification delivery and preferences, report math and CSV export,
   dashboard counts and filters, reporting helpers, and permission
   helpers.
+- Milestone 5: create-event-category UI on the shipment detail page
+  (closes the Milestone 2 gap): authorized users add a custom
+  organization category without leaving the event section, with
+  validation and duplicate-name error states.
+- Milestone 5: security headers middleware on all API responses
+  (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer`, and a minimal `Permissions-Policy`).
+- Milestone 5: full security review of the tree (tenancy,
+  authorization, mass assignment, SQL, files, auth, headers, CORS,
+  secrets, error leakage, audit sanitizing). Findings are in
+  `docs/SECURITY.md`. Two fixes landed: the security headers above
+  and an allowlist guard on the report money-column helper.
+- Milestone 5: scripted end-to-end scenario pass (specification
+  scenarios A to I) run live over HTTP against a fresh database:
+  registration and invitations, shipment and detention event,
+  evidence upload, claim and readiness, review, PDF generation and
+  download, submission, acceptance, payment, cross-tenant denial,
+  and duplicate-free deadline notifications. 9 of 9 pass.
+- Milestone 5: 4 new backend feature tests (200 total, 783
+  assertions) and 5 new frontend tests (110 total).
 
 ### Changed
 
@@ -138,6 +157,18 @@ Milestone 5 (hardening and release) remains.
   organization at the start of every request, and membership lookups
   bypass the tenant scope, so a stale organization cannot leak into a
   later request in long-running processes or tests.
+- Milestone 5: unauthenticated API requests no longer return 500
+  ("Route [login] not defined") when they omit the
+  `Accept: application/json` header. Guests are never redirected, and
+  authentication failures on `/api/*` render as JSON 401. Regression
+  tests cover the request with and without the header.
+- Milestone 5: frontend id types now match the backend (UUID strings
+  for carriers, shipments, events, categories, evidence, claims, and
+  the rest; integers only for users, members, and pivot rows). This
+  fixed two real bugs the wrong types were hiding: the shipment form
+  sent `Number(carrier_id)` and the event form sent
+  `Number(event_category_id)`, which turned UUIDs into NaN and
+  silently dropped the selection. Both forms now send the string.
 
 ### Notes
 
@@ -147,3 +178,10 @@ Milestone 5 (hardening and release) remains.
   available there). See `docs/DEVELOPMENT.md`.
 - The CI workflow is not in the repository yet; workflow files cannot be
   pushed through the GitHub API and must be added through the web UI.
+  See `docs/DEVELOPMENT.md` for the manual step.
+- No v1.0.1 git tag exists yet. Create the release and tag through the
+  GitHub web UI.
+- Not verified on the build machine: Docker builds, migrations against
+  live PostgreSQL, the queue worker against live Redis, S3 storage
+  paths, emails through a real mailer, and the frontend in a real
+  browser. See `docs/PHASE-1-SCOPE.md`.

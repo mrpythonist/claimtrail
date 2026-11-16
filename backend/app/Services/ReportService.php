@@ -244,6 +244,13 @@ class ReportService
      */
     protected function moneyByCurrency(Builder $claims, array $statuses, string $column): array
     {
+        // The column name is interpolated into raw SQL, so it must
+        // come from this fixed list. All callers pass one of these
+        // three literals; anything else is a programming error.
+        if (! in_array($column, ['requested_amount', 'accepted_amount', 'recovered_amount'], true)) {
+            throw new \InvalidArgumentException("Unsupported amount column: {$column}");
+        }
+
         $values = array_map(fn (ClaimStatus $status) => $status->value, $statuses);
 
         $rows = (clone $claims)

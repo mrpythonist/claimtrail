@@ -261,4 +261,24 @@ class AuthTest extends TestCase
 
         Notification::assertSentTo($user, VerifyEmail::class);
     }
+
+    public function test_unauthenticated_api_request_without_json_accept_header_returns_401_json(): void
+    {
+        // Regression test: this used to return a 500 ("Route [login]
+        // not defined") because the API-only app has no login route
+        // for the default redirect. API routes must always answer
+        // unauthenticated requests with JSON 401.
+        $response = $this->withHeaders(['Accept' => 'text/html'])
+            ->get('/api/v1/auth/me');
+
+        $response->assertUnauthorized()
+            ->assertJson(['message' => 'Unauthenticated.']);
+    }
+
+    public function test_unauthenticated_api_request_with_json_accept_header_returns_401_json(): void
+    {
+        $this->getJson('/api/v1/auth/me')
+            ->assertUnauthorized()
+            ->assertJson(['message' => 'Unauthenticated.']);
+    }
 }

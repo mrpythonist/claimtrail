@@ -98,6 +98,36 @@ cd frontend && npm run build       # Production build with type check
 Backend tests live in `backend/tests/Feature/`. Frontend tests live next
 to the code they cover (`__tests__` directories).
 
+## Continuous integration
+
+There is no `.github/workflows/` directory in the repository: workflow
+files cannot be pushed through the GitHub API, so the CI workflow has
+to be added through the web UI. To set it up:
+
+1. In the repository on GitHub, go to Actions, then "New workflow",
+   then "set up a workflow yourself".
+2. Name the file `ci.yml` and paste in the prepared workflow (backend
+   tests on PHP 8.3 with SQLite, frontend tests, lint, and production
+   build on Node 24). The prepared content is kept with the release
+   notes; ask the maintainer for the current copy.
+3. Commit it directly to `main` through the web UI.
+
+Until this is done, CI does not run on pushes. Run the four test
+commands above locally before pushing.
+
+## Before production
+
+- Set `APP_DEBUG=false`. With debug on, error pages leak stack traces
+  and internals; with it off, unexpected API errors render as a
+  generic "Server Error".
+- Set a real mailer (SES, Mailgun, or SMTP) instead of the log driver.
+- Set `SANCTUM_TOKEN_EXPIRATION` once the frontend has a token refresh
+  flow.
+- Generate production secrets outside the repository; never reuse the
+  development `.env` values.
+- See `docs/SECURITY.md` for the open review items (token storage,
+  CSP/HSTS, upload scanning, penetration test, backups).
+
 ## Useful commands
 
 ```sh
