@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/*
+ * ClaimTrail design tokens.
+ *
+ * Brand is a deep navy (trust, financial accuracy) with a restrained
+ * amber accent used sparingly for highlights and warnings. Neutrals
+ * come from Tailwind's slate scale. There are no gradients in the
+ * interface. Type is Geist Sans from next/font with system fallbacks.
+ */
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  --color-brand-50: #eff5fa;
+  --color-brand-100: #d9e7f2;
+  --color-brand-200: #b3cfe4;
+  --color-brand-300: #84add2;
+  --color-brand-400: #5486b8;
+  --color-brand-500: #336a9e;
+  --color-brand-600: #245583;
+  --color-brand-700: #1d4569;
+  --color-brand-800: #173753;
+  --color-brand-900: #122a40;
+  --color-brand-950: #0a1b2b;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Visible, consistent keyboard focus for interactive elements. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
