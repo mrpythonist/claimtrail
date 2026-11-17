@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
+import { EvidencePreviewModal } from "@/components/evidence/EvidencePreviewModal";
 import { apiDownload, apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canDeleteEvidence, canVerifyEvidence } from "@/lib/permissions";
@@ -19,8 +20,6 @@ import {
   DOCUMENT_CATEGORIES,
   downloadBlob,
   formatFileSize,
-  isPreviewableMime,
-  openBlobInNewTab,
   shortId,
   VERIFICATION_STATUS_LABELS,
   verificationStatusTone,
@@ -59,6 +58,7 @@ function EvidenceContent({ org }: { org: Organization }) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EvidenceFile | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
 
   const myRole = org.current_user_role;
 
@@ -114,19 +114,14 @@ function EvidenceContent({ org }: { org: Organization }) {
     };
   }, [org.id, page, shipmentFilter, categoryFilter, verificationFilter]);
 
-  async function handleDownload(file: EvidenceFile, preview: boolean) {
+  async function handleDownload(file: EvidenceFile) {
     setError(null);
     setDownloadingId(file.id);
     try {
-      const blob = await apiDownload(
-        `/evidence/${file.id}/download${preview ? "?preview=1" : ""}`,
-        { orgId: org.id },
-      );
-      if (preview && isPreviewableMime(file.mime_type)) {
-        openBlobInNewTab(blob);
-      } else {
-        downloadBlob(blob, file.original_filename);
-      }
+      const blob = await apiDownload(`/evidence/${file.id}/download`, {
+        orgId: org.id,
+      });
+      downloadBlob(blob, file.original_filename);
     } catch (err) {
       setError(
         err instanceof ApiRequestError
@@ -344,21 +339,19 @@ function EvidenceContent({ org }: { org: Organization }) {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {isPreviewableMime(file.mime_type) && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={downloadingId === file.id}
-                            onClick={() => handleDownload(file, true)}
-                          >
-                            Preview
-                          </Button>
-                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           disabled={downloadingId === file.id}
-                          onClick={() => handleDownload(file, false)}
+                          onClick={() => setPreviewFile(file)}
+                        >
+                          Preview
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={downloadingId === file.id}
+                          onClick={() => handleDownload(file)}
                         >
                           Download
                         </Button>
@@ -420,6 +413,11 @@ function EvidenceContent({ org }: { org: Organization }) {
         loading={deleting}
         onConfirm={confirmDelete}
         onClose={() => setDeleteTarget(null)}
+      />
+      <EvidencePreviewModal
+        file={previewFile}
+        orgId={org.id}
+        onClose={() => setPreviewFile(null)}
       />
     </div>
   );

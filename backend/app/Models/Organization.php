@@ -21,6 +21,7 @@ class Organization extends Model
     {
         return [
             'settings' => 'array',
+            'onboarding_dismissed_at' => 'datetime',
         ];
     }
 
@@ -128,6 +129,14 @@ class Organization extends Model
     public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    /**
+     * Saved list views belonging to this organization.
+     */
+    public function savedViews(): HasMany
+    {
+        return $this->hasMany(SavedView::class);
     }
 
     /**

@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { CountBar } from "@/components/ui/CountBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch, ApiRequestError } from "@/lib/api";
@@ -19,13 +20,16 @@ import {
   daysRemainingLabel,
   deadlineStatusTone,
 } from "@/lib/claims";
+import { canManageOrganization } from "@/lib/permissions";
 import { formatCurrencyAmount } from "@/lib/reporting";
 import { TIMEZONES } from "@/lib/timezones";
 import type {
   DashboardData,
   DeadlineStatus,
   MoneyAmount,
+  OnboardingProgress,
   Organization,
+  OrganizationRole,
 } from "@/lib/types";
 
 function CreateOrganizationCard() {
@@ -89,6 +93,79 @@ function CreateOrganizationCard() {
             Create organization
           </Button>
         </form>
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * Onboarding panel for the dashboard. Hidden when onboarding is
+ * complete or dismissed, and when the endpoint cannot be reached.
+ */
+function OnboardingPanel({
+  org,
+  role,
+}: {
+  org: Organization;
+  role: OrganizationRole | null;
+}) {
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
+  const [dismissing, setDismissing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ data: OnboardingProgress }>("/onboarding", { orgId: org.id })
+      .then((response) => {
+        if (!cancelled) setProgress(response.data);
+      })
+      .catch(() => {
+        // Onboarding is a guide, not a blocker: hide the panel on failure.
+        if (!cancelled) setProgress(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id]);
+
+  async function handleDismiss() {
+    setDismissing(true);
+    try {
+      await apiFetch("/onboarding/dismiss", {
+        method: "POST",
+        orgId: org.id,
+      });
+      setProgress((current) =>
+        current ? { ...current, dismissed: true } : current,
+      );
+    } catch {
+      // Dismiss failing leaves the panel in place; nothing else breaks.
+    } finally {
+      setDismissing(false);
+    }
+  }
+
+  if (!progress || progress.all_completed || progress.dismissed) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Get started"
+        description="A few first steps to get your organization ready to recover money."
+        action={
+          <Link href="/onboarding">
+            <Button variant="secondary" size="sm">
+              View all steps
+            </Button>
+          </Link>
+        }
+      />
+      <CardBody>
+        <OnboardingChecklist
+          progress={progress}
+          canDismiss={canManageOrganization(role)}
+          dismissing={dismissing}
+          onDismiss={handleDismiss}
+        />
       </CardBody>
     </Card>
   );
@@ -218,6 +295,8 @@ function DashboardContent({ org }: { org: Organization }) {
 
   return (
     <div className="space-y-6">
+      <OnboardingPanel org={org} role={data.current_user_role} />
+
       <Card>
         <CardBody>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

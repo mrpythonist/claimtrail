@@ -42,6 +42,7 @@ enum Permission: string
     // Claims (enforced from Milestone 3)
     case CreateClaims = 'create-claims';
     case EditClaims = 'edit-claims';
+    case DeleteClaims = 'delete-claims';
     case ReviewClaims = 'review-claims';
     case SubmitClaims = 'submit-claims';
     case RecordClaimPayments = 'record-claim-payments';

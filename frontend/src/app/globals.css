@@ -35,6 +35,23 @@ body {
   color: var(--color-foreground);
 }
 
+/*
+ * Narrow-screen guard: long unbroken text (references, file names)
+ * must wrap instead of forcing the page wider than the viewport.
+ * overflow-x: clip keeps the sticky header working, unlike hidden.
+ */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Media inside cards and modals must stay inside their container. */
+img,
+iframe,
+video {
+  max-width: 100%;
+}
+
 /* Visible, consistent keyboard focus for interactive elements. */
 :focus-visible {
   outline: 2px solid var(--color-brand-600);

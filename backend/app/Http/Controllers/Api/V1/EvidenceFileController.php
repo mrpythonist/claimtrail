@@ -158,6 +158,69 @@ class EvidenceFileController extends Controller
     }
 
     /**
+     * Preview a file inline in the browser.
+     *
+     * Only images and PDFs are previewable: other types get a 422
+     * with previewable false, and the client falls back to a
+     * download. Authorization and storage checks are identical to
+     * the download endpoint.
+     */
+    public function preview(Request $request, EvidenceFile $evidence): BinaryFileResponse|RedirectResponse|StreamedResponse|JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        if ($evidence->organization_id !== $organization->getKey()) {
+            abort(404);
+        }
+
+        Gate::authorize('view', $evidence);
+
+        if (! $evidence->isPreviewable()) {
+            return response()->json([
+                'message' => 'Preview is not available for this file type. Download the file instead.',
+                'previewable' => false,
+                'mime_type' => $evidence->mime_type,
+            ], 422);
+        }
+
+        $disk = Storage::disk($evidence->disk);
+
+        if (! $disk->exists($evidence->storage_key)) {
+            Log::warning('Evidence file missing from storage.', [
+                'evidence_id' => $evidence->getKey(),
+                'organization_id' => $organization->getKey(),
+            ]);
+
+            abort(404, 'The file is no longer available.');
+        }
+
+        $disposition = (new ResponseHeaderBag)->makeDisposition(
+            ResponseHeaderBag::DISPOSITION_INLINE,
+            $evidence->original_filename
+        );
+
+        if ($evidence->disk === 's3') {
+            return redirect()->away($disk->temporaryUrl(
+                $evidence->storage_key,
+                now()->addMinutes(5),
+                [
+                    'ResponseContentDisposition' => $disposition,
+                    'ResponseContentType' => $evidence->mime_type,
+                ]
+            ));
+        }
+
+        return $disk->response(
+            $evidence->storage_key,
+            $evidence->original_filename,
+            [
+                'Content-Type' => $evidence->mime_type,
+                'Content-Disposition' => $disposition,
+            ]
+        );
+    }
+
+    /**
      * Download a file, or preview it inline with ?preview=1.
      *
      * Access is authorized on every request. On the local disk the

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\CarrierController;
 use App\Http\Controllers\Api\V1\ClaimController;
 use App\Http\Controllers\Api\V1\ClaimDeadlineController;
 use App\Http\Controllers\Api\V1\ClaimPackageController;
+use App\Http\Controllers\Api\V1\ClaimReviewNoteController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
@@ -13,11 +14,13 @@ use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\EvidenceRequirementController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
+use App\Http\Controllers\Api\V1\OnboardingController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\ReportController;
+use App\Http\Controllers\Api\V1\SavedViewController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
@@ -66,6 +69,14 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
         Route::middleware('organization')->group(function () {
             Route::get('/dashboard', [DashboardController::class, 'show']);
 
+            Route::get('/onboarding', [OnboardingController::class, 'show']);
+            Route::post('/onboarding/dismiss', [OnboardingController::class, 'dismiss']);
+
+            Route::get('/saved-views', [SavedViewController::class, 'index']);
+            Route::post('/saved-views', [SavedViewController::class, 'store']);
+            Route::put('/saved-views/{savedView}', [SavedViewController::class, 'update']);
+            Route::delete('/saved-views/{savedView}', [SavedViewController::class, 'destroy']);
+
             Route::get('/members', [OrganizationMemberController::class, 'index']);
             Route::put('/members/{member}', [OrganizationMemberController::class, 'update']);
             Route::delete('/members/{member}', [OrganizationMemberController::class, 'destroy']);
@@ -83,6 +94,8 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/shipments/export', [ShipmentController::class, 'export']);
             Route::post('/shipments/import/preview', [ShipmentImportController::class, 'preview']);
             Route::post('/shipments/import/confirm', [ShipmentImportController::class, 'confirm']);
+            Route::post('/shipments/bulk-status', [ShipmentController::class, 'bulkStatus']);
+            Route::post('/shipments/bulk-archive', [ShipmentController::class, 'bulkArchive']);
             Route::get('/shipments', [ShipmentController::class, 'index']);
             Route::post('/shipments', [ShipmentController::class, 'store']);
             Route::get('/shipments/{shipment}', [ShipmentController::class, 'show']);
@@ -103,14 +116,20 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/evidence', [EvidenceFileController::class, 'store']);
             Route::get('/evidence/{evidence}', [EvidenceFileController::class, 'show']);
             Route::get('/evidence/{evidence}/download', [EvidenceFileController::class, 'download']);
+            Route::get('/evidence/{evidence}/preview', [EvidenceFileController::class, 'preview']);
             Route::put('/evidence/{evidence}/verification', [EvidenceFileController::class, 'verify']);
             Route::delete('/evidence/{evidence}', [EvidenceFileController::class, 'destroy']);
 
             Route::get('/claims', [ClaimController::class, 'index']);
             Route::post('/claims', [ClaimController::class, 'store']);
+            Route::post('/claims/bulk-transition', [ClaimController::class, 'bulkTransition']);
+            Route::post('/claims/bulk-delete', [ClaimController::class, 'bulkDelete']);
             Route::get('/claims/{claim}', [ClaimController::class, 'show']);
             Route::put('/claims/{claim}', [ClaimController::class, 'update']);
             Route::post('/claims/{claim}/transition', [ClaimController::class, 'transition']);
+            Route::post('/claims/{claim}/review', [ClaimController::class, 'review']);
+            Route::get('/claims/{claim}/review-notes', [ClaimReviewNoteController::class, 'index']);
+            Route::post('/claims/{claim}/review-notes', [ClaimReviewNoteController::class, 'store']);
             Route::post('/claims/{claim}/record-payment', [ClaimController::class, 'recordPayment']);
             Route::get('/claims/{claim}/history', [ClaimController::class, 'history']);
             Route::get('/claims/{claim}/evidence', [ClaimController::class, 'evidence']);

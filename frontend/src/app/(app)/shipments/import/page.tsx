@@ -21,7 +21,19 @@ import type {
 type Step = "upload" | "preview" | "done";
 
 function rowIsValid(row: ImportPreviewRow): boolean {
+  if (typeof row.valid === "boolean") return row.valid;
   return Object.keys(row.errors).length === 0 && !row.is_duplicate;
+}
+
+/** Field-level errors for one row, as [field, message] pairs. */
+function rowFieldErrors(row: ImportPreviewRow): [string, string][] {
+  const pairs: [string, string][] = [];
+  for (const [field, messages] of Object.entries(row.errors)) {
+    for (const message of messages) {
+      pairs.push([field, message]);
+    }
+  }
+  return pairs;
 }
 
 function rowIssues(row: ImportPreviewRow): string[] {
@@ -294,6 +306,53 @@ function ImportContent({ org }: { org: Organization }) {
                   {selected.size} of {preview.summary.total} rows selected.
                 </p>
               </div>
+              {preview.rows.some((row) => !rowIsValid(row)) && (
+                <div className="border-t border-slate-200 px-5 py-4">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Rows with errors
+                  </h3>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    Fix these rows in the CSV file and upload again. Invalid
+                    and duplicate rows cannot be imported.
+                  </p>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th scope="col" className="px-4 py-2 font-medium text-slate-500">Row</th>
+                          <th scope="col" className="px-4 py-2 font-medium text-slate-500">Field</th>
+                          <th scope="col" className="px-4 py-2 font-medium text-slate-500">Problem</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {preview.rows
+                          .filter((row) => !rowIsValid(row))
+                          .flatMap((row) => {
+                            const fieldErrors = rowFieldErrors(row);
+                            if (fieldErrors.length === 0) {
+                              return [
+                                <tr key={`row-${row.index}-dup`}>
+                                  <TableCell>{row.index}</TableCell>
+                                  <TableCell>Row</TableCell>
+                                  <TableCell>
+                                    Duplicate of an existing shipment.
+                                  </TableCell>
+                                </tr>,
+                              ];
+                            }
+                            return fieldErrors.map(([field, message]) => (
+                              <tr key={`row-${row.index}-${field}-${message}`}>
+                                <TableCell>{row.index}</TableCell>
+                                <TableCell>{field}</TableCell>
+                                <TableCell>{message}</TableCell>
+                              </tr>
+                            ));
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Card>
@@ -316,10 +375,30 @@ function ImportContent({ org }: { org: Organization }) {
                 <h3 className="text-sm font-semibold text-slate-900">
                   Skipped rows
                 </h3>
-                <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                <ul className="mt-2 space-y-3 text-sm text-slate-600">
                   {result.skipped_rows.map((row) => (
                     <li key={row.index}>
-                      Row {row.index}: {row.reason}
+                      <p>
+                        Row {row.index}: {row.reason}
+                        {row.is_duplicate && (
+                          <span className="ml-2">
+                            <Badge tone="warning">Duplicate</Badge>
+                          </span>
+                        )}
+                      </p>
+                      {row.errors &&
+                        Object.entries(row.errors).length > 0 && (
+                          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-red-700">
+                            {Object.entries(row.errors).flatMap(
+                              ([field, messages]) =>
+                                messages.map((message) => (
+                                  <li key={`${row.index}-${field}-${message}`}>
+                                    {field}: {message}
+                                  </li>
+                                )),
+                            )}
+                          </ul>
+                        )}
                     </li>
                   ))}
                 </ul>

@@ -200,7 +200,7 @@ class ShipmentCsvImporter
      * back and the summary reports nothing imported.
      *
      * @param  array<int, int>|null  $rowIndexes  1-based row indexes to import, or null for all valid rows.
-     * @return array{imported: int, skipped: int, skipped_rows: array<int, array{index: int, reason: string}>}
+     * @return array{imported: int, skipped: int, skipped_rows: array<int, array{index: int, reason: string, is_duplicate: bool, errors: array<string, array<int, string>>}>}
      */
     public function confirm(string $token, string $organizationId, ?array $rowIndexes, int $userId): array
     {
@@ -229,11 +229,16 @@ class ShipmentCsvImporter
 
         foreach ($selected as $row) {
             if (! $row['valid']) {
+                // The per-field errors ride along so the client can
+                // show exactly what was wrong with each skipped row,
+                // not just that it failed.
                 $skipped[] = [
                     'index' => $row['index'],
                     'reason' => $row['is_duplicate']
                         ? 'Duplicate internal reference.'
                         : 'Row failed validation.',
+                    'is_duplicate' => $row['is_duplicate'],
+                    'errors' => $row['errors'],
                 ];
                 continue;
             }
@@ -258,6 +263,8 @@ class ShipmentCsvImporter
                         $skipped[] = [
                             'index' => $row['index'],
                             'reason' => 'Duplicate internal reference.',
+                            'is_duplicate' => true,
+                            'errors' => ['internal_reference' => ['A shipment with this reference already exists.']],
                         ];
                         continue;
                     }
@@ -271,6 +278,8 @@ class ShipmentCsvImporter
                             $skipped[] = [
                                 'index' => $row['index'],
                                 'reason' => 'The carrier no longer exists.',
+                                'is_duplicate' => false,
+                                'errors' => ['carrier' => ['The carrier no longer exists.']],
                             ];
                             continue;
                         }

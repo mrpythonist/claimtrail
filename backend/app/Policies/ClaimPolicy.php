@@ -59,6 +59,17 @@ class ClaimPolicy
     }
 
     /**
+     * Deleting needs the delete permission. Only pre-submission
+     * claims can be deleted: once a claim is submitted, its record
+     * is part of the broker trail and closing is the way to end it.
+     */
+    public function delete(User $user, Claim $claim): bool
+    {
+        return $claim->status->isPreSubmission()
+            && $user->hasPermissionIn($claim->organization_id, Permission::DeleteClaims);
+    }
+
+    /**
      * Recording a payment needs the payment permission and an
      * accepted or partially accepted claim.
      */

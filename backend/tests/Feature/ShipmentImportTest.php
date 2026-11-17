@@ -251,4 +251,78 @@ class ShipmentImportTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_preview_reports_per_row_field_errors(): void
+    {
+        [$user, $organization] = $this->actingAsMemberOf(OrganizationRole::OperationsManager);
+        $this->createShipment($organization, ['internal_reference' => 'CT-DUP-1']);
+
+        $csv = "internal_reference,broker_or_customer_name,base_rate\n"
+            . "CT-DUP-1,Heartland Foods,1200.00\n"
+            . "CT-BAD-1,Ozark Supply,not-a-number\n"
+            . "CT-OK-1,Heartland Foods,500.00\n";
+
+        $response = $this->withHeaders($this->orgHeaders($organization))
+            ->post('/api/v1/shipments/import/preview', [
+                'file' => $this->csvFile($csv),
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.summary.total', 3)
+            ->assertJsonPath('data.summary.valid', 1)
+            ->assertJsonPath('data.summary.invalid', 1)
+            ->assertJsonPath('data.summary.duplicate', 1)
+            ->assertJsonPath('data.rows.0.index', 1)
+            ->assertJsonPath('data.rows.0.is_duplicate', true)
+            ->assertJsonPath('data.rows.0.valid', false)
+            ->assertJsonPath('data.rows.1.index', 2)
+            ->assertJsonPath('data.rows.1.is_duplicate', false)
+            ->assertJsonPath('data.rows.1.valid', false)
+            ->assertJsonPath('data.rows.2.valid', true);
+
+        // The duplicate row names the field; the bad row names its own.
+        $this->assertArrayHasKey('internal_reference', $response->json('data.rows.0.errors'));
+        $this->assertArrayHasKey('base_rate', $response->json('data.rows.1.errors'));
+    }
+
+    public function test_confirm_reports_skipped_rows_with_their_field_errors(): void
+    {
+        [$user, $organization] = $this->actingAsMemberOf(OrganizationRole::OperationsManager);
+        $this->createShipment($organization, ['internal_reference' => 'CT-DUP-1']);
+
+        $csv = "internal_reference,broker_or_customer_name,base_rate\n"
+            . "CT-DUP-1,Heartland Foods,1200.00\n"
+            . "CT-BAD-1,Ozark Supply,not-a-number\n"
+            . "CT-OK-1,Heartland Foods,500.00\n";
+
+        $token = $this->withHeaders($this->orgHeaders($organization))
+            ->post('/api/v1/shipments/import/preview', [
+                'file' => $this->csvFile($csv),
+            ])
+            ->assertOk()
+            ->json('data.preview_token');
+
+        // Partial success: the one valid row is created, the other
+        // two are reported with their row-level errors attached.
+        $response = $this->withHeaders($this->orgHeaders($organization))
+            ->postJson('/api/v1/shipments/import/confirm', [
+                'preview_token' => $token,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.imported', 1)
+            ->assertJsonPath('data.skipped', 2)
+            ->assertJsonCount(2, 'data.skipped_rows');
+
+        $skipped = collect($response->json('data.skipped_rows'))->keyBy('index');
+        $this->assertSame('Duplicate internal reference.', $skipped[1]['reason']);
+        $this->assertTrue($skipped[1]['is_duplicate']);
+        $this->assertArrayHasKey('internal_reference', $skipped[1]['errors']);
+        $this->assertSame('Row failed validation.', $skipped[2]['reason']);
+        $this->assertFalse($skipped[2]['is_duplicate']);
+        $this->assertArrayHasKey('base_rate', $skipped[2]['errors']);
+
+        $this->assertSame(1, Shipment::where('organization_id', $organization->getKey())
+            ->where('internal_reference', 'CT-OK-1')->count());
+    }
 }

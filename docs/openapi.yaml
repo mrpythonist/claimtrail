@@ -1,14 +1,17 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.0.1
+  version: 1.1.0
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
     the dashboard, carriers, shipments, CSV import and export, shipment
     events, event categories, evidence, claims, evidence readiness,
     deadlines, claim package PDFs, the audit trail, notifications, and
-    reports.
+    reports. Version 1.1.0 adds guided onboarding, bulk shipment and
+    claim operations, advanced search and filters, saved list views,
+    per-row CSV import errors, inline evidence previews, and claim
+    review notes with an approve / request-changes review action.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -31,6 +34,8 @@ tags:
   - name: Audit
   - name: Notifications
   - name: Reports
+  - name: Onboarding
+  - name: SavedViews
 paths:
   /auth/register:
     post:
@@ -372,6 +377,143 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /onboarding:
+    get:
+      tags: [Onboarding]
+      summary: Onboarding progress for the organization (any member)
+      description: >
+        Steps are derived live from the organization's data; only the
+        dismissal is stored.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Onboarding progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnboardingProgress"
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /onboarding/dismiss:
+    post:
+      tags: [Onboarding]
+      summary: Dismiss the onboarding checklist (requires manage-organization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      dismissed: { type: boolean }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /saved-views:
+    get:
+      tags: [SavedViews]
+      summary: List the member's saved views, optionally by resource type
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+            enum: [shipment, claim]
+      responses:
+        "200":
+          description: Saved views
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SavedView"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [SavedViews]
+      summary: Save the current list filters as a named view
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedViewInput"
+      responses:
+        "201":
+          description: Saved view created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SavedView"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /saved-views/{savedView}:
+    put:
+      tags: [SavedViews]
+      summary: Rename a saved view or replace its filters (owner only)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: savedView
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                filters:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        "200":
+          description: Saved view updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SavedView"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [SavedViews]
+      summary: Delete a saved view (owner only)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: savedView
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Saved view deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404": { $ref: "#/components/responses/NotFound" }
   /members:
     get:
       tags: [Members]
@@ -666,7 +808,7 @@ paths:
         - $ref: "#/components/parameters/OrganizationHeader"
         - name: search
           in: query
-          description: Matches reference, broker, and driver name
+          description: Matches reference, broker, driver name, carrier name, and pickup/delivery location
           schema: { type: string }
         - name: status
           in: query
@@ -683,6 +825,30 @@ paths:
           in: query
           description: Pickup appointment on or before this date
           schema: { type: string, format: date }
+        - name: delivery_date_from
+          in: query
+          description: Delivery appointment on or after this date
+          schema: { type: string, format: date }
+        - name: delivery_date_to
+          in: query
+          description: Delivery appointment on or before this date
+          schema: { type: string, format: date }
+        - name: amount_min
+          in: query
+          description: Base rate at or above this amount
+          schema: { type: number }
+        - name: amount_max
+          in: query
+          description: Base rate at or below this amount
+          schema: { type: number }
+        - name: event_type
+          in: query
+          description: Only shipments with an event in this category (slug, e.g. detention)
+          schema: { type: string }
+        - name: broker
+          in: query
+          description: Broker or customer name contains this text
+          schema: { type: string }
         - name: sort
           in: query
           schema:
@@ -826,6 +992,78 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/ImportResult"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/bulk-status:
+    post:
+      tags: [Shipments]
+      summary: Move several shipments to the same status (requires edit-shipments)
+      description: >
+        Each shipment follows the forward-only transition map and the
+        update policy. Shipments that cannot move are reported in
+        failed with a reason; the rest still move.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, to_status]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+                to_status:
+                  $ref: "#/components/schemas/ShipmentStatus"
+      responses:
+        "200":
+          description: Bulk result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BulkIdResult"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /shipments/bulk-archive:
+    post:
+      tags: [Shipments]
+      summary: Archive several shipments (requires archive-shipments)
+      description: >
+        Archiving is the bulk-delete equivalent: shipments are never
+        hard-deleted. Already archived shipments are reported in
+        failed.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Bulk result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BulkIdResult"
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /shipments/{shipment}:
@@ -1214,6 +1452,29 @@ paths:
               schema: { type: string, format: binary }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /evidence/{evidence}/preview:
+    get:
+      tags: [Evidence]
+      summary: Preview a file inline (requires view-evidence)
+      description: >
+        Serves images (JPEG, PNG, WebP) and PDFs inline with the
+        correct content type. Other file types return 422 with
+        previewable false; download those instead.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: evidence
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: File bytes inline, or a redirect to a short-lived S3 signed URL
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /evidence/{evidence}/verification:
     put:
       tags: [Evidence]
@@ -1255,6 +1516,7 @@ paths:
         - $ref: "#/components/parameters/OrganizationHeader"
         - name: search
           in: query
+          description: Matches claim reference, description, broker reference, shipment reference and broker, and carrier name
           schema: { type: string }
         - name: status
           in: query
@@ -1266,6 +1528,40 @@ paths:
             $ref: "#/components/schemas/ClaimCategory"
         - name: shipment_id
           in: query
+          schema: { type: string, format: uuid }
+        - name: amount_min
+          in: query
+          description: Requested amount at or above this amount
+          schema: { type: number }
+        - name: amount_max
+          in: query
+          description: Requested amount at or below this amount
+          schema: { type: number }
+        - name: deadline_from
+          in: query
+          description: Submission deadline on or after this date
+          schema: { type: string, format: date }
+        - name: deadline_to
+          in: query
+          description: Submission deadline on or before this date
+          schema: { type: string, format: date }
+        - name: deadline_status
+          in: query
+          description: overdue or upcoming only count while the claim is still being prepared; none means no deadline set
+          schema:
+            type: string
+            enum: [overdue, upcoming, none]
+        - name: event_type
+          in: query
+          description: Only claims whose event is in this category (slug, e.g. detention)
+          schema: { type: string }
+        - name: broker
+          in: query
+          description: Shipment broker or customer name contains this text
+          schema: { type: string }
+        - name: carrier_id
+          in: query
+          description: Only claims whose shipment uses this carrier
           schema: { type: string, format: uuid }
         - name: sort
           in: query
@@ -1317,6 +1613,83 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/bulk-transition:
+    post:
+      tags: [Claims]
+      summary: Move several claims to the same status
+      description: >
+        Each claim goes through the transition service with its own
+        map, data rules, history row, and audit row. The permission
+        depends on the target, as in the single transition endpoint.
+        Claims that cannot move are reported in failed with a
+        reason; moving to paid is always rejected here.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, to_status]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+                to_status:
+                  $ref: "#/components/schemas/ClaimStatus"
+                reason: { type: string, maxLength: 2000, nullable: true }
+                accepted_amount: { type: number, nullable: true }
+                rejection_reason: { type: string, maxLength: 2000, nullable: true }
+                submitted_at: { type: string, format: date-time, nullable: true }
+      responses:
+        "200":
+          description: Bulk result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BulkClaimResult"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/bulk-delete:
+    post:
+      tags: [Claims]
+      summary: Delete several claims (requires delete-claims)
+      description: >
+        Only pre-submission claims can be deleted. Submitted or
+        later claims are reported in failed; close those instead.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Bulk result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BulkIdResult"
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /claims/{claim}:
@@ -1404,6 +1777,104 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/review:
+    post:
+      tags: [Claims]
+      summary: Review a claim under review (requires review-claims)
+      description: >
+        Approve moves the claim to ready_to_submit; request_changes
+        moves it back to evidence_required and requires a comment.
+        The comment is recorded as a reviewer note and as the reason
+        on the status history row.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, request_changes]
+                comment: { type: string, maxLength: 5000, nullable: true }
+      responses:
+        "200":
+          description: Claim reviewed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/{claim}/review-notes:
+    get:
+      tags: [Claims]
+      summary: List the reviewer notes on a claim (requires view-claims)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Reviewer notes, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReviewNote"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Claims]
+      summary: Add a reviewer note (requires review-claims)
+      description: Notes are append-only; closed claims take no more notes.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 5000 }
+      responses:
+        "201":
+          description: Note added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReviewNote"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -2539,6 +3010,101 @@ components:
             properties:
               index: { type: integer }
               reason: { type: string }
+              is_duplicate: { type: boolean }
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+    SavedView:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        resource_type:
+          type: string
+          enum: [shipment, claim]
+        name: { type: string }
+        filters:
+          type: object
+          additionalProperties: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SavedViewInput:
+      type: object
+      required: [name, resource_type, filters]
+      properties:
+        name: { type: string, maxLength: 100 }
+        resource_type:
+          type: string
+          enum: [shipment, claim]
+        filters:
+          type: object
+          additionalProperties: { type: string }
+    OnboardingProgress:
+      type: object
+      properties:
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              description: { type: string }
+              href: { type: string }
+              completed: { type: boolean }
+        completed_count: { type: integer }
+        total_count: { type: integer }
+        all_completed: { type: boolean }
+        dismissed: { type: boolean }
+    ReviewNote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        note: { type: string }
+        author:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        created_at: { type: string, format: date-time }
+    BulkFailure:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reason: { type: string }
+    BulkIdResult:
+      type: object
+      properties:
+        updated:
+          type: array
+          items: { type: string, format: uuid }
+        deleted:
+          type: array
+          items: { type: string, format: uuid }
+        failed:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkFailure"
+    BulkClaimResult:
+      type: object
+      properties:
+        updated:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              claim_reference: { type: string }
+              status:
+                $ref: "#/components/schemas/ClaimStatus"
+        failed:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkFailure"
     EventCategory:
       type: object
       properties:
@@ -2619,6 +3185,9 @@ components:
         original_filename: { type: string }
         mime_type: { type: string }
         file_size: { type: integer }
+        previewable:
+          type: boolean
+          description: True for images (JPEG, PNG, WebP) and PDFs; other types download instead
         uploaded_by:
           type: object
           nullable: true

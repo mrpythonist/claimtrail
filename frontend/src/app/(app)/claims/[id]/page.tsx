@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
+import { EvidencePreviewModal } from "@/components/evidence/EvidencePreviewModal";
 import {
   apiDownload,
   apiFetch,
@@ -266,6 +267,7 @@ function ClaimDetailContent({
   const [detachTarget, setDetachTarget] = useState<EvidenceFile | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
 
   const myRole = org.current_user_role;
   const immutable = claim ? isClaimImmutable(claim.status) : false;
@@ -1072,16 +1074,14 @@ function ClaimDetailContent({
                 <TableCell>{file.uploaded_by?.name ?? "Unknown"}</TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    {isPreviewableMime(file.mime_type) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={downloadingId === file.id}
-                        onClick={() => handleDownloadEvidence(file, true)}
-                      >
-                        Preview
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={downloadingId === file.id}
+                      onClick={() => setPreviewFile(file)}
+                    >
+                      Preview
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1233,6 +1233,11 @@ function ClaimDetailContent({
         loading={detaching}
         onConfirm={confirmDetach}
         onClose={() => setDetachTarget(null)}
+      />
+      <EvidencePreviewModal
+        file={previewFile}
+        orgId={org.id}
+        onClose={() => setPreviewFile(null)}
       />
     </div>
   );

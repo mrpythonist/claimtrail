@@ -106,6 +106,22 @@ a login page.
 | ------ | ---- | ---- | ----------- |
 | GET | `/dashboard` | Yes + org header | Organization overview: member counts, pending invitations, current role, member since, plus shipment, event, evidence, claim, and deadline counts, upcoming deadlines, claims by status, and per-currency financials (potential, submitted, accepted, recovered). Query: `date_from`, `date_to` (filter created_at of shipments and claims), `status` (adds a `claims_filtered` section with that status's count and requested amounts). `claims_submitted` counts status `submitted` only; accepted and partially accepted claims are under `claims_approved`. Potential money is labeled estimated, never recovered. |
 
+### Onboarding (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/onboarding` | Yes + org header | Guided first-steps progress. Steps are derived live from the organization's data (invite a member, first shipment, first event, first evidence upload, first claim, first review); only the dismissal is stored. Returns `steps` (key, label, description, href, completed), `completed_count`, `total_count`, `all_completed`, `dismissed`. Any active member can read it. |
+| POST | `/onboarding/dismiss` | Yes + org header | Dismiss the checklist for the whole organization. Requires `manage-organization`. |
+
+### Saved views (tenant-scoped)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/saved-views` | Yes + org header | The member's saved views. Query: `resource_type` (`shipment` or `claim`). Views are personal: a member only sees their own. Requires the matching list view permission. |
+| POST | `/saved-views` | Yes + org header | Save the current list filters as a named view. Body: `name`, `resource_type`, `filters` (a flat map of list query parameter names to text values; unknown keys are dropped). At most 25 views per member per resource type (201). Requires the matching list view permission. |
+| PUT | `/saved-views/{savedView}` | Yes + org header | Rename a view or replace its filters. Only the owner of the view can change it; other members get 404. |
+| DELETE | `/saved-views/{savedView}` | Yes + org header | Delete a view. Only the owner of the view can delete it; other members get 404. |
+
 ### Members (tenant-scoped)
 
 | Method | Path | Auth | Description |
@@ -139,11 +155,13 @@ deactivated, or removed.
 
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
-| GET | `/shipments` | Yes + org header | Paginated shipments (15 per page, max 100). Query: `search` (reference, broker, driver), `status`, `carrier_id`, `date_from`, `date_to` (pickup appointment range), `sort` (`created_at`, `pickup_appointment`, `delivery_appointment`, `status`), `direction`, `page`. Requires `view-shipments`. |
+| GET | `/shipments` | Yes + org header | Paginated shipments (15 per page, max 100). Query: `search` (reference, broker, driver, carrier name, pickup/delivery location), `status`, `carrier_id`, `date_from`, `date_to` (pickup appointment range), `delivery_date_from`, `delivery_date_to` (delivery appointment range), `amount_min`, `amount_max` (base rate), `event_type` (event category slug), `broker` (broker/customer substring), `sort` (`created_at`, `pickup_appointment`, `delivery_appointment`, `status`), `direction`, `page`. Requires `view-shipments`. |
 | POST | `/shipments` | Yes + org header | Create a shipment. Body: `internal_reference` (required, unique per organization), `broker_or_customer_name` (required), optional `external_load_reference`, `carrier_id`, `driver_name`, `driver_contact`, `pickup_location`, `delivery_location`, `pickup_appointment`, `delivery_appointment`, `actual_arrival_at`, `actual_departure_at`, `base_rate`, `currency` (default `USD`), `status` (`draft` or `planned`, default `draft`), `notes` (201). Requires `create-shipments`. |
 | GET | `/shipments/{shipment}` | Yes + org header | One shipment with carrier, creator, event count, and evidence count. Requires `view-shipments`. |
 | PUT | `/shipments/{shipment}` | Yes + org header | Update a shipment. Status changes must follow the transition map (see below). Requires `edit-shipments`. Archived shipments return 403: they are read-only. |
 | POST | `/shipments/{shipment}/archive` | Yes + org header | Archive a shipment. One-way; there is no unarchive. Requires `archive-shipments`. |
+| POST | `/shipments/bulk-status` | Yes + org header | Move several shipments to the same status. Body: `ids` (1 to 100), `to_status`. Each shipment follows the transition map and the update policy; shipments that cannot move are reported in `failed` with a reason instead of failing the batch. Returns `updated` (ids) and `failed` (id + reason). Requires `edit-shipments`. |
+| POST | `/shipments/bulk-archive` | Yes + org header | Archive several shipments at once. This is the bulk-delete equivalent: shipments are never hard-deleted. Body: `ids` (1 to 100). Returns `updated` and `failed`. Requires `archive-shipments`. |
 | GET | `/shipments/export` | Yes + org header | Download the filtered list as CSV (same filters as the list). Requires `export-shipments`. |
 
 Status transitions move forward one step at a time: `draft` to
@@ -160,7 +178,7 @@ preview. Both steps require `import-shipments`.
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
 | POST | `/shipments/import/preview` | Yes + org header | Multipart upload: `file` (CSV, max 5 MB) and optional `mapping` (JSON object of exact header text to field name). Returns `preview_token`, `summary` (`total`, `valid`, `invalid`, `duplicate`), `columns`, and `rows` with per-row `data`, `errors`, and `is_duplicate`. Previews expire after 30 minutes. |
-| POST | `/shipments/import/confirm` | Yes + org header | Body: `preview_token`, optional `row_indexes` (1-based; omit to import all valid rows). Returns `imported`, `skipped`, and `skipped_rows` with a reason per row. A token can only be confirmed once. |
+| POST | `/shipments/import/confirm` | Yes + org header | Body: `preview_token`, optional `row_indexes` (1-based; omit to import all valid rows). Returns `imported`, `skipped`, and `skipped_rows` with a reason, an `is_duplicate` flag, and the per-field `errors` for each skipped row, so the client can show exactly what was wrong. A token can only be confirmed once. |
 
 Column mapping accepts the canonical field names and common aliases
 (case-insensitive, so "Internal Reference" and "internal_reference"
@@ -194,8 +212,9 @@ non-archived status; the create endpoint only accepts `draft` and
 | ------ | ---- | ---- | ----------- |
 | GET | `/evidence` | Yes + org header | Paginated evidence library (25 per page). Query: `shipment_id`, `shipment_event_id`, `document_category`, `verification_status`, `page`. Requires `view-evidence`. |
 | POST | `/evidence` | Yes + org header | Multipart upload: `file` (max 20 MB; pdf, jpg, jpeg, png, webp, doc, docx, xls, xlsx, csv, txt), `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `document_category` (required), `description` (201). Requires `upload-evidence`. Archived shipments return 422. |
-| GET | `/evidence/{evidence}` | Yes + org header | One evidence record's metadata. The storage key is never exposed. Requires `view-evidence`. |
+| GET | `/evidence/{evidence}` | Yes + org header | One evidence record's metadata, including `previewable` (true for images and PDFs). The storage key is never exposed. Requires `view-evidence`. |
 | GET | `/evidence/{evidence}/download` | Yes + org header | Download the file. Add `?preview=1` to serve it inline (for images and PDFs). On S3 this redirects to a 5-minute signed URL. Requires `view-evidence`. |
+| GET | `/evidence/{evidence}/preview` | Yes + org header | Serve an image (JPEG, PNG, WebP) or PDF inline with the correct content type. Other file types return 422 with `previewable: false`; download those instead. On S3 this redirects to a 5-minute signed URL. Requires `view-evidence`. |
 | PUT | `/evidence/{evidence}/verification` | Yes + org header | Set `verification_status` (`pending`, `verified`, `rejected`). Requires `verify-evidence`. |
 | DELETE | `/evidence/{evidence}` | Yes + org header | Delete the record and the stored file. Requires `delete-evidence`. The deletion is written to the application log and to the audit trail. |
 
@@ -208,11 +227,16 @@ Document categories: `bill_of_lading`, `proof_of_delivery`,
 
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
-| GET | `/claims` | Yes + org header | Paginated claims (15 per page, max 100). Query: `search` (reference, description, broker reference, shipment reference or broker), `status`, `claim_category`, `shipment_id`, `sort` (`created_at`, `requested_amount`, `status`, `submission_deadline_at`), `direction`, `page`. Requires `view-claims`. |
+| GET | `/claims` | Yes + org header | Paginated claims (15 per page, max 100). Query: `search` (reference, description, broker reference, shipment reference or broker, carrier name), `status`, `claim_category`, `shipment_id`, `amount_min`, `amount_max` (requested amount), `deadline_from`, `deadline_to` (submission deadline range), `deadline_status` (`overdue`, `upcoming`, `none`; overdue/upcoming only count while the claim is still being prepared), `event_type` (event category slug), `broker` (shipment broker/customer substring), `carrier_id` (through the shipment), `sort` (`created_at`, `requested_amount`, `status`, `submission_deadline_at`), `direction`, `page`. Requires `view-claims`. |
 | POST | `/claims` | Yes + org header | Create a claim. Body: `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `claim_category` (inherited from the event when omitted), `description`, `requested_amount` (required, greater than zero), `currency` (default `USD`), `internal_notes`, `external_broker_reference`, `submission_deadline_at` (201). The reference is generated per organization (`CLM-YYYY-NNNN`). Requires `create-claims`. |
 | GET | `/claims/{claim}` | Yes + org header | One claim with shipment, event, active deadline, creator, updater, evidence count, and allowed transitions. Requires `view-claims`. |
 | PUT | `/claims/{claim}` | Yes + org header | Update a claim. Amount, currency, category, and event link are frozen once the claim is submitted; notes and the broker reference stay editable until the claim is paid or closed. Status never changes here: use the transition endpoint. Requires `edit-claims`. |
 | POST | `/claims/{claim}/transition` | Yes + org header | Move the claim to `to_status`. Body may include `reason`, `accepted_amount`, `rejection_reason`, `submitted_at`. See the transition rules below. The permission depends on the target (see below). |
+| POST | `/claims/{claim}/review` | Yes + org header | Review a claim that is under review. Body: `decision` (`approve` or `request_changes`), optional `comment`. Approve moves it to `ready_to_submit`; requesting changes moves it back to `evidence_required` and requires a comment. The comment is recorded as a reviewer note and as the reason on the status history row. Requires `review-claims`. |
+| GET | `/claims/{claim}/review-notes` | Yes + org header | Reviewer notes on a claim, oldest first. Requires `view-claims`. |
+| POST | `/claims/{claim}/review-notes` | Yes + org header | Add a reviewer note. Body: `note` (required). Notes are append-only; closed claims take no more notes (201). Requires `review-claims`. |
+| POST | `/claims/bulk-transition` | Yes + org header | Move several claims to the same status. Body: `ids` (1 to 100), `to_status`, optional `reason`, `accepted_amount`, `rejection_reason`, `submitted_at`. Each claim goes through the transition service with its own map, data rules, history row, and audit row; claims that cannot move are reported in `failed` with a reason. Moving to `paid` is always rejected here. Returns `updated` (id, claim reference, status) and `failed`. The permission depends on the target, as in the single transition endpoint. |
+| POST | `/claims/bulk-delete` | Yes + org header | Delete several claims. Only pre-submission claims can be deleted; submitted or later claims are reported in `failed`. Body: `ids` (1 to 100). Returns `deleted` and `failed`. Requires `delete-claims` (owner, admin, operations manager, billing staff). |
 | POST | `/claims/{claim}/record-payment` | Yes + org header | Record a payment and move an accepted or partially accepted claim to `paid`. Body: `recovered_amount` (required, greater than zero), `payment_date` (required), optional `payment_reference`, `reason`. Requires `record-claim-payments`. This is the only route to `paid`. |
 | GET | `/claims/{claim}/history` | Yes + org header | Append-only status history, oldest first. Requires `view-claims`. |
 | GET | `/claims/{claim}/evidence` | Yes + org header | Evidence files attached to the claim. Requires `view-claims`. |

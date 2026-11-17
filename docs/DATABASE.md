@@ -32,6 +32,7 @@ Sanctum API tokens. One row per login session. Revoked on logout.
 | slug | string, unique, indexed | URL-safe, random suffix to avoid collisions |
 | timezone | string, default `UTC` | IANA timezone |
 | settings | json, nullable | Organization settings (reserved for later use) |
+| onboarding_dismissed_at | timestamp, nullable | Set when a manager dismisses the guided onboarding checklist (v1.1.0) |
 | created_at, updated_at | timestamps | |
 
 ### organization_members
@@ -481,6 +482,40 @@ and there is no conversion.
   estimates or agreed rates, never recovered revenue. Claim amounts keep
   requested, accepted, and recovered in separate columns for the same
   reason.
+
+## Tables in v1.1.0 (Phase 2, UX Improvements)
+
+### saved_views
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| user_id | bigint, FK to users, cascade on delete | The member who saved the view |
+| resource_type | string | `shipment` or `claim` |
+| name | string, max 100 | |
+| filters | json | Flat map of list query parameter names to text values |
+| created_at, updated_at | timestamps | |
+
+Index `(organization_id, user_id, resource_type)`. Views are personal:
+a member only sees their own. At most 25 per member per organization
+per resource type.
+
+### claim_review_notes
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| claim_id | uuid, FK to claims, cascade on delete | |
+| user_id | bigint, FK to users, nullable, null on delete | The reviewer who wrote the note |
+| note | text | |
+| created_at, updated_at | timestamps | |
+
+Indexes `(organization_id, claim_id)` and `(claim_id, created_at)`.
+Notes are append-only: there is no update or delete endpoint. The
+review action (approve / request changes) writes a note row alongside
+the status history row, so the decision and its reasoning stay linked.
 
 ## Tables planned for later milestones
 

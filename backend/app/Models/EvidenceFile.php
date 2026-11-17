@@ -45,6 +45,26 @@ class EvidenceFile extends Model
     }
 
     /**
+     * MIME types the preview endpoint serves inline. Everything
+     * else (spreadsheets, documents, text) downloads instead: the
+     * browser has no reliable inline viewer for them.
+     */
+    public const PREVIEWABLE_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/pdf',
+    ];
+
+    /**
+     * Whether this file can be previewed inline in the browser.
+     */
+    public function isPreviewable(): bool
+    {
+        return in_array($this->mime_type, self::PREVIEWABLE_MIME_TYPES, true);
+    }
+
+    /**
      * The shipment this evidence supports.
      */
     public function shipment(): BelongsTo

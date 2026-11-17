@@ -3,6 +3,93 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.1.0] - 2026-11-17
+
+Phase 2, UX Improvements. One new permission (`delete-claims`:
+owner, admin, operations manager, billing staff).
+
+### Added
+
+- Guided onboarding: a progress endpoint (`GET /onboarding`) that
+  derives seven first steps live from the organization's data (invite
+  a member, first shipment, first event, first evidence upload, first
+  claim, first review), a dashboard checklist panel with a guided
+  first-steps page (`/onboarding`), and organization-wide dismissal
+  (`POST /onboarding/dismiss`, requires `manage-organization`). Only
+  the dismissal is stored (`organizations.onboarding_dismissed_at`).
+- Bulk shipment operations: `POST /shipments/bulk-status` and
+  `POST /shipments/bulk-archive` (up to 100 ids). Each shipment
+  follows the forward-only transition map and the update/archive
+  policy; shipments that cannot move are reported in `failed` with a
+  reason instead of failing the batch. Archiving is the bulk-delete
+  equivalent: shipments are never hard-deleted. Status changes are
+  audit-logged by the model observer. The shipments list has
+  multi-select with a bulk action bar.
+- Bulk claim operations: `POST /claims/bulk-transition` (up to 100
+  ids; each claim goes through the transition service with its own
+  map, data rules, history row, audit row, and notifications; moving
+  to `paid` is rejected) and `POST /claims/bulk-delete` (only
+  pre-submission claims; submitted or later claims are reported in
+  `failed`). The claims list has multi-select with a bulk action bar,
+  including accepted-amount and reason inputs for the targets that
+  need them.
+- Advanced search and filters: shipments gain delivery date range,
+  base-rate range, event type, broker substring, and search that also
+  matches carrier name and pickup/delivery location. Claims gain
+  requested-amount range, submission-deadline range, deadline status
+  (`overdue`, `upcoming`, `none`; overdue and upcoming only count
+  while the claim is still being prepared), event type, broker, and
+  carrier filters, plus search that also matches carrier name.
+- Saved views (`saved_views` table): per-member named filter sets for
+  the shipment and claim lists (`GET`, `POST`, `PUT`, `DELETE
+  /saved-views`), at most 25 per member per organization per resource
+  type. Filter payloads are flat maps of list query parameters to
+  text values; unknown keys are dropped and nested values are
+  rejected. The list pages can save the current filters, apply a
+  view, and delete it.
+- Improved CSV imports: the confirm result now reports each skipped
+  row with its `reason`, an `is_duplicate` flag, and the per-field
+  `errors`, so the import page can show exactly what was wrong with
+  every row. The preview already returned per-row errors; the import
+  page now displays them in a dedicated errors table.
+- Evidence previews: a dedicated `GET /evidence/{evidence}/preview`
+  endpoint serving images (JPEG, PNG, WebP) and PDFs inline with the
+  correct content type and disposition; other file types return 422
+  with `previewable: false` and the client falls back to download.
+  Evidence records now carry a `previewable` flag. The evidence
+  library and the claim detail page have a preview modal (image or
+  PDF embed, download fallback).
+- Improved claim review workflows: reviewer notes
+  (`claim_review_notes` table, append-only) with `GET` and `POST
+  /claims/{claim}/review-notes`, and a review action (`POST
+  /claims/{claim}/review`) where approve moves an under-review claim
+  to ready to submit and request changes moves it back to evidence
+  required with a mandatory comment. The comment is recorded as a
+  reviewer note and as the reason on the status history row. The
+  review page now shows a plain-language readiness checklist,
+  reviewer notes, and next-action guidance.
+- Responsive UI and navigation: grouped sidebar sections (Workspace,
+  Insights, Settings), 44px touch targets on navigation and buttons,
+  a mobile drawer that closes on navigation, backdrop, or Escape,
+  horizontal-scroll tables, and a full breadcrumb pass (every detail
+  page already had crumbs; none were missing). Version strings
+  updated to v1.1.0 across the app shell, footer, landing page, and
+  package version.
+- 38 new backend feature tests (238 total, 1029 assertions) and 34
+  new frontend tests (144 total): onboarding, bulk shipments, bulk
+  claims, saved views, advanced filters, evidence preview, claim
+  review, and per-row import errors. OpenAPI updated to 70 paths
+  (verified against the live route list); `docs/API.md` and
+  `docs/DATABASE.md` updated for the new endpoints and tables.
+
+### Changed
+
+- Shipment and claim list search now also matches the carrier name;
+  shipment search also matches pickup and delivery locations.
+- `ImportResult.skipped_rows` entries now carry `is_duplicate` and
+  `errors` in addition to `index` and `reason`.
+- `EvidenceFile` responses now include `previewable`.
+
 ## [1.0.1] - 2026-11-16
 
 Phase 1, complete. All milestones (0 to 5) are done.

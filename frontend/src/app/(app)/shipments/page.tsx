@@ -4,17 +4,22 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
+import { BulkBar } from "@/components/bulk/BulkBar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
-import { Table, TableCell } from "@/components/ui/Table";
+import { TableCell } from "@/components/ui/Table";
+import { SavedViews } from "@/components/views/SavedViews";
 import { apiDownload, apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { bulkResultSummary, toggleAllOnPage, toggleId } from "@/lib/bulk";
 import {
+  canArchiveShipments,
   canCreateShipments,
+  canEditShipments,
   canExportShipments,
   canImportShipments,
 } from "@/lib/permissions";
@@ -25,6 +30,7 @@ import {
 } from "@/lib/shipments";
 import type {
   Carrier,
+  EventCategory,
   Organization,
   PaginatedMeta,
   Shipment,
@@ -63,6 +69,7 @@ function ShipmentsContent({ org }: { org: Organization }) {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [meta, setMeta] = useState<PaginatedMeta | null>(null);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [categories, setCategories] = useState<EventCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -70,9 +77,25 @@ function ShipmentsContent({ org }: { org: Organization }) {
   const [carrierFilter, setCarrierFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [deliveryDateFrom, setDeliveryDateFrom] = useState("");
+  const [deliveryDateTo, setDeliveryDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [eventType, setEventType] = useState("");
+  const [broker, setBroker] = useState("");
   const [sort, setSort] = useState("created_at:desc");
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Bulk selection state.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<ShipmentStatus>("planned");
+  const [bulkWorking, setBulkWorking] = useState(false);
+  const [bulkSummary, setBulkSummary] = useState<string | null>(null);
+  const [bulkSummaryTone, setBulkSummaryTone] = useState<
+    "success" | "error" | "info"
+  >("success");
 
   const myRole = org.current_user_role;
 
@@ -86,6 +109,15 @@ function ShipmentsContent({ org }: { org: Organization }) {
         // The carrier filter is a convenience; the list still works
         // without it.
         if (!cancelled) setCarriers([]);
+      });
+    apiFetch<{ data: EventCategory[] }>("/event-categories", {
+      orgId: org.id,
+    })
+      .then((response) => {
+        if (!cancelled) setCategories(response.data);
+      })
+      .catch(() => {
+        if (!cancelled) setCategories([]);
       });
     return () => {
       cancelled = true;
@@ -105,6 +137,12 @@ function ShipmentsContent({ org }: { org: Organization }) {
     if (carrierFilter) params.set("carrier_id", carrierFilter);
     if (dateFrom) params.set("date_from", dateFrom);
     if (dateTo) params.set("date_to", dateTo);
+    if (deliveryDateFrom) params.set("delivery_date_from", deliveryDateFrom);
+    if (deliveryDateTo) params.set("delivery_date_to", deliveryDateTo);
+    if (amountMin) params.set("amount_min", amountMin);
+    if (amountMax) params.set("amount_max", amountMax);
+    if (eventType) params.set("event_type", eventType);
+    if (broker) params.set("broker", broker);
 
     apiFetch<{ data: Shipment[]; meta: PaginatedMeta }>(
       `/shipments?${params.toString()}`,
@@ -131,7 +169,31 @@ function ShipmentsContent({ org }: { org: Organization }) {
     return () => {
       cancelled = true;
     };
-  }, [org.id, page, search, statusFilter, carrierFilter, dateFrom, dateTo, sort]);
+  }, [
+    org.id,
+    page,
+    search,
+    statusFilter,
+    carrierFilter,
+    dateFrom,
+    dateTo,
+    deliveryDateFrom,
+    deliveryDateTo,
+    amountMin,
+    amountMax,
+    eventType,
+    broker,
+    sort,
+    refreshKey,
+  ]);
+
+  // Selection only ever applies to the rows on screen, so it clears
+  // whenever the page or any filter changes. The handlers below own
+  // that: resetPage, applyFilters, and changePage all clear it.
+  function changePage(next: number) {
+    setSelectedIds([]);
+    setPage(next);
+  }
 
   function filterParams(): URLSearchParams {
     const params = new URLSearchParams();
@@ -140,8 +202,56 @@ function ShipmentsContent({ org }: { org: Organization }) {
     if (carrierFilter) params.set("carrier_id", carrierFilter);
     if (dateFrom) params.set("date_from", dateFrom);
     if (dateTo) params.set("date_to", dateTo);
+    if (deliveryDateFrom) params.set("delivery_date_from", deliveryDateFrom);
+    if (deliveryDateTo) params.set("delivery_date_to", deliveryDateTo);
+    if (amountMin) params.set("amount_min", amountMin);
+    if (amountMax) params.set("amount_max", amountMax);
+    if (eventType) params.set("event_type", eventType);
+    if (broker) params.set("broker", broker);
     return params;
   }
+
+  /** Current filter state as a record, for saving as a view. */
+  function currentFilters(): Record<string, string> {
+    const filters: Record<string, string> = {};
+    for (const [key, value] of filterParams().entries()) {
+      filters[key] = value;
+    }
+    return filters;
+  }
+
+  function applyFilters(filters: Record<string, string>) {
+    setSelectedIds([]);
+    setSearch(filters.search ?? "");
+    setStatusFilter(filters.status ?? "");
+    setCarrierFilter(filters.carrier_id ?? "");
+    setDateFrom(filters.date_from ?? "");
+    setDateTo(filters.date_to ?? "");
+    setDeliveryDateFrom(filters.delivery_date_from ?? "");
+    setDeliveryDateTo(filters.delivery_date_to ?? "");
+    setAmountMin(filters.amount_min ?? "");
+    setAmountMax(filters.amount_max ?? "");
+    setEventType(filters.event_type ?? "");
+    setBroker(filters.broker ?? "");
+    setPage(1);
+  }
+
+  function clearFilters() {
+    applyFilters({});
+  }
+
+  const hasFilters =
+    search !== "" ||
+    statusFilter !== "" ||
+    carrierFilter !== "" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
+    deliveryDateFrom !== "" ||
+    deliveryDateTo !== "" ||
+    amountMin !== "" ||
+    amountMax !== "" ||
+    eventType !== "" ||
+    broker !== "";
 
   async function handleExport() {
     setError(null);
@@ -164,8 +274,81 @@ function ShipmentsContent({ org }: { org: Organization }) {
   }
 
   function resetPage() {
+    setSelectedIds([]);
     setPage(1);
   }
+
+  async function handleBulkStatus() {
+    if (selectedIds.length === 0) return;
+    setBulkWorking(true);
+    setBulkSummary(null);
+    try {
+      const response = await apiFetch<{
+        data: {
+          updated: string[];
+          failed: { id: string; reason: string }[];
+        };
+      }>("/shipments/bulk-status", {
+        method: "POST",
+        body: { ids: selectedIds, to_status: bulkStatus },
+        orgId: org.id,
+      });
+      const failed = response.data.failed;
+      setBulkSummary(
+        bulkResultSummary(response.data.updated.length, failed, "shipments"),
+      );
+      setBulkSummaryTone(failed.length > 0 ? "error" : "success");
+      setSelectedIds([]);
+      setRefreshKey((key) => key + 1);
+    } catch (err) {
+      setBulkSummary(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Could not update the selected shipments.",
+      );
+      setBulkSummaryTone("error");
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
+  async function handleBulkArchive() {
+    if (selectedIds.length === 0) return;
+    setBulkWorking(true);
+    setBulkSummary(null);
+    try {
+      const response = await apiFetch<{
+        data: {
+          updated: string[];
+          failed: { id: string; reason: string }[];
+        };
+      }>("/shipments/bulk-archive", {
+        method: "POST",
+        body: { ids: selectedIds },
+        orgId: org.id,
+      });
+      const failed = response.data.failed;
+      setBulkSummary(
+        bulkResultSummary(response.data.updated.length, failed, "shipments"),
+      );
+      setBulkSummaryTone(failed.length > 0 ? "error" : "success");
+      setSelectedIds([]);
+      setRefreshKey((key) => key + 1);
+    } catch (err) {
+      setBulkSummary(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Could not archive the selected shipments.",
+      );
+      setBulkSummaryTone("error");
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
+  const pageIds = shipments.map((shipment) => shipment.id);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
 
   return (
     <div>
@@ -194,6 +377,12 @@ function ShipmentsContent({ org }: { org: Organization }) {
                 </Button>
               ) : undefined
             }
+          />
+          <SavedViews
+            resourceType="shipment"
+            orgId={org.id}
+            currentFilters={currentFilters()}
+            onApply={applyFilters}
           />
           <div className="grid gap-3 border-b border-slate-200 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
             <Input
@@ -259,6 +448,81 @@ function ShipmentsContent({ org }: { org: Organization }) {
                 resetPage();
               }}
             />
+            <Input
+              id="delivery-date-from"
+              label="Delivery from date"
+              type="date"
+              value={deliveryDateFrom}
+              onChange={(event) => {
+                setDeliveryDateFrom(event.target.value);
+                resetPage();
+              }}
+            />
+            <Input
+              id="delivery-date-to"
+              label="Delivery to date"
+              type="date"
+              value={deliveryDateTo}
+              onChange={(event) => {
+                setDeliveryDateTo(event.target.value);
+                resetPage();
+              }}
+            />
+            <Input
+              id="amount-min"
+              label="Minimum amount"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={amountMin}
+              onChange={(event) => {
+                setAmountMin(event.target.value);
+                resetPage();
+              }}
+              placeholder="0.00"
+            />
+            <Input
+              id="amount-max"
+              label="Maximum amount"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={amountMax}
+              onChange={(event) => {
+                setAmountMax(event.target.value);
+                resetPage();
+              }}
+              placeholder="0.00"
+            />
+            <Select
+              id="event-type-filter"
+              label="Event type"
+              value={eventType}
+              onChange={(event) => {
+                setEventType(event.target.value);
+                resetPage();
+              }}
+            >
+              <option value="">All event types</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.slug}>
+                  {category.label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              id="broker-filter"
+              label="Broker / Customer"
+              type="text"
+              value={broker}
+              onChange={(event) => {
+                setBroker(event.target.value);
+                resetPage();
+              }}
+              placeholder="Broker or customer name"
+            />
             <Select
               id="sort"
               label="Sort by"
@@ -275,6 +539,57 @@ function ShipmentsContent({ org }: { org: Organization }) {
               ))}
             </Select>
           </div>
+          {hasFilters && (
+            <div className="border-b border-slate-200 px-5 py-3">
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            </div>
+          )}
+
+          <BulkBar
+            selectedCount={selectedIds.length}
+            itemLabel="shipment"
+            onClearSelection={() => setSelectedIds([])}
+            summary={bulkSummary}
+            summaryTone={bulkSummaryTone}
+          >
+            {canEditShipments(myRole) && (
+              <>
+                <Select
+                  id="bulk-shipment-status"
+                  label="Change status to"
+                  value={bulkStatus}
+                  onChange={(event) =>
+                    setBulkStatus(event.target.value as ShipmentStatus)
+                  }
+                >
+                  {STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {SHIPMENT_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  loading={bulkWorking}
+                  disabled={selectedIds.length === 0}
+                  onClick={handleBulkStatus}
+                >
+                  Apply
+                </Button>
+              </>
+            )}
+            {canArchiveShipments(myRole) && (
+              <Button
+                variant="danger"
+                loading={bulkWorking}
+                disabled={selectedIds.length === 0}
+                onClick={handleBulkArchive}
+              >
+                Archive
+              </Button>
+            )}
+          </BulkBar>
 
           {shipments.length === 0 ? (
             <EmptyState
@@ -290,53 +605,94 @@ function ShipmentsContent({ org }: { org: Organization }) {
             />
           ) : (
             <>
-              <Table
-                headers={[
-                  "Reference",
-                  "Broker / Customer",
-                  "Carrier",
-                  "Pickup",
-                  "Delivery",
-                  "Status",
-                  "Events",
-                  "Evidence",
-                ]}
-              >
-                {shipments.map((shipment) => (
-                  <tr key={shipment.id}>
-                    <TableCell>
-                      <Link
-                        href={`/shipments/${shipment.id}`}
-                        className="font-medium text-brand-700 hover:underline"
-                      >
-                        {shipment.internal_reference}
-                      </Link>
-                      {shipment.external_load_reference && (
-                        <p className="text-xs text-slate-500">
-                          {shipment.external_load_reference}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell>{shipment.broker_or_customer_name}</TableCell>
-                    <TableCell>{shipment.carrier?.name ?? "Not assigned"}</TableCell>
-                    <TableCell>
-                      {formatDate(shipment.pickup_appointment)}
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(shipment.delivery_appointment)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge tone={shipmentStatusTone(shipment.status)}>
-                        {shipment.status_label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{shipment.events_count}</TableCell>
-                    <TableCell>{shipment.evidence_count}</TableCell>
-                  </tr>
-                ))}
-              </Table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th scope="col" className="px-4 py-3 first:pl-5">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all shipments on this page"
+                          checked={allPageSelected}
+                          onChange={() =>
+                            setSelectedIds((current) =>
+                              toggleAllOnPage(current, pageIds),
+                            )
+                          }
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                      </th>
+                      {[
+                        "Reference",
+                        "Broker / Customer",
+                        "Carrier",
+                        "Pickup",
+                        "Delivery",
+                        "Status",
+                        "Events",
+                        "Evidence",
+                      ].map((header) => (
+                        <th
+                          key={header}
+                          scope="col"
+                          className="px-4 py-3 font-medium text-slate-500 last:pr-5"
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {shipments.map((shipment) => (
+                      <tr key={shipment.id}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select shipment ${shipment.internal_reference}`}
+                            checked={selectedIds.includes(shipment.id)}
+                            onChange={() =>
+                              setSelectedIds((current) =>
+                                toggleId(current, shipment.id),
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            href={`/shipments/${shipment.id}`}
+                            className="font-medium text-brand-700 hover:underline"
+                          >
+                            {shipment.internal_reference}
+                          </Link>
+                          {shipment.external_load_reference && (
+                            <p className="text-xs text-slate-500">
+                              {shipment.external_load_reference}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>{shipment.broker_or_customer_name}</TableCell>
+                        <TableCell>{shipment.carrier?.name ?? "Not assigned"}</TableCell>
+                        <TableCell>
+                          {formatDate(shipment.pickup_appointment)}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(shipment.delivery_appointment)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge tone={shipmentStatusTone(shipment.status)}>
+                            {shipment.status_label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{shipment.events_count}</TableCell>
+                        <TableCell>{shipment.evidence_count}</TableCell>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {meta && meta.last_page > 1 && (
-                <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-5 py-3 text-sm">
                   <p className="text-slate-500">
                     Page {meta.current_page} of {meta.last_page} ({meta.total}{" "}
                     shipments)
@@ -346,7 +702,7 @@ function ShipmentsContent({ org }: { org: Organization }) {
                       variant="secondary"
                       size="sm"
                       disabled={page <= 1}
-                      onClick={() => setPage((current) => current - 1)}
+                      onClick={() => changePage(page - 1)}
                     >
                       Previous
                     </Button>
@@ -354,7 +710,7 @@ function ShipmentsContent({ org }: { org: Organization }) {
                       variant="secondary"
                       size="sm"
                       disabled={page >= meta.last_page}
-                      onClick={() => setPage((current) => current + 1)}
+                      onClick={() => changePage(page + 1)}
                     >
                       Next
                     </Button>

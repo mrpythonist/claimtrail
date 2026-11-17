@@ -9,10 +9,12 @@ use App\Models\Shipment;
 use App\Permission;
 use App\Services\ShipmentRules;
 use App\ShipmentStatus;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShipmentController extends Controller
@@ -135,6 +137,115 @@ class ShipmentController extends Controller
     }
 
     /**
+     * Move several shipments to the same status.
+     *
+     * Each shipment follows the forward-only transition map and the
+     * policy (archived shipments are read-only). A shipment that
+     * cannot move is reported in `failed` with its reason instead
+     * of failing the whole batch. Status changes are audit-logged
+     * by the model observer.
+     */
+    public function bulkStatus(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::EditShipments->value, $organization);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['uuid'],
+            'to_status' => ['required', 'string', Rule::in(ShipmentStatus::values())],
+        ]);
+
+        $target = ShipmentStatus::from($validated['to_status']);
+        $updated = [];
+        $failed = [];
+
+        foreach (array_unique($validated['ids']) as $id) {
+            $shipment = Shipment::forOrganization($organization->getKey())->whereKey($id)->first();
+
+            if ($shipment === null) {
+                $failed[] = ['id' => $id, 'reason' => 'Shipment not found.'];
+                continue;
+            }
+
+            try {
+                Gate::authorize('update', $shipment);
+            } catch (AuthorizationException) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => 'This shipment cannot be edited. Archived shipments are read-only.',
+                ];
+                continue;
+            }
+
+            if ($target !== $shipment->status && ! $shipment->status->canTransitionTo($target)) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => "A {$shipment->status->label()} shipment cannot move to {$target->label()}.",
+                ];
+                continue;
+            }
+
+            $shipment->update(['status' => $target]);
+            $updated[] = $id;
+        }
+
+        return response()->json([
+            'data' => ['updated' => $updated, 'failed' => $failed],
+        ]);
+    }
+
+    /**
+     * Archive several shipments at once.
+     *
+     * Archiving is the bulk-delete equivalent: shipments are never
+     * hard-deleted, because events, evidence, and claims hang off
+     * them. Already archived shipments are reported as failures
+     * rather than silently skipped.
+     */
+    public function bulkArchive(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ArchiveShipments->value, $organization);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['uuid'],
+        ]);
+
+        $updated = [];
+        $failed = [];
+
+        foreach (array_unique($validated['ids']) as $id) {
+            $shipment = Shipment::forOrganization($organization->getKey())->whereKey($id)->first();
+
+            if ($shipment === null) {
+                $failed[] = ['id' => $id, 'reason' => 'Shipment not found.'];
+                continue;
+            }
+
+            try {
+                Gate::authorize('archive', $shipment);
+            } catch (AuthorizationException) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => 'This shipment cannot be archived. Archived shipments are read-only.',
+                ];
+                continue;
+            }
+
+            $shipment->update(['status' => ShipmentStatus::Archived]);
+            $updated[] = $id;
+        }
+
+        return response()->json([
+            'data' => ['updated' => $updated, 'failed' => $failed],
+        ]);
+    }
+
+    /**
      * Archive a shipment. Archiving is one-way in this milestone:
      * archived shipments are read-only and cannot be restored.
      */
@@ -234,7 +345,10 @@ class ShipmentController extends Controller
                     $query->where('internal_reference', 'like', $search)
                         ->orWhere('external_load_reference', 'like', $search)
                         ->orWhere('broker_or_customer_name', 'like', $search)
-                        ->orWhere('driver_name', 'like', $search);
+                        ->orWhere('driver_name', 'like', $search)
+                        ->orWhere('pickup_location', 'like', $search)
+                        ->orWhere('delivery_location', 'like', $search)
+                        ->orWhereHas('carrier', fn ($carrier) => $carrier->where('name', 'like', $search));
                 });
             })
             ->when(
@@ -243,7 +357,16 @@ class ShipmentController extends Controller
             )
             ->when($request->filled('carrier_id'), fn ($query) => $query->where('carrier_id', $request->string('carrier_id')))
             ->when($request->filled('date_from'), fn ($query) => $query->whereDate('pickup_appointment', '>=', $request->string('date_from')))
-            ->when($request->filled('date_to'), fn ($query) => $query->whereDate('pickup_appointment', '<=', $request->string('date_to')));
+            ->when($request->filled('date_to'), fn ($query) => $query->whereDate('pickup_appointment', '<=', $request->string('date_to')))
+            ->when($request->filled('delivery_date_from'), fn ($query) => $query->whereDate('delivery_appointment', '>=', $request->string('delivery_date_from')))
+            ->when($request->filled('delivery_date_to'), fn ($query) => $query->whereDate('delivery_appointment', '<=', $request->string('delivery_date_to')))
+            ->when($request->filled('amount_min') && is_numeric($request->input('amount_min')), fn ($query) => $query->where('base_rate', '>=', $request->input('amount_min')))
+            ->when($request->filled('amount_max') && is_numeric($request->input('amount_max')), fn ($query) => $query->where('base_rate', '<=', $request->input('amount_max')))
+            ->when($request->filled('event_type'), fn ($query) => $query->whereHas('events.category', fn ($category) => $category->where('slug', $request->string('event_type'))))
+            ->when($request->filled('broker'), function ($query) use ($request) {
+                $broker = '%'.$request->string('broker').'%';
+                $query->where('broker_or_customer_name', 'like', $broker);
+            });
     }
 
     /**

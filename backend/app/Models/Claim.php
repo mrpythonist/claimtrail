@@ -117,6 +117,14 @@ class Claim extends Model
     }
 
     /**
+     * Reviewer notes on this claim, oldest first.
+     */
+    public function reviewNotes(): HasMany
+    {
+        return $this->hasMany(ClaimReviewNote::class)->orderBy('created_at');
+    }
+
+    /**
      * Readiness snapshots for this claim.
      */
     public function requirementSnapshots(): HasMany

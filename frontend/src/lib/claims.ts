@@ -195,3 +195,27 @@ export function formatMoney(amount: string | null, currency: string): string {
   if (amount === null || amount === "") return "Not set";
   return `${currency} ${amount}`;
 }
+
+/**
+ * Plain-language next step for the claim review page, based on the
+ * claim status and how much evidence is still missing. Shown above
+ * the approve/request-changes buttons so the reviewer knows what
+ * still blocks submission.
+ */
+export function reviewNextAction(
+  status: ClaimStatus,
+  readinessPercentage: number | null,
+  missingCount: number | null,
+): string {
+  if (status !== "under_review") {
+    return "This claim is not under review, so it cannot be approved or sent back from here. Open the claim to see the moves that are available now.";
+  }
+  if (readinessPercentage !== null && readinessPercentage < 100) {
+    const missing =
+      missingCount !== null && missingCount > 0
+        ? ` ${missingCount} required document${missingCount === 1 ? " is" : "s are"} still missing.`
+        : "";
+    return `Evidence is ${readinessPercentage}% ready.${missing} Ask for changes to send the claim back for evidence, or override readiness first if the missing documents are not needed.`;
+  }
+  return "Evidence is complete. Approve to move the claim to ready to submit, or ask for changes if something else needs fixing first.";
+}

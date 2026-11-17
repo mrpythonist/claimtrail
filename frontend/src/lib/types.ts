@@ -330,6 +330,8 @@ export interface EvidenceFile {
   uploaded_by: { id: number; name: string } | null;
   description: string | null;
   verification_status: VerificationStatus;
+  /** True for image/* and application/pdf; those files can be previewed inline. */
+  previewable: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -339,6 +341,8 @@ export interface ImportPreviewRow {
   data: Record<string, string | number | null>;
   errors: Record<string, string[]>;
   is_duplicate: boolean;
+  /** True when the row has no field errors and is not a duplicate. */
+  valid: boolean;
 }
 
 export interface ImportPreview {
@@ -356,7 +360,47 @@ export interface ImportPreview {
 export interface ImportConfirmResult {
   imported: number;
   skipped: number;
-  skipped_rows: { index: number; reason: string }[];
+  skipped_rows: {
+    index: number;
+    reason: string;
+    is_duplicate: boolean;
+    errors: Record<string, string[]>;
+  }[];
+}
+
+/** One step of the guided onboarding checklist. */
+export interface OnboardingStep {
+  key: string;
+  label: string;
+  description: string;
+  completed: boolean;
+  href: string;
+}
+
+export interface OnboardingProgress {
+  steps: OnboardingStep[];
+  completed_count: number;
+  total_count: number;
+  all_completed: boolean;
+  dismissed: boolean;
+}
+
+/** A saved set of list filters for shipments or claims. */
+export interface SavedView {
+  id: string;
+  resource_type: "shipment" | "claim";
+  name: string;
+  filters: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A note left by a reviewer on a claim under review. */
+export interface ReviewNote {
+  id: string;
+  note: string;
+  author: { id: number; name: string } | null;
+  created_at: string;
 }
 
 export type ClaimStatus =

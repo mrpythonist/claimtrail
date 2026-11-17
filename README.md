@@ -12,10 +12,25 @@ ClaimTrail never guarantees that a charge is recoverable. Contractual
 eligibility and submission requirements are configured and verified by the
 customer.
 
-## Current status: Phase 1 complete (v1.0.1)
+## Current status: Phase 2 in progress (v1.1.0)
 
-This repository is at Phase 1, v1.0.1. All six milestones (0 to 5) are
-complete. What exists today:
+This repository is at Phase 2, v1.1.0. Phase 1 (v1.0.1) is complete.
+What v1.1.0 adds on top of Phase 1:
+
+- Guided onboarding with a dashboard checklist, a first-steps page,
+  and organization-wide dismissal.
+- Bulk shipment status changes and archiving, and bulk claim
+  transitions and deletion, all with per-item success/failure
+  reporting.
+- Advanced search and filters on the shipment and claim lists, plus
+  per-member saved views.
+- Per-row error reporting for CSV imports, a dedicated inline evidence
+  preview endpoint, and claim review notes with an approve /
+  request-changes review action.
+- Responsive UI and navigation: grouped sidebar sections, 44px touch
+  targets, and a working mobile drawer.
+
+What exists from Phase 1:
 
 - User registration, login, logout, password reset, and email verification
   (Laravel Sanctum token auth for the Next.js frontend).

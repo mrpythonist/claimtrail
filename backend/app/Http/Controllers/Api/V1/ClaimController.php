@@ -19,11 +19,13 @@ use App\Services\ClaimReferenceService;
 use App\Services\ClaimTransitionService;
 use App\Services\NotificationService;
 use App\Services\ReadinessService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ClaimController extends Controller
 {
@@ -58,7 +60,8 @@ class ClaimController extends Controller
                         ->orWhere('external_broker_reference', 'like', $search)
                         ->orWhereHas('shipment', function ($query) use ($search) {
                             $query->where('broker_or_customer_name', 'like', $search)
-                                ->orWhere('internal_reference', 'like', $search);
+                                ->orWhere('internal_reference', 'like', $search)
+                                ->orWhereHas('carrier', fn ($carrier) => $carrier->where('name', 'like', $search));
                         });
                 });
             })
@@ -71,6 +74,42 @@ class ClaimController extends Controller
                 fn ($query) => $query->where('claim_category', $request->string('claim_category'))
             )
             ->when($request->filled('shipment_id'), fn ($query) => $query->where('shipment_id', $request->string('shipment_id')))
+            ->when($request->filled('amount_min') && is_numeric($request->input('amount_min')), fn ($query) => $query->where('requested_amount', '>=', $request->input('amount_min')))
+            ->when($request->filled('amount_max') && is_numeric($request->input('amount_max')), fn ($query) => $query->where('requested_amount', '<=', $request->input('amount_max')))
+            ->when($request->filled('deadline_from'), fn ($query) => $query->whereDate('submission_deadline_at', '>=', $request->string('deadline_from')))
+            ->when($request->filled('deadline_to'), fn ($query) => $query->whereDate('submission_deadline_at', '<=', $request->string('deadline_to')))
+            ->when($request->filled('deadline_status'), function ($query) use ($request) {
+                $deadlineStatus = $request->string('deadline_status')->toString();
+
+                // Overdue and upcoming only count while the claim is
+                // still being prepared: a submitted claim has met its
+                // deadline, even if the date has passed.
+                $preSubmission = [
+                    ClaimStatus::Potential->value,
+                    ClaimStatus::EvidenceRequired->value,
+                    ClaimStatus::UnderReview->value,
+                    ClaimStatus::ReadyToSubmit->value,
+                ];
+
+                if ($deadlineStatus === 'overdue') {
+                    $query->whereNotNull('submission_deadline_at')
+                        ->where('submission_deadline_at', '<', now())
+                        ->whereIn('status', $preSubmission);
+                } elseif ($deadlineStatus === 'upcoming') {
+                    $query->whereNotNull('submission_deadline_at')
+                        ->where('submission_deadline_at', '>=', now())
+                        ->where('submission_deadline_at', '<=', now()->addDays(7))
+                        ->whereIn('status', $preSubmission);
+                } elseif ($deadlineStatus === 'none') {
+                    $query->whereNull('submission_deadline_at');
+                }
+            })
+            ->when($request->filled('event_type'), fn ($query) => $query->whereHas('event.category', fn ($category) => $category->where('slug', $request->string('event_type'))))
+            ->when($request->filled('broker'), function ($query) use ($request) {
+                $broker = '%'.$request->string('broker').'%';
+                $query->whereHas('shipment', fn ($shipment) => $shipment->where('broker_or_customer_name', 'like', $broker));
+            })
+            ->when($request->filled('carrier_id'), fn ($query) => $query->whereHas('shipment', fn ($shipment) => $shipment->where('carrier_id', $request->string('carrier_id'))))
             ->orderBy(
                 $this->sortColumn($request),
                 $this->sortDirection($request)
@@ -288,6 +327,188 @@ class ClaimController extends Controller
 
         return response()->json([
             'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator', 'updater'])),
+        ]);
+    }
+
+    /**
+     * Review a claim that is under review.
+     *
+     * Approve moves it to ready to submit; requesting changes moves
+     * it back to evidence required. The comment is required when
+     * requesting changes, is recorded as a reviewer note, and
+     * becomes the reason on the status history row, so the decision
+     * and its reasoning stay linked.
+     */
+    public function review(Request $request, Claim $claim, ClaimTransitionService $transitions): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        if ($claim->organization_id !== $organization->getKey()) {
+            abort(404);
+        }
+
+        if ($claim->status !== ClaimStatus::UnderReview) {
+            return response()->json([
+                'message' => 'Only a claim under review can be reviewed. This claim is '.$claim->status->label().'.',
+            ], 422);
+        }
+
+        Gate::authorize(Permission::ReviewClaims->value, $organization);
+
+        $validated = $request->validate([
+            'decision' => ['required', 'string', Rule::in(['approve', 'request_changes'])],
+            'comment' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $comment = trim((string) ($validated['comment'] ?? ''));
+
+        if ($validated['decision'] === 'request_changes' && $comment === '') {
+            return response()->json([
+                'message' => 'A comment is required when requesting changes.',
+                'errors' => ['comment' => ['A comment is required when requesting changes.']],
+            ], 422);
+        }
+
+        $target = $validated['decision'] === 'approve'
+            ? ClaimStatus::ReadyToSubmit
+            : ClaimStatus::EvidenceRequired;
+
+        $claim = $transitions->transition($claim, $target, $request->user(), [
+            'reason' => $comment !== '' ? $comment : null,
+        ]);
+
+        if ($comment !== '') {
+            $claim->reviewNotes()->create([
+                'organization_id' => $organization->getKey(),
+                'user_id' => $request->user()->id,
+                'note' => $comment,
+            ]);
+        }
+
+        return response()->json([
+            'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator', 'updater'])),
+        ]);
+    }
+
+    /**
+     * Move several claims to the same status.
+     *
+     * Each claim is transitioned on its own through the transition
+     * service, so its own map, data rules, history row, audit row,
+     * and notifications all apply. A claim that cannot move is
+     * reported in `failed` with its reason instead of failing the
+     * whole batch: bulk work is partial-success by design. Moving
+     * to paid is rejected here, as in the single endpoint.
+     */
+    public function bulkTransition(Request $request, ClaimTransitionService $transitions): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['uuid'],
+            'to_status' => ['required', 'string', Rule::in(array_diff(ClaimStatus::values(), [ClaimStatus::Paid->value]))],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'accepted_amount' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99'],
+            'rejection_reason' => ['nullable', 'string', 'max:2000'],
+            'submitted_at' => ['nullable', 'date'],
+        ]);
+
+        $target = ClaimStatus::from($validated['to_status']);
+        $data = array_filter([
+            'reason' => $validated['reason'] ?? null,
+            'accepted_amount' => $validated['accepted_amount'] ?? null,
+            'rejection_reason' => $validated['rejection_reason'] ?? null,
+            'submitted_at' => $validated['submitted_at'] ?? null,
+        ], fn ($value) => $value !== null);
+
+        $updated = [];
+        $failed = [];
+
+        foreach (array_unique($validated['ids']) as $id) {
+            $claim = Claim::forOrganization($organization->getKey())->whereKey($id)->first();
+
+            if ($claim === null) {
+                $failed[] = ['id' => $id, 'reason' => 'Claim not found.'];
+                continue;
+            }
+
+            try {
+                Gate::authorize('transitionTo', [$claim, $target]);
+
+                $result = $transitions->transition($claim, $target, $request->user(), $data);
+
+                $updated[] = [
+                    'id' => (string) $result->getKey(),
+                    'claim_reference' => $result->claim_reference,
+                    'status' => $result->status->value,
+                ];
+            } catch (AuthorizationException) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => 'You do not have permission to move this claim to '.$target->label().'.',
+                ];
+            } catch (ValidationException $exception) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => collect($exception->errors())->flatten()->first()
+                        ?? 'The claim cannot move to '.$target->label().'.',
+                ];
+            }
+        }
+
+        return response()->json([
+            'data' => ['updated' => $updated, 'failed' => $failed],
+        ]);
+    }
+
+    /**
+     * Delete several claims.
+     *
+     * Only pre-submission claims can be deleted; anything submitted
+     * or beyond is part of the broker trail and must be closed
+     * instead. Related history, notes, deadlines, and documents are
+     * removed by the database cascades, and the deletion itself is
+     * audit-logged by the observer.
+     */
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::DeleteClaims->value, $organization);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['uuid'],
+        ]);
+
+        $deleted = [];
+        $failed = [];
+
+        foreach (array_unique($validated['ids']) as $id) {
+            $claim = Claim::forOrganization($organization->getKey())->whereKey($id)->first();
+
+            if ($claim === null) {
+                $failed[] = ['id' => $id, 'reason' => 'Claim not found.'];
+                continue;
+            }
+
+            try {
+                Gate::authorize('delete', $claim);
+            } catch (AuthorizationException) {
+                $failed[] = [
+                    'id' => $id,
+                    'reason' => 'This claim cannot be deleted. Only pre-submission claims can be deleted.',
+                ];
+                continue;
+            }
+
+            $claim->delete();
+            $deleted[] = $id;
+        }
+
+        return response()->json([
+            'data' => ['deleted' => $deleted, 'failed' => $failed],
         ]);
     }
 

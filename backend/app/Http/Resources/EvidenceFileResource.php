@@ -27,6 +27,7 @@ class EvidenceFileResource extends JsonResource
             'original_filename' => $this->original_filename,
             'mime_type' => $this->mime_type,
             'file_size' => $this->file_size,
+            'previewable' => $this->isPreviewable(),
             'uploaded_by' => $this->whenLoaded('uploader', fn () => $this->uploader ? [
                 'id' => $this->uploader->id,
                 'name' => $this->uploader->name,
