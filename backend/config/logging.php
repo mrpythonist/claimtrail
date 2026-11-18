@@ -1,5 +1,8 @@
 <?php
 
+use App\Logging\AddContextProcessor;
+use App\Logging\ContextProcessor;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -63,6 +66,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [AddContextProcessor::class],
         ],
 
         'daily' => [
@@ -71,6 +75,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [AddContextProcessor::class],
         ],
 
         'monthly' => [
@@ -129,6 +134,42 @@ return [
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
+        ],
+
+        /*
+        |------------------------------------------------------------------
+        | Structured JSON channels (v1.1.1)
+        |------------------------------------------------------------------
+        |
+        | One JSON object per line, for log aggregators. The json
+        | channel mirrors the default log in structured form;
+        | production sets LOG_STACK=json to use it. The errors
+        | channel takes error-level entries only and is what the
+        | operations errors endpoint reads. Both carry the
+        | correlation id, app name, and environment in `extra`.
+        |
+        */
+
+        'json' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => storage_path('logs/laravel.json.log'),
+            ],
+            'formatter' => JsonFormatter::class,
+            'processors' => [ContextProcessor::class, PsrLogMessageProcessor::class],
+        ],
+
+        'errors' => [
+            'driver' => 'monolog',
+            'level' => 'error',
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => storage_path('logs/errors.json.log'),
+            ],
+            'formatter' => JsonFormatter::class,
+            'processors' => [ContextProcessor::class, PsrLogMessageProcessor::class],
         ],
 
         'emergency' => [

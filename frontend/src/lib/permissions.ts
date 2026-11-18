@@ -101,6 +101,8 @@ const AUDIT_LOG_VIEWERS: OrganizationRole[] = [
   "operations_manager",
 ];
 
+const OPERATIONS_VIEWERS: OrganizationRole[] = ["owner", "admin"];
+
 export function canManageOrganization(role: OrganizationRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
@@ -199,6 +201,10 @@ export function canExportReports(role: OrganizationRole | null | undefined): boo
 
 export function canViewAuditLogs(role: OrganizationRole | null | undefined): boolean {
   return isOneOf(role, AUDIT_LOG_VIEWERS);
+}
+
+export function canViewOperations(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, OPERATIONS_VIEWERS);
 }
 
 /**

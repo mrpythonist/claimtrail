@@ -21,6 +21,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Slow Query Logging
+    |--------------------------------------------------------------------------
+    |
+    | Queries slower than this many milliseconds are written to the
+    | log with their SQL and timing (never their bindings, which
+    | may carry personal data). Set to 0 to log every query.
+    | The listener lives in AppServiceProvider.
+    |
+    */
+
+    'slow_log_ms' => (int) env('DB_SLOW_LOG_MS', 500),
+
+    /*
+    |--------------------------------------------------------------------------
     | Database Connections
     |--------------------------------------------------------------------------
     |

@@ -3,6 +3,94 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.1.1] - 2026-11-18
+
+Phase 2, Reliability. One new permission (`view-operations`: owner,
+admin).
+
+### Added
+
+- Public health endpoint `GET /health` (no authentication): overall
+  status plus per-check status and latency for the database, cache,
+  queue, and storage. Returns 200 when ok or degraded, 503 when
+  down (database or storage failure). The queue check reports
+  "skipped" unless the database queue driver is in use. Intended
+  for load balancers and uptime monitors.
+- Operations endpoints (all require `view-operations`): detailed
+  health `GET /ops/health` (versions, queue totals), queue
+  statistics `GET /ops/queue` (per-queue pending, reserved, and
+  delayed counts with the age of the oldest pending job), failed
+  jobs `GET /ops/failed-jobs` (paginated, tenant-filtered by
+  payload), `POST /ops/failed-jobs/{uuid}/retry`,
+  `POST /ops/failed-jobs/{uuid}/forget`,
+  `POST /ops/failed-jobs/retry-all`, `POST /ops/failed-jobs/flush`
+  (deletes only the organization's jobs older than a given number
+  of hours, default 168), and recent errors `GET /ops/errors`.
+  Failed jobs that cannot be attributed to an organization are
+  never listed or acted on.
+- Operations page (`/settings/operations`) for organization admins:
+  health card, queue stats, failed-jobs table with retry/forget,
+  retry-all and flush actions, and recent errors, with manual
+  refresh.
+- Idempotent background jobs: `JobExecution` records keyed by a
+  unique idempotency key. Claim package generation keys on the
+  document id; notification emails key on the notification id (or
+  a payload hash for ad-hoc emails). A second delivery of the same
+  job is skipped, a failed run releases its key, and a running key
+  abandoned for over 60 minutes can be re-claimed.
+- Standard retry profile for queued jobs (3 tries, 120 second
+  timeout, backoff 30/120/600 seconds, retry until 24 hours),
+  with a `failed()` hook on both jobs logging the final failure.
+  The notification email keeps its longer 60/300/900 backoff.
+- Upload reliability: evidence uploads store a SHA-256 checksum
+  of the uploaded file; the write is verified (exists and size
+  matches) before the database row is created, and a failed row
+  create removes the stored file. Downloads and previews verify
+  the stored object against its checksum and fail with a 500 on
+  mismatch. A weekly scheduled command
+  (`claimtrail:cleanup-orphan-evidence`, `--dry-run` supported)
+  deletes evidence objects with no database row and older than
+  one hour.
+- Structured logging: a JSON log channel (`laravel.json.log`) and
+  an errors-only JSON channel (`errors.json.log`), both carrying
+  the correlation id, application name, and environment in every
+  record. Server errors (5xx) are reported with exception class,
+  file and line, route, method, user, organization, and
+  correlation id; 4xx responses are not recorded as errors.
+- Slow-query logging: queries slower than `DB_SLOW_LOG_MS`
+  (default 500 ms) are logged with the SQL and duration. Bindings
+  are never logged.
+- API performance: an `X-Response-Time` header on every response,
+  and ETag support on the event-categories list (304 on
+  `If-None-Match`).
+- Database indexes: composite index on `jobs` (queue,
+  available_at, reserved_at) for queue polling and monitoring,
+  and indexes on `shipments` (organization_id,
+  delivery_appointment) and `claims` (organization_id,
+  requested_amount) for the common filtered list queries.
+- Operations runbook: `docs/OPERATIONS.md` (health endpoint,
+  queue monitoring, failed-job recovery, log locations, orphan
+  cleanup).
+
+### Changed
+
+- `GET /api/v1/health` is the only unauthenticated endpoint
+  besides auth; everything under `/ops` requires the
+  `view-operations` permission.
+- Evidence responses now include the `checksum` field.
+
+### Notes
+
+- Queue monitoring reads the database queue tables and reports
+  `supported: false` on other drivers. Redis queue monitoring is
+  not implemented; the Redis worker itself remains unverified on
+  this VM (no Redis server), as recorded in the v1.0.1
+  limitations.
+- The errors endpoint reads the local `errors.json.log` file. On
+  multi-server deployments the log must be aggregated (for
+  example by shipping the JSON log to a central store) or each
+  server shows only its own errors.
+
 ## [1.1.0] - 2026-11-17
 
 Phase 2, UX Improvements. One new permission (`delete-claims`:

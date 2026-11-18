@@ -248,16 +248,18 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.1.1 — Reliability
 
-- [ ] Queue monitoring.
-- [ ] Failed-job handling.
-- [ ] Retry mechanisms.
-- [ ] Idempotent background jobs.
-- [ ] Upload reliability.
-- [ ] Database optimization.
-- [ ] API performance optimization.
-- [ ] Structured logging.
-- [ ] Error monitoring.
-- [ ] Health checks.
+> Verified 2026-11-18 (daily build run): backend 289 passed (1200 assertions), frontend 171 passed, `npm run build` succeeds (35/35 pages, incl. /settings/operations), `tsc --noEmit` clean, lint clean, fresh-DB `migrate:fresh` passes (3 new migrations, 4 new indexes), live HTTP smoke test over the built-in server passed (public health, ops health + queue stats with a seeded job, failed-job retry round trip, ETag 304, upload checksum). Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), Redis queue monitoring (not implemented; database driver only). Note: `artisan serve` itself fails on this VM (child dies during bootstrap); the same app serves fine via the built-in server directly and via the CLI kernel, so this is a VM quirk, not a code bug.
+
+- [x] Queue monitoring.
+- [x] Failed-job handling.
+- [x] Retry mechanisms.
+- [x] Idempotent background jobs.
+- [x] Upload reliability.
+- [x] Database optimization.
+- [x] API performance optimization.
+- [x] Structured logging.
+- [x] Error monitoring.
+- [x] Health checks.
 
 ### v1.1.2 — Customization
 

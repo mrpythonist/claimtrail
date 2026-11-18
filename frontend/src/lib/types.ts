@@ -565,3 +565,82 @@ export interface GeneratedDocument {
   generated_at: string | null;
   created_at: string;
 }
+
+/** Overall health of the application or of one subsystem. */
+export type HealthStatus = "ok" | "degraded" | "down" | "skipped";
+
+export interface HealthCheck {
+  status: HealthStatus;
+  latency_ms: number | null;
+  detail: string | null;
+}
+
+export interface HealthChecks {
+  database: HealthCheck;
+  cache: HealthCheck;
+  queue: HealthCheck;
+  storage: HealthCheck;
+}
+
+export interface QueueTotals {
+  pending: number;
+  reserved: number;
+  delayed: number;
+  failed: number;
+}
+
+/** Authenticated health payload from GET /ops/health. */
+export interface OpsHealth {
+  status: "ok" | "degraded" | "down";
+  checks: HealthChecks;
+  checked_at: string;
+  version: string;
+  php_version: string;
+  laravel_version: string;
+  queue_totals: QueueTotals;
+  queue_supported: boolean;
+}
+
+export interface QueueStatsRow {
+  queue: string;
+  pending: number;
+  reserved: number;
+  delayed: number;
+  oldest_pending_age_seconds: number | null;
+}
+
+/** Queue breakdown from GET /ops/queue. */
+export interface QueueStats {
+  supported: boolean;
+  driver: string;
+  connection: string;
+  queues: QueueStatsRow[];
+  totals: QueueTotals;
+}
+
+/** One row of the failed-jobs table. The exception is truncated server-side. */
+export interface FailedJob {
+  uuid: string;
+  connection: string;
+  queue: string;
+  job: string;
+  failed_at: string;
+  exception: string;
+}
+
+/** One parsed line from the application log. */
+export interface RecentErrorEntry {
+  datetime: string;
+  level: string;
+  message: string;
+  exception: string | null;
+  route: string | null;
+  method: string | null;
+  correlation_id: string | null;
+}
+
+/** Recent log errors from GET /ops/errors. */
+export interface RecentErrors {
+  entries: RecentErrorEntry[];
+  scanned_lines: number;
+}

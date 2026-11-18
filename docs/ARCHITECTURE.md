@@ -174,6 +174,7 @@ from them instead of inventing new patterns.
 | Notifications | NotificationService, Notification model, queued mailable | notifications page, preferences form, unread badge | Done (M4) |
 | Reports | ReportService | reports page, CSV export | Done (M4) |
 | Dashboard metrics | DashboardService | rebuilt dashboard | Done (M4) |
+| Operations and reliability | HealthController, OpsController, HealthCheckService, QueueMonitorService, FailedJobService, ErrorLogService, ErrorReporter, job idempotency traits | operations page, ops.ts | Done (v1.1.1) |
 
 ## Production notes (not implemented in Phase 1)
 
@@ -185,3 +186,26 @@ from them instead of inventing new patterns.
   baked in at build time.
 - Add the CI workflow (prepared separately; the GitHub API rejects
   workflow file pushes, so it is added through the web UI).
+
+## Reliability (v1.1.1)
+
+- Health checks live in `HealthCheckService`: database, cache,
+  queue (database driver only), and storage. `GET /api/v1/health`
+  is the only public endpoint besides auth.
+- Operations endpoints under `/api/v1/ops` require the
+  `view-operations` permission (owner, admin). Failed jobs are
+  attributed to an organization from their payload and never
+  shown across tenants.
+- Queued jobs share a standard retry profile
+  (`HasStandardRetries`: 3 tries, 120s timeout, backoff
+  30/120/600s, retry until 24h) and are idempotent
+  (`IsIdempotent` + the `job_executions` table keyed by a unique
+  idempotency key). See `docs/OPERATIONS.md` for the runbook.
+- Logging has two JSON channels: `json` (all levels) and
+  `errors` (error and above). Every record carries a correlation
+  id, the application name, and the environment. 5xx errors are
+  reported with request context; 4xx responses are not errors.
+- Slow queries are logged above `DB_SLOW_LOG_MS` (default 500).
+  Bindings are never logged.
+- Every response carries an `X-Response-Time` header. The
+  event-categories list supports ETags (304 on `If-None-Match`).

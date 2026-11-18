@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\HasStandardRetries;
+use App\Jobs\Concerns\IsIdempotent;
 use App\Mail\NotificationMail;
 use App\Models\Notification;
 use App\Models\Organization;
@@ -15,22 +17,22 @@ use Illuminate\Support\Facades\Mail;
  * Sends one notification email and stamps the notification row.
  *
  * The payload travels with the job (not the models), so a retry
- * always works from the original text. On success the in-app row,
- * when one exists, gets its email_sent_at stamp. On final failure
- * the error is logged with enough context to find the notification;
- * the in-app row is unaffected, so the member still sees it there.
+ * always works from the original text. The job is idempotent: a
+ * redelivery after a completed run is skipped, so a member never
+ * gets the same email twice because a retry raced the stamp
+ * update. On success the in-app row, when one exists, gets its
+ * email_sent_at stamp. On final failure the error is logged with
+ * enough context to find the notification; the in-app row is
+ * unaffected, so the member still sees it there.
  */
 class SendNotificationEmail implements ShouldQueue
 {
-    use Queueable;
+    use HasStandardRetries, IsIdempotent, Queueable;
 
     /**
-     * Attempts before the job is moved to the failed table.
-     */
-    public int $tries = 3;
-
-    /**
-     * Backoff between attempts, in seconds.
+     * Backoff between attempts, in seconds. Email delivery gets
+     * longer waits than the standard trait backoff: a down mail
+     * server rarely recovers in thirty seconds.
      */
     public function backoff(): array
     {
@@ -51,6 +53,26 @@ class SendNotificationEmail implements ShouldQueue
     ) {}
 
     /**
+     * One key per notification. Jobs without a notification row
+     * (invitations and other ad-hoc mail) key on a hash of the
+     * payload, so the same email is never sent twice.
+     */
+    public function idempotencyKey(): string
+    {
+        if ($this->notificationId !== null) {
+            return 'notification-email:'.$this->notificationId;
+        }
+
+        return 'notification-email:adhoc:'.hash('sha256', implode('|', [
+            $this->userId,
+            $this->organizationId,
+            $this->type,
+            $this->title,
+            $this->body,
+        ]));
+    }
+
+    /**
      * Execute the job.
      */
     public function handle(): void
@@ -68,19 +90,21 @@ class SendNotificationEmail implements ShouldQueue
             return;
         }
 
-        Mail::to($user)->send(new NotificationMail(
-            $this->title,
-            $this->body,
-            $organization->name,
-            $this->actionUrl(),
-        ));
+        $this->runIdempotently(function () use ($user, $organization): void {
+            Mail::to($user)->send(new NotificationMail(
+                $this->title,
+                $this->body,
+                $organization->name,
+                $this->actionUrl(),
+            ));
 
-        if ($this->notificationId !== null) {
-            Notification::query()
-                ->withoutGlobalScope('organization')
-                ->whereKey($this->notificationId)
-                ->update(['email_sent_at' => now()]);
-        }
+            if ($this->notificationId !== null) {
+                Notification::query()
+                    ->withoutGlobalScope('organization')
+                    ->whereKey($this->notificationId)
+                    ->update(['email_sent_at' => now()]);
+            }
+        });
     }
 
     /**

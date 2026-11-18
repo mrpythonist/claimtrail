@@ -15,7 +15,10 @@ use App\Permission;
 use App\Support\Correlation;
 use App\Support\CurrentOrganization;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -62,6 +65,25 @@ class AppServiceProvider extends ServiceProvider
             $frontend = rtrim((string) config('app.frontend_url'), '/');
 
             return $frontend.'/reset-password?token='.$token.'&email='.urlencode($user->getEmailForPasswordReset());
+        });
+
+        // Slow-query logging (v1.1.1): queries slower than
+        // DB_SLOW_LOG_MS are logged with their SQL and timing.
+        // Bindings are never logged: they may carry personal data.
+        // The threshold is read per query so tests can set it to
+        // zero and verify the mechanism without a slow query.
+        DB::listen(function (QueryExecuted $query): void {
+            $threshold = (int) config('database.slow_log_ms', 500);
+
+            if ($query->time < $threshold) {
+                return;
+            }
+
+            Log::warning('Slow query detected.', [
+                'sql' => mb_substr($query->sql, 0, 2000),
+                'time_ms' => $query->time,
+                'connection' => $query->connectionName,
+            ]);
         });
     }
 }

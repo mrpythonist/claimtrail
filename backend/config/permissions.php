@@ -62,6 +62,7 @@ return [
         Permission::ViewReports->value,
         Permission::ExportReports->value,
         Permission::ViewAuditLogs->value,
+        Permission::ViewOperations->value,
     ],
 
     OrganizationRole::OperationsManager->value => [

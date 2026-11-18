@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ErrorReporter;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        $middleware->append(\App\Http\Middleware\ResponseTime::class);
 
         // Laravel defaults guest redirects to route('login'), which
         // this API-only app does not define; the redirect lookup
@@ -41,5 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*')) {
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
+        });
+
+        // Structured error monitoring (v1.1.1): server errors are
+        // written to the errors channel with route, user, org, and
+        // correlation id. 4xx responses are normal traffic and are
+        // not recorded. Reporting never throws.
+        $exceptions->report(function (Throwable $exception) {
+            ErrorReporter::report($exception, request());
         });
     })->create();

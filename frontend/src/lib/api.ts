@@ -175,6 +175,14 @@ export async function apiFetch<T>(
  * Sends the same Authorization and X-Organization-Id headers as
  * apiFetch, but deliberately does not set Content-Type: the browser
  * sets it with the multipart boundary. 401 handling matches apiFetch.
+ *
+ * Retries once on a network failure or a 5xx response: a dropped
+ * connection or a transient server error should not lose an upload
+ * the user just waited for. A 4xx response (for example a
+ * validation error) is final and is never retried. Retrying a POST
+ * can duplicate the upload if the first request reached the server
+ * but its response was lost; callers that cannot tolerate that
+ * should not rely on the retry alone.
  */
 export async function apiUpload<T>(
   path: string,
@@ -189,14 +197,25 @@ export async function apiUpload<T>(
 
   const headers = authHeaders({ orgId, withOrg });
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
-  } catch {
+  // FormData is reusable as a request body, so the same payload
+  // can be sent again on the retry attempt.
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetch(`${API_URL}${path}`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+    } catch {
+      response = null;
+    }
+    // Success or a 4xx: never retry. Only a network failure
+    // (response null) or a 5xx reaches the second attempt.
+    if (response !== null && response.status < 500) break;
+  }
+
+  if (response === null) {
     throw new ApiRequestError(0, { message: UNREACHABLE_MESSAGE });
   }
 

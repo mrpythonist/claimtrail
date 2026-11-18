@@ -31,6 +31,7 @@ class EvidenceFile extends Model
         'disk',
         'mime_type',
         'file_size',
+        'checksum',
         'uploaded_by',
         'description',
         'verification_status',

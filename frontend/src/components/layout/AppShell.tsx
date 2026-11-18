@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import {
   canViewAuditLogs,
+  canViewOperations,
   canViewReports,
 } from "@/lib/permissions";
 import type { OnboardingProgress, OrganizationRole } from "@/lib/types";
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Members", href: "/settings/members", section: "Settings" },
   { label: "Organization", href: "/settings/organization", section: "Settings" },
   { label: "Evidence Requirements", href: "/settings/evidence-requirements", section: "Settings" },
+  { label: "Operations", href: "/settings/operations", section: "Settings", visibleFor: canViewOperations },
   { label: "Profile", href: "/settings/profile", section: "Settings" },
 ];
 
@@ -311,7 +313,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Menu
           </button>
           <p className="hidden text-sm text-slate-500 md:block">
-            ClaimTrail v1.1.0
+            ClaimTrail v1.1.1
           </p>
 
           <div className="relative" ref={menuRef}>
@@ -364,7 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
 
         <footer className="border-t border-slate-200 px-4 py-4 text-center text-xs text-slate-500 sm:px-6">
-          ClaimTrail v1.1.0. Claim amounts shown anywhere in the product are
+          ClaimTrail v1.1.1. Claim amounts shown anywhere in the product are
           potential amounts, never a guarantee of recovery.
         </footer>
       </div>

@@ -17,8 +17,12 @@ class EventCategoryController extends Controller
     /**
      * List event categories visible to the organization: the system
      * categories plus the organization's own custom ones.
+     *
+     * The list changes rarely, so it carries an ETag: a client
+     * that sends the ETag back in If-None-Match gets a 304 with
+     * no body instead of the full list.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse|\Illuminate\Http\Response
     {
         $organization = $this->organization($request);
 
@@ -28,9 +32,18 @@ class EventCategoryController extends Controller
             ->orderBy('label')
             ->get();
 
-        return response()->json([
+        $payload = [
             'data' => EventCategoryResource::collection($categories),
-        ]);
+        ];
+
+        $etag = '"'.md5((string) json_encode($payload)).'"';
+
+        if ($request->header('If-None-Match') === $etag) {
+            return response(null, 304)->header('ETag', $etag);
+        }
+
+        return response()->json($payload)->header('ETag', $etag)
+            ->header('Cache-Control', 'private, max-age=0, must-revalidate');
     }
 
     /**

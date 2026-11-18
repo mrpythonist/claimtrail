@@ -111,26 +111,58 @@ class EvidenceFileController extends Controller
         $disk = config('evidence.disk');
         $key = 'evidence/'.$organization->getKey().'/'.$shipment->getKey().'/'.Str::uuid().'.'.$file->extension();
 
+        // The checksum is taken from the uploaded temp file before
+        // anything is stored, so it describes what the client sent,
+        // not what survived the write.
+        $checksum = hash_file('sha256', $file->getRealPath());
+
         Storage::disk($disk)->putFileAs(
             dirname($key),
             $file,
             basename($key)
         );
 
-        $evidence = EvidenceFile::create([
-            'organization_id' => $organization->getKey(),
-            'shipment_id' => $shipment->getKey(),
-            'shipment_event_id' => $validated['shipment_event_id'] ?? null,
-            'document_category' => $validated['document_category'],
-            'original_filename' => $file->getClientOriginalName(),
-            'storage_key' => $key,
-            'disk' => $disk,
-            'mime_type' => $file->getMimeType(),
-            'file_size' => $file->getSize(),
-            'uploaded_by' => $request->user()->id,
-            'description' => $validated['description'] ?? null,
-            'verification_status' => EvidenceVerificationStatus::Pending,
-        ]);
+        // Verify the write before recording the file: a partial or
+        // missing object must fail the upload, not create a row
+        // pointing at a broken file.
+        $stored = Storage::disk($disk);
+
+        if (! $stored->exists($key) || $stored->size($key) !== $file->getSize()) {
+            $stored->delete($key);
+
+            Log::error('Evidence upload failed verification after write.', [
+                'organization_id' => $organization->getKey(),
+                'shipment_id' => $shipment->getKey(),
+            ]);
+
+            return response()->json([
+                'message' => 'The upload could not be verified. Please try again.',
+            ], 503);
+        }
+
+        try {
+            $evidence = EvidenceFile::create([
+                'organization_id' => $organization->getKey(),
+                'shipment_id' => $shipment->getKey(),
+                'shipment_event_id' => $validated['shipment_event_id'] ?? null,
+                'document_category' => $validated['document_category'],
+                'original_filename' => $file->getClientOriginalName(),
+                'storage_key' => $key,
+                'disk' => $disk,
+                'mime_type' => $file->getMimeType(),
+                'file_size' => $file->getSize(),
+                'checksum' => $checksum,
+                'uploaded_by' => $request->user()->id,
+                'description' => $validated['description'] ?? null,
+                'verification_status' => EvidenceVerificationStatus::Pending,
+            ]);
+        } catch (\Throwable $e) {
+            // The file landed but the row did not: remove the object
+            // so it never becomes an orphan.
+            $stored->delete($key);
+
+            throw $e;
+        }
 
         return response()->json([
             'data' => new EvidenceFileResource($evidence->load('uploader')),
@@ -194,6 +226,15 @@ class EvidenceFileController extends Controller
             abort(404, 'The file is no longer available.');
         }
 
+        if (! $this->checksumMatches($evidence)) {
+            Log::error('Evidence file failed its integrity check.', [
+                'evidence_id' => $evidence->getKey(),
+                'organization_id' => $organization->getKey(),
+            ]);
+
+            abort(500, 'The file failed its integrity check.');
+        }
+
         $disposition = (new ResponseHeaderBag)->makeDisposition(
             ResponseHeaderBag::DISPOSITION_INLINE,
             $evidence->original_filename
@@ -247,6 +288,15 @@ class EvidenceFileController extends Controller
             ]);
 
             abort(404, 'The file is no longer available.');
+        }
+
+        if (! $this->checksumMatches($evidence)) {
+            Log::error('Evidence file failed its integrity check.', [
+                'evidence_id' => $evidence->getKey(),
+                'organization_id' => $organization->getKey(),
+            ]);
+
+            abort(500, 'The file failed its integrity check.');
         }
 
         $disposition = (new ResponseHeaderBag)->makeDisposition(
@@ -329,6 +379,30 @@ class EvidenceFileController extends Controller
         $evidence->delete();
 
         return response()->json(['message' => 'Evidence deleted.']);
+    }
+
+    /**
+     * Whether the stored object still matches its upload checksum.
+     *
+     * Files uploaded before checksums exist have a null checksum
+     * and are served without verification. S3 objects are skipped:
+     * verifying one would download the whole object, and object
+     * integrity there is the provider's job. A disk with no local
+     * path is skipped the same way.
+     */
+    protected function checksumMatches(EvidenceFile $evidence): bool
+    {
+        if ($evidence->checksum === null || $evidence->disk === 's3') {
+            return true;
+        }
+
+        try {
+            $path = Storage::disk($evidence->disk)->path($evidence->storage_key);
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return hash_equals($evidence->checksum, hash_file('sha256', $path));
     }
 
     /**

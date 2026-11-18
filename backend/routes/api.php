@@ -12,9 +12,11 @@ use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\EvidenceRequirementController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
 use App\Http\Controllers\Api\V1\OnboardingController;
+use App\Http\Controllers\Api\V1\OpsController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
@@ -29,6 +31,10 @@ use Illuminate\Support\Facades\Route;
 // Every API request gets a correlation id, echoed back on the
 // response and recorded on audit rows written during the request.
 Route::prefix('v1')->middleware('correlation')->group(function () {
+    // Public health check for load balancers and uptime monitors.
+    // Reports only whether the app and its dependencies are up.
+    Route::get('/health', [HealthController::class, 'show']);
+
     // Public authentication endpoints. Tight rate limits apply because
     // these are the unauthenticated entry points.
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
@@ -169,6 +175,19 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/reports/summary', [ReportController::class, 'summary']);
             Route::get('/reports/recovery-history', [ReportController::class, 'recoveryHistory']);
             Route::get('/reports/export', [ReportController::class, 'export']);
+
+            // Operations (v1.1.1): detailed health, queue depth,
+            // failed jobs, and recent errors. All require the
+            // view-operations permission (owner and admin) and are
+            // tenant-scoped to the resolved organization.
+            Route::get('/ops/health', [HealthController::class, 'ops']);
+            Route::get('/ops/queue', [OpsController::class, 'queue']);
+            Route::get('/ops/failed-jobs', [OpsController::class, 'failedJobs']);
+            Route::post('/ops/failed-jobs/retry-all', [OpsController::class, 'retryAllFailedJobs']);
+            Route::post('/ops/failed-jobs/flush', [OpsController::class, 'flushFailedJobs']);
+            Route::post('/ops/failed-jobs/{uuid}/retry', [OpsController::class, 'retryFailedJob']);
+            Route::post('/ops/failed-jobs/{uuid}/forget', [OpsController::class, 'forgetFailedJob']);
+            Route::get('/ops/errors', [OpsController::class, 'errors']);
         });
     });
 });

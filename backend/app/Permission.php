@@ -64,6 +64,10 @@ enum Permission: string
     // Audit trail (enforced from Milestone 4)
     case ViewAuditLogs = 'view-audit-logs';
 
+    // Operations (enforced from v1.1.1): queue depth, failed jobs,
+    // and recent errors for the organization.
+    case ViewOperations = 'view-operations';
+
     /**
      * Every permission value, for validation and documentation.
      *

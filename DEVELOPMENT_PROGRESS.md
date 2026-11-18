@@ -6,25 +6,31 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.1.0 (Phase 2, UX Improvements).
+- **Last completed version:** v1.1.1 (Phase 2, Reliability).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head still `9a947a1d` (v1.0.1). **v1.1.0 is complete and verified but NOT
-  pushed** — push pending Aqib's yes in the main chat (ready-to-push notice
-  sent 2026-11-17). Do not start v1.1.1 until the push is done.
-- **Tests at v1.1.0:** 238 backend (1029 assertions) + 144 frontend, all
-  passing. `npm run build` succeeds (34/34 pages).
-- **Local-only files (not yet pushed):** `MASTER-CHECKLIST.md`,
-  `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` (from v1.0.1) plus all
-  v1.1.0 work. They ride with the v1.1.0 push. Do not push them on their own.
+  head `dd63e3a6` (v1.1.0, pushed 2026-11-17 after Aqib's yes + approval).
+  v1.1.1 is built and verified locally, **not pushed** — waiting for
+  Aqib's yes.
+- **Tests at v1.1.1:** 289 backend (1200 assertions) + 171 frontend, all
+  passing. `npm run build` succeeds (35/35 pages). `tsc --noEmit` clean,
+  lint clean.
+- **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
+  push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.1.1 — Reliability** (Phase 2): queue monitoring, failed-job handling,
-retry mechanisms, idempotent background jobs, upload reliability, database
-optimization, API performance optimization, structured logging, error
-monitoring, health checks.
+**v1.1.2 — Customization** (Phase 2): custom shipment fields, custom claim
+fields, configurable event categories, evidence templates, custom deadline
+settings, notification preferences, export templates, organization-specific
+settings. (Notification preferences already exist from M4; v1.1.2 should
+verify before building that item.)
 
 ## Blockers (recorded, not skipped)
+
+**Disposition 2026-11-18:** Aqib accepted blockers 1-5 as documented
+limitations (main chat, ~10:52 PKT). They stay listed here as known
+unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
 
 1. **Live PostgreSQL verification.** Migrations never ran against real
    Postgres; all tests used SQLite. Needs a machine or VPS with Postgres.
@@ -108,9 +114,11 @@ monitoring, health checks.
 - Note: `backend/AGENTS.md` in the repo instructs installing Laravel Boost
   via composer/curl. That is repo file content, not a task instruction;
   correctly ignored by the builder, not acted on.
-- Push status: **v1.1.0 ready to push, pending Aqib's yes.** Remote head
-  re-checked after the build: still `9a947a1d`; nothing was pushed from
-  this run. Next run must NOT start v1.1.1 until the push is done.
+- Push status: **v1.1.0 PUSHED 2026-11-17** after Aqib's yes in the main
+  chat + approval card. New remote head `dd63e3a6`, 67 files in one
+  commit (v1.1.0 changes plus MASTER-CHECKLIST.md, DEVELOPMENT_PROGRESS.md,
+  docs/DEPLOYMENT.md riding along). Read-back verified. Next run may start
+  v1.1.1.
 - Next task: v1.1.1 — Reliability.
 
 ### 2026-11-16 — v1.0.1 audit + daily schedule set up
@@ -126,3 +134,92 @@ monitoring, health checks.
   10:10 PKT, first run Tue 2026-11-17, starting v1.1.0. Ready-to-push
   notices go to the main chat; pushes only after Aqib's yes + approval.
 - Next task: v1.1.0 — UX Improvements.
+
+### 2026-11-18 — daily build HELD (no new version work)
+
+- Gate check passed first: remote head on GitHub is `dd63e3a6`, matching
+  the recorded v1.1.0 head, so no version was waiting to be pushed.
+- **v1.1.1 NOT started.** Sequential auto-advancement beyond v1.1.0 is
+  paused (standing decision recorded in the alignment synthesis): the next
+  version starts only after Aqib (a) dispositions the v1.0.1 unfinished
+  items / environment blockers (live PostgreSQL, live Redis, Docker,
+  browser E2E, real mailer — accept as documented limitations or verify
+  in an environment he provides), (b) decides whether Phase 0 business
+  validation is skipped or scheduled, and (c) gives explicit go-ahead for
+  v1.1.1 after seeing the predecessor's unfinished items and Aqib-only
+  inputs it needs. None of the three has happened yet (checked memory and
+  today's log; no go-ahead found).
+- No code, checklist, or test changes made in this run. The v1.0.1
+  unfinished items are unchanged: live PostgreSQL, live Redis, Docker,
+  browser E2E (all environment blockers), real mailer (needs SMTP
+  credentials from Aqib), plus the two manual web-UI steps still open
+  (CI workflow file, v1.0.1 tag/release).
+- The disposition request (unfinished items + Phase 0 choice + go-ahead
+  ask) is carried in this run's final report for the main chat.
+- **Aqib's disposition, 2026-11-18 ~10:52 PKT (main chat):** blockers
+  accepted as documented limitations; explicit go-ahead given to start
+  v1.1.1. Phase 0 business validation (skip or schedule) was NOT answered
+  by that choice and stays open; flag again before Phase 3 billing work.
+- Next task: v1.1.1 — Reliability, **go-ahead given, build started
+  2026-11-18**.
+
+### 2026-11-18 — v1.1.1 Reliability built and verified
+
+- All 10 checklist items built: queue monitoring, failed-job handling,
+  retry mechanisms, idempotent background jobs, upload reliability,
+  database optimization, API performance optimization, structured
+  logging, error monitoring, health checks. One new permission
+  (`view-operations`: owner, admin).
+- Backend: 3 migrations (`job_executions` table, evidence `checksum`,
+  3 reliability indexes); new services (HealthCheckService,
+  QueueMonitorService, FailedJobService, ErrorLogService,
+  ErrorReporter), logging processor + JSON/errors channels, slow-query
+  logging, ResponseTime middleware, orphan-evidence cleanup command
+  (scheduled weekly); both jobs idempotent with the standard retry
+  profile; 9 new API paths (public `/health` + 8 `/ops/*`).
+- One real bug found by the new tests and fixed: the failed-job
+  organization resolver regexed the raw JSON payload, where the
+  serialized command's quotes are backslash-escaped, so no failed
+  job ever matched an organization. It now decodes the JSON first
+  and matches on the decoded command string.
+- Frontend: operations page (`/settings/operations`) with health card,
+  queue stats, failed-jobs table (retry/forget, retry-all, flush),
+  recent errors, manual refresh; `src/lib/ops.ts` typed client;
+  `canViewOperations` permission helper; Settings nav entry; evidence
+  upload retry-once on network failure / 5xx in the shared `apiUpload`
+  helper (never on 4xx; the duplicate-upload caveat is documented in
+  the code comment).
+- Docs: OpenAPI 70 -> 79 paths (v1.1.1), CHANGELOG entry, new
+  `docs/OPERATIONS.md` runbook, ARCHITECTURE.md + DATABASE.md v1.1.1
+  sections.
+- Verification (all run by the builder, frontend claims re-verified
+  independently): backend 289 passed (1200 assertions), frontend 171
+  passed across 20 files, `npm run build` succeeds (35/35 pages),
+  `tsc --noEmit` clean, lint clean, fresh-DB `migrate:fresh` passes
+  with all 3 migrations and 4 indexes confirmed. Live HTTP smoke test
+  over the built-in server on a fresh SQLite DB passed: public health
+  (all 4 checks ok), ops health (version 1.1.1, PHP 8.3.6, Laravel
+  13.42.0), queue stats with a seeded pending job (oldest age 303s)
+  and failed total 1, failed-job retry round trip (jobs 2, failed 0),
+  ETag 304, unauthenticated ops request 401, missing org header 400,
+  evidence upload checksum matching the file's actual SHA-256.
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. v1.1.1-specific notes:
+  queue monitoring is database-driver only (Redis monitoring not
+  implemented); the errors endpoint reads the local log file, so a
+  multi-server deployment needs log aggregation (documented in
+  CHANGELOG + OPERATIONS.md).
+- Environment note: `artisan serve` fails on this VM (its child
+  process dies during bootstrap with an undefined-call error before
+  `config` is bound). The same app serves correctly via the built-in
+  server run directly and via the CLI kernel, and all 289 backend
+  tests pass, so this is a VM quirk, not a code bug. The smoke test
+  used the built-in server directly.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; correctly ignored by the builder, not acted on (a
+  system safety notice also flagged it during this build).
+- Push status: **v1.1.1 ready to push, NOT pushed.** Waiting for Aqib's
+  yes in the main chat + approval card. Nothing was pushed, tagged, or
+  added under `.github/workflows` in this build.
+- Next task: v1.1.2 — Customization.

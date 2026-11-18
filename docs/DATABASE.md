@@ -517,6 +517,39 @@ Notes are append-only: there is no update or delete endpoint. The
 review action (approve / request changes) writes a note row alongside
 the status history row, so the decision and its reasoning stay linked.
 
+## Tables in v1.1.1 (Phase 2, Reliability)
+
+### job_executions
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| key | string, unique | Idempotency key, for example `claim-package:{document_id}` |
+| job | string | Fully qualified job class name |
+| status | string, default `running` | `running` or `completed` |
+| completed_at | timestamp, nullable | |
+| created_at, updated_at | timestamps | `updated_at` is the staleness clock: a `running` row untouched for over 60 minutes can be re-claimed |
+
+Index `(job, status)`. The unique key is the atomic claim: two
+workers cannot claim the same key. A failed run releases its key
+(deletes the row); a completed key is never re-claimed. The table
+is not tenant-scoped: keys embed the tenant-owned id they guard.
+
+### evidence_files: checksum (added in v1.1.1)
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| checksum | string (64), nullable | SHA-256 hex digest of the uploaded file, stored at upload. Null for files uploaded before v1.1.1, which skip verification. |
+
+### Indexes added in v1.1.1
+
+- `jobs`: composite `(queue, available_at, reserved_at)` for
+  queue polling and the queue-monitoring endpoint.
+- `shipments`: `(organization_id, delivery_appointment)` for the
+  filtered list queries.
+- `claims`: `(organization_id, requested_amount)` for the
+  amount-range list queries.
+
 ## Tables planned for later milestones
 
 None. Milestone 5 (hardening and release) adds no new tables.

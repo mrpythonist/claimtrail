@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\GeneratedDocumentStatus;
+use App\Jobs\Concerns\HasStandardRetries;
+use App\Jobs\Concerns\IsIdempotent;
 use App\Models\GeneratedDocument;
 use App\Models\User;
 use App\Services\AuditService;
@@ -18,21 +20,26 @@ use Illuminate\Support\Str;
  *
  * The job works from the generated_documents row created by the
  * controller, so a retry never creates a second document record.
- * On failure the row is marked failed with the error message; the
- * user regenerates from the claim page.
+ * It is also idempotent: a redelivery after a completed run is
+ * skipped, so a retry can never render or store a second PDF for
+ * the same document. On failure the row is marked failed with the
+ * error message; the user regenerates from the claim page.
  */
 class GenerateClaimPackage implements ShouldQueue
 {
-    use Queueable;
-
-    /**
-     * Attempts before the job is moved to the failed table.
-     */
-    public int $tries = 3;
+    use HasStandardRetries, IsIdempotent, Queueable;
 
     public function __construct(
         protected string $documentId,
     ) {}
+
+    /**
+     * One key per document: the PDF for a document is rendered once.
+     */
+    public function idempotencyKey(): string
+    {
+        return 'claim-package:'.$this->documentId;
+    }
 
     /**
      * Execute the job.
@@ -40,6 +47,8 @@ class GenerateClaimPackage implements ShouldQueue
      * The audit service is optional so the job can be run directly
      * with only the package service (as the package tests do); the
      * container injects both when the job is dispatched normally.
+     * The document lookup happens before the idempotency claim, so
+     * a run for a deleted document leaves no execution row behind.
      */
     public function handle(ClaimPackageService $packages, ?AuditService $audit = null): void
     {
@@ -56,6 +65,32 @@ class GenerateClaimPackage implements ShouldQueue
             return;
         }
 
+        $this->runIdempotently(function () use ($packages, $audit, $document): void {
+            $this->render($packages, $audit, $document);
+        });
+    }
+
+    /**
+     * Handle a job failure after all retries.
+     *
+     * The document row was already marked failed by the failing
+     * attempt; this records the final failure so it is visible in
+     * the error log with the full attempt history behind it.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('Claim package generation failed after retries.', [
+            'document_id' => $this->documentId,
+            'error' => $exception->getMessage(),
+        ]);
+    }
+
+    /**
+     * Render the PDF and store it. Runs at most once per document
+     * thanks to the idempotency claim in handle().
+     */
+    protected function render(ClaimPackageService $packages, AuditService $audit, GeneratedDocument $document): void
+    {
         try {
             $claim = $document->claim;
             $disk = config('evidence.disk');
