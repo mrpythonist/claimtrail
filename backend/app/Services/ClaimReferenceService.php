@@ -19,12 +19,21 @@ class ClaimReferenceService
 {
     /**
      * Reserve and return the next reference for an organization.
+     *
+     * The prefix comes from the organization settings
+     * (`claim_reference_prefix`, default `CLM`) and only affects
+     * claims created after the setting is saved.
      */
     public function nextReference(Organization $organization): string
     {
         $year = (int) now()->format('Y');
+        $prefix = strtoupper((string) (($organization->settings ?? [])['claim_reference_prefix'] ?? 'CLM'));
 
-        return DB::transaction(function () use ($organization, $year) {
+        if ($prefix === '') {
+            $prefix = 'CLM';
+        }
+
+        return DB::transaction(function () use ($organization, $year, $prefix) {
             $sequence = ClaimSequence::where('organization_id', $organization->getKey())
                 ->where('year', $year)
                 ->lockForUpdate()
@@ -40,7 +49,7 @@ class ClaimReferenceService
 
             $sequence->increment('last_number');
 
-            return sprintf('CLM-%d-%04d', $year, $sequence->last_number);
+            return sprintf('%s-%d-%04d', $prefix, $year, $sequence->last_number);
         });
     }
 }

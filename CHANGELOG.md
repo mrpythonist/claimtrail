@@ -3,6 +3,91 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.1.2] - 2026-11-19
+
+Phase 2, Customization (backend only; no frontend was built for
+customization in this version). One new permission
+(`manage-customization`: owner, admin, operations manager).
+
+### Added
+
+- Custom fields for shipments and claims: definitions per
+  organization and resource type (`GET`/`POST /custom-fields`,
+  `GET`/`PUT`/`DELETE /custom-fields/{field}`), with field types
+  `text`, `number`, `date`, `select`, and `boolean`, an auto-slugged
+  key (immutable after creation), required flags, select options,
+  sort order, and an active flag. At most 20 active definitions per
+  organization and resource type. Shipment and claim create/update
+  accept `custom_field_values`, validated against the active
+  definitions (unknown keys, missing required fields, and wrong
+  types return 422); updates merge over the stored values, and both
+  resources return `custom_field_values`. Deleting a definition
+  strips its key from every shipment and claim value map in the
+  organization.
+- Event category updates (`PUT /event-categories/{category}`) and
+  deletion (`DELETE /event-categories/{category}`) for
+  organization-owned categories: rename with slug recompute and
+  collision check against visible categories, disable with
+  `is_active`, and default estimated amount and currency that
+  prefill new events when none is given. System categories return
+  404; a category with events returns 422 on delete. Creating an
+  event under a disabled category returns 422; events recorded
+  before a category was disabled stay readable.
+- Evidence templates (`GET`/`POST /evidence-templates`,
+  `GET`/`PUT`/`DELETE /evidence-templates/{template}`,
+  `POST /evidence-templates/{template}/apply-to-claim/{claim}`):
+  named checklists of document categories with labels, required
+  flags, and sort order. Applying a template creates a
+  `ClaimRequirement` row per document category the claim does not
+  already have; applying the same template twice creates nothing
+  the second time.
+- Deadline settings (`GET`/`POST /deadline-settings`,
+  `GET`/`PUT`/`DELETE /deadline-settings/{setting}`,
+  `GET /deadline-settings/resolve`): organization defaults for how
+  soon after an event a claim must be submitted, scoped `global`,
+  `claim_category`, or `event_category`, with `submit_within_days`
+  (1 to 365) and `reminder_days_before`. Resolution precedence is
+  claim category, then event category, then global. When a claim is
+  created without an explicit submission deadline, the resolved
+  setting creates a `ClaimDeadline` row (source "Organization
+  deadline default") and sets the claim's `submission_deadline_at`.
+- Export templates (`GET`/`POST /export-templates`,
+  `GET`/`PUT`/`DELETE /export-templates/{template}`,
+  `POST /export-templates/{template}/set-default`,
+  `GET /export-templates/available-columns`): saved column
+  selections per resource type, with one default per organization
+  and resource type. `GET /shipments/export` and the new
+  `GET /claims/export` accept `?export_template_id=`; without it
+  the default column sets are used. Columns are fixed keys or
+  `custom:<field_key>` for active custom fields.
+- Organization settings now accept `settings.default_currency`
+  (3 letters), `settings.date_format` (`Y-m-d`, `d/m/Y`, or
+  `m/d/Y`), and `settings.claim_reference_prefix` (up to 10
+  characters, uppercase letters, digits, and hyphens). Unknown
+  settings keys are rejected with 422, and given settings merge
+  over the stored ones. The claim reference prefix only affects
+  claims created after the setting is saved; the format is
+  `<PREFIX>-YYYY-NNNN` with `CLM` as the default.
+- OpenAPI now documents all 93 route paths (up from 79), matching
+  the route list exactly.
+
+### Changed
+
+- Claim references use the organization settings prefix when one is
+  set; the default `CLM` prefix is unchanged, so existing tests and
+  references are unaffected.
+- The event-categories list now includes `is_active`,
+  `default_estimated_amount`, and `default_currency` per category.
+
+### Notes
+
+- Notification preferences were verified pre-existing (model plus
+  `GET`/`PUT /notification-preferences`, per-member per-event
+  in-app/email) and were not rebuilt in this version.
+- Deadline defaults only apply when no explicit submission deadline
+  is given at claim creation; they never overwrite one.
+- The claim reference prefix only affects new claims.
+
 ## [1.1.1] - 2026-11-18
 
 Phase 2, Reliability. One new permission (`view-operations`: owner,

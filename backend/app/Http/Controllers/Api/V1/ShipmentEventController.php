@@ -67,6 +67,26 @@ class ShipmentEventController extends Controller
 
         $validated = $request->validate($this->rules($organization));
 
+        $category = EventCategory::visibleTo($organization)
+            ->whereKey($validated['event_category_id'])
+            ->firstOrFail();
+
+        if (! $category->is_active) {
+            return response()->json([
+                'message' => 'This event category is disabled. Choose an active category.',
+            ], 422);
+        }
+
+        // A category default fills in the amount (and currency) when
+        // the event does not supply its own.
+        if (($validated['estimated_amount'] ?? null) === null && $category->default_estimated_amount !== null) {
+            $validated['estimated_amount'] = $category->default_estimated_amount;
+        }
+
+        if (($validated['currency'] ?? null) === null && $category->default_currency !== null) {
+            $validated['currency'] = $category->default_currency;
+        }
+
         $event = $shipment->events()->create(array_merge($validated, [
             'organization_id' => $organization->getKey(),
             'reported_by' => $request->user()->id,

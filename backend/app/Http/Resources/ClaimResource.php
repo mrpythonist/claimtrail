@@ -52,6 +52,7 @@ class ClaimResource extends JsonResource
             'payment_reference' => $this->payment_reference,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
+            'custom_field_values' => $this->custom_field_values ?? [],
             'allowed_transitions' => array_map(
                 fn ($status) => ['value' => $status->value, 'label' => $status->label()],
                 $this->status->allowedTransitions()

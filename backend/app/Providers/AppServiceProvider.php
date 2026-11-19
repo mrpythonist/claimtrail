@@ -4,7 +4,12 @@ namespace App\Providers;
 
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
+use App\Models\CustomField;
+use App\Models\DeadlineSetting;
+use App\Models\EventCategory;
 use App\Models\EvidenceFile;
+use App\Models\EvidenceTemplate;
+use App\Models\ExportTemplate;
 use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\OrganizationMember;
@@ -56,6 +61,11 @@ class AppServiceProvider extends ServiceProvider
         EvidenceFile::observe(AuditObserver::class);
         Claim::observe(AuditObserver::class);
         ClaimDeadline::observe(AuditObserver::class);
+        CustomField::observe(AuditObserver::class);
+        EventCategory::observe(AuditObserver::class);
+        EvidenceTemplate::observe(AuditObserver::class);
+        DeadlineSetting::observe(AuditObserver::class);
+        ExportTemplate::observe(AuditObserver::class);
         OrganizationMember::observe(AuditObserver::class);
         OrganizationInvitation::observe(AuditObserver::class);
 

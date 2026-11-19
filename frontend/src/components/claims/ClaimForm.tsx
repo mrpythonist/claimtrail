@@ -5,8 +5,14 @@ import Link from "next/link";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { CustomFieldInputs } from "@/components/customization/CustomFieldInputs";
 import { apiFetch, ApiRequestError } from "@/lib/api";
 import { CLAIM_CATEGORIES, isClaimPastSubmission } from "@/lib/claims";
+import {
+  cleanCustomFieldValues,
+  getCustomFields,
+  validateCustomFieldValues,
+} from "@/lib/customization";
 import {
   blankToNull,
   inputValueToIso,
@@ -17,6 +23,8 @@ import { validateClaimForm } from "@/lib/validation";
 import type {
   Claim,
   ClaimCategory,
+  CustomField,
+  CustomFieldValues,
   Shipment,
   ShipmentEvent,
 } from "@/lib/types";
@@ -31,6 +39,7 @@ export interface ClaimPayload {
   internal_notes: string | null;
   external_broker_reference: string | null;
   submission_deadline_at: string | null;
+  custom_field_values?: CustomFieldValues;
 }
 
 interface ClaimFormProps {
@@ -103,6 +112,26 @@ export function ClaimForm({
     isoToInputValue(initial?.submission_deadline_at ?? null),
   );
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>(
+    initial?.custom_field_values ?? {},
+  );
+
+  // Custom field definitions are optional: a failed fetch leaves
+  // the form working exactly as before.
+  useEffect(() => {
+    let cancelled = false;
+    getCustomFields(orgId, "claim")
+      .then((fields) => {
+        if (!cancelled) setCustomFields(fields);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomFields([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   // Load the events of the chosen shipment whenever it changes.
   // The loading flag is set by the change handler (or the initial
@@ -176,6 +205,10 @@ export function ClaimForm({
       delete formErrors.requested_amount;
       delete formErrors.currency;
     }
+    Object.assign(
+      formErrors,
+      validateCustomFieldValues(customFields, customValues),
+    );
     setErrors(formErrors);
     if (Object.keys(formErrors).length > 0) return;
 
@@ -185,6 +218,9 @@ export function ClaimForm({
       external_broker_reference: blankToNull(brokerReference),
       submission_deadline_at: inputValueToIso(submissionDeadline),
     };
+    if (customFields.length > 0) {
+      payload.custom_field_values = cleanCustomFieldValues(customValues);
+    }
     if (!isEdit) {
       payload.shipment_id = shipmentId;
     }
@@ -362,6 +398,13 @@ export function ClaimForm({
         onChange={(event) => setInternalNotes(event.target.value)}
         error={fieldError("internal_notes")}
         help="Notes for your team only. They are left out of the claim package unless you choose to include them."
+      />
+
+      <CustomFieldInputs
+        fields={customFields}
+        values={customValues}
+        onChange={setCustomValues}
+        errors={{ ...serverErrors, ...errors }}
       />
 
       <div className="flex flex-wrap gap-2">

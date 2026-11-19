@@ -30,6 +30,12 @@ const SHIPMENT_MANAGERS: OrganizationRole[] = [
   "operations_manager",
 ];
 
+const CUSTOMIZATION_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+];
+
 const SHIPMENT_EXPORTERS: OrganizationRole[] = [
   "owner",
   "admin",
@@ -133,6 +139,14 @@ export function canImportShipments(role: OrganizationRole | null | undefined): b
 
 export function canExportShipments(role: OrganizationRole | null | undefined): boolean {
   return isOneOf(role, SHIPMENT_EXPORTERS);
+}
+
+export function canExportClaims(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, SHIPMENT_EXPORTERS);
+}
+
+export function canManageCustomization(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, CUSTOMIZATION_MANAGERS);
 }
 
 export function canManageEvents(role: OrganizationRole | null | undefined): boolean {

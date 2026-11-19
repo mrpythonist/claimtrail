@@ -80,6 +80,11 @@ class OrganizationController extends Controller
 
     /**
      * Update organization settings.
+     *
+     * Only three settings keys are accepted: default_currency,
+     * date_format, and claim_reference_prefix. Unknown settings
+     * keys are rejected, and the given settings are merged over the
+     * stored ones instead of replacing them.
      */
     public function update(Request $request, Organization $organization): JsonResponse
     {
@@ -89,7 +94,31 @@ class OrganizationController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'timezone' => ['sometimes', 'string', 'timezone'],
             'settings' => ['sometimes', 'array'],
+            'settings.default_currency' => ['sometimes', 'nullable', 'string', 'size:3', 'alpha'],
+            'settings.date_format' => ['sometimes', 'nullable', 'string', Rule::in(['Y-m-d', 'd/m/Y', 'm/d/Y'])],
+            'settings.claim_reference_prefix' => ['sometimes', 'nullable', 'string', 'max:10', 'regex:/^[A-Z0-9-]+$/'],
         ]);
+
+        // Check the raw input for unknown keys, not the validated
+        // data: validation drops keys with no rule, so a settings
+        // object holding only unknown keys would otherwise vanish
+        // from the validated data and slip past this check.
+        if ($request->has('settings')) {
+            $allowed = ['default_currency', 'date_format', 'claim_reference_prefix'];
+            $unknown = array_diff(array_keys((array) $request->input('settings', [])), $allowed);
+
+            if (! empty($unknown)) {
+                return response()->json([
+                    'message' => 'Unknown organization settings: '.implode(', ', $unknown).'.',
+                    'errors' => ['settings' => ['Unknown organization settings: '.implode(', ', $unknown).'.']],
+                ], 422);
+            }
+
+            $validated['settings'] = array_merge(
+                $organization->settings ?? [],
+                $validated['settings'] ?? [],
+            );
+        }
 
         $organization->update($validated);
 

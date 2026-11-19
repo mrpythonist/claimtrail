@@ -15,6 +15,14 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
 import { EvidencePreviewModal } from "@/components/evidence/EvidencePreviewModal";
 import {
+  CustomFieldValuesDisplay,
+} from "@/components/customization/CustomFieldInputs";
+import {
+  applyEvidenceTemplateToClaim,
+  getCustomFields,
+  getEvidenceTemplates,
+} from "@/lib/customization";
+import {
   apiDownload,
   apiFetch,
   ApiRequestError,
@@ -36,6 +44,7 @@ import {
   canAttachClaimEvidence,
   canEditClaims,
   canGenerateClaimPackages,
+  canManageCustomization,
   canManageDeadlines,
   canRecordClaimPayments,
   canTransitionClaimTo,
@@ -61,7 +70,9 @@ import type {
   ClaimDeadline,
   ClaimStatus,
   ClaimStatusHistory,
+  CustomField,
   EvidenceFile,
+  EvidenceTemplate,
   GeneratedDocument,
   Organization,
 } from "@/lib/types";
@@ -223,6 +234,10 @@ function ClaimDetailContent({
 }) {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [history, setHistory] = useState<ClaimStatusHistory[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [evidenceTemplates, setEvidenceTemplates] = useState<EvidenceTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [attachedEvidence, setAttachedEvidence] = useState<EvidenceFile[]>([]);
   const [shipmentEvidence, setShipmentEvidence] = useState<EvidenceFile[]>([]);
   const [document, setDocument] = useState<GeneratedDocument | null>(null);
@@ -326,6 +341,23 @@ function ClaimDetailContent({
         if (!cancelled) setAttachedEvidence([]);
       });
 
+    // Custom fields and evidence templates are secondary; the claim
+    // still loads when these fetches fail.
+    getCustomFields(org.id, "claim")
+      .then((fields) => {
+        if (!cancelled) setCustomFields(fields);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomFields([]);
+      });
+    getEvidenceTemplates(org.id)
+      .then((templates) => {
+        if (!cancelled) setEvidenceTemplates(templates);
+      })
+      .catch(() => {
+        if (!cancelled) setEvidenceTemplates([]);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -341,6 +373,36 @@ function ClaimDetailContent({
     })
       .then((response) => setHistory(response.data))
       .catch(() => undefined);
+  }
+
+  function refreshAttachedEvidence() {
+    apiFetch<{ data: EvidenceFile[] }>(`/claims/${claimId}/evidence`, {
+      orgId: org.id,
+    })
+      .then((response) => setAttachedEvidence(response.data))
+      .catch(() => undefined);
+  }
+
+  async function handleApplyTemplate() {
+    if (!selectedTemplateId || !claim) return;
+    setError(null);
+    setNotice(null);
+    setApplyingTemplate(true);
+    try {
+      const result = await applyEvidenceTemplateToClaim(
+        org.id,
+        selectedTemplateId,
+        claim.id,
+      );
+      setNotice(
+        `Template applied: ${result.created} requirement${result.created === 1 ? "" : "s"} created, ${result.skipped} skipped (already present).`,
+      );
+      refreshAttachedEvidence();
+    } catch (err) {
+      showError(err, "Could not apply the evidence template.");
+    } finally {
+      setApplyingTemplate(false);
+    }
   }
 
   function openTransition(target: { value: string; label: string }) {
@@ -690,6 +752,24 @@ function ClaimDetailContent({
         </CardBody>
       </Card>
 
+      {claim.custom_field_values &&
+        Object.entries(claim.custom_field_values).some(
+          ([, value]) => value !== null && value !== undefined && value !== "",
+        ) && (
+          <Card>
+            <CardHeader
+              title="Custom fields"
+              description="Extra fields set for this claim."
+            />
+            <CardBody>
+              <CustomFieldValuesDisplay
+                fields={customFields}
+                values={claim.custom_field_values}
+              />
+            </CardBody>
+          </Card>
+        )}
+
       <Card>
         <CardHeader
           title="Amounts"
@@ -1010,6 +1090,49 @@ function ClaimDetailContent({
           )}
         </CardBody>
       </Card>
+
+      {canManageCustomization(myRole) && !immutable && (
+        <Card>
+          <CardHeader
+            title="Apply evidence template"
+            description="Create this claim's evidence requirements from a saved template. Requirements that already exist are skipped."
+          />
+          <CardBody>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-64 flex-1">
+                <Select
+                  id="apply-evidence-template"
+                  label="Template"
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                  help={
+                    evidenceTemplates.filter((template) => template.is_active)
+                      .length === 0
+                      ? "No active evidence templates yet. Add one in Customization settings."
+                      : undefined
+                  }
+                >
+                  <option value="">Choose a template</option>
+                  {evidenceTemplates
+                    .filter((template) => template.is_active)
+                    .map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                </Select>
+              </div>
+              <Button
+                loading={applyingTemplate}
+                disabled={!selectedTemplateId}
+                onClick={handleApplyTemplate}
+              >
+                Apply template
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader

@@ -11,7 +11,15 @@ import { apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canManageOrganization } from "@/lib/permissions";
 import { TIMEZONES } from "@/lib/timezones";
-import type { Organization } from "@/lib/types";
+import { DATE_FORMATS, type Organization } from "@/lib/types";
+
+function settingsString(
+  settings: Record<string, unknown> | null,
+  key: string,
+): string {
+  const value = settings?.[key];
+  return typeof value === "string" ? value : "";
+}
 
 /**
  * The form initializes from the organization it is given. The parent keys
@@ -22,6 +30,15 @@ function OrganizationForm({ org }: { org: Organization }) {
   const { refreshUser } = useAuth();
   const [name, setName] = useState(org.name);
   const [timezone, setTimezone] = useState(org.timezone);
+  const [defaultCurrency, setDefaultCurrency] = useState(
+    settingsString(org.settings, "default_currency") || "USD",
+  );
+  const [dateFormat, setDateFormat] = useState(
+    settingsString(org.settings, "date_format") || "Y-m-d",
+  );
+  const [claimReferencePrefix, setClaimReferencePrefix] = useState(
+    settingsString(org.settings, "claim_reference_prefix"),
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,13 +51,34 @@ function OrganizationForm({ org }: { org: Organization }) {
       setError("Organization name is required.");
       return;
     }
+    const currency = defaultCurrency.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      setError("Default currency must be a 3-letter code, for example USD.");
+      return;
+    }
+    const prefix = claimReferencePrefix.trim().toUpperCase();
+    if (prefix && !/^[A-Z0-9-]{1,10}$/.test(prefix)) {
+      setError(
+        "Claim reference prefix must be up to 10 letters, numbers, or dashes.",
+      );
+      return;
+    }
     setError(null);
     setMessage(null);
     setLoading(true);
     try {
       await apiFetch<{ data: Organization }>(`/organizations/${org.id}`, {
         method: "PUT",
-        body: { name: name.trim(), timezone },
+        body: {
+          name: name.trim(),
+          timezone,
+          settings: {
+            ...(org.settings ?? {}),
+            default_currency: currency,
+            date_format: dateFormat,
+            claim_reference_prefix: prefix ? prefix : null,
+          },
+        },
         withOrg: false,
       });
       setMessage("Organization settings saved.");
@@ -94,6 +132,38 @@ function OrganizationForm({ org }: { org: Organization }) {
                 </option>
               ))}
             </Select>
+            <Input
+              id="org-default-currency"
+              label="Default currency"
+              type="text"
+              value={defaultCurrency}
+              onChange={(event) => setDefaultCurrency(event.target.value)}
+              disabled={!canEdit}
+              help="3-letter code, for example USD."
+            />
+            <Select
+              id="org-date-format"
+              label="Date format"
+              value={dateFormat}
+              onChange={(event) => setDateFormat(event.target.value)}
+              disabled={!canEdit}
+            >
+              {DATE_FORMATS.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              id="org-claim-reference-prefix"
+              label="Claim reference prefix"
+              type="text"
+              value={claimReferencePrefix}
+              onChange={(event) => setClaimReferencePrefix(event.target.value)}
+              disabled={!canEdit}
+              placeholder="For example: CLM"
+              help="Up to 10 letters, numbers, or dashes. Leave blank to use the default prefix."
+            />
             {canEdit && (
               <Button type="submit" loading={loading}>
                 Save settings

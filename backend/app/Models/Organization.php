@@ -154,4 +154,36 @@ class Organization extends Model
     {
         return $this->hasMany(NotificationPreference::class);
     }
+
+    /**
+     * Custom field definitions for this organization.
+     */
+    public function customFields(): HasMany
+    {
+        return $this->hasMany(CustomField::class);
+    }
+
+    /**
+     * Evidence templates for this organization.
+     */
+    public function evidenceTemplates(): HasMany
+    {
+        return $this->hasMany(EvidenceTemplate::class);
+    }
+
+    /**
+     * Deadline defaults for this organization.
+     */
+    public function deadlineSettings(): HasMany
+    {
+        return $this->hasMany(DeadlineSetting::class);
+    }
+
+    /**
+     * Export templates for this organization.
+     */
+    public function exportTemplates(): HasMany
+    {
+        return $this->hasMany(ExportTemplate::class);
+    }
 }

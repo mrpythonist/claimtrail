@@ -7,11 +7,15 @@ use App\Http\Controllers\Api\V1\ClaimController;
 use App\Http\Controllers\Api\V1\ClaimDeadlineController;
 use App\Http\Controllers\Api\V1\ClaimPackageController;
 use App\Http\Controllers\Api\V1\ClaimReviewNoteController;
+use App\Http\Controllers\Api\V1\CustomFieldController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DeadlineSettingController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\EvidenceRequirementController;
+use App\Http\Controllers\Api\V1\EvidenceTemplateController;
+use App\Http\Controllers\Api\V1\ExportTemplateController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
@@ -113,6 +117,8 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
 
             Route::get('/event-categories', [EventCategoryController::class, 'index']);
             Route::post('/event-categories', [EventCategoryController::class, 'store']);
+            Route::put('/event-categories/{category}', [EventCategoryController::class, 'update']);
+            Route::delete('/event-categories/{category}', [EventCategoryController::class, 'destroy']);
 
             Route::get('/events/{event}', [ShipmentEventController::class, 'show']);
             Route::put('/events/{event}', [ShipmentEventController::class, 'update']);
@@ -126,6 +132,7 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::put('/evidence/{evidence}/verification', [EvidenceFileController::class, 'verify']);
             Route::delete('/evidence/{evidence}', [EvidenceFileController::class, 'destroy']);
 
+            Route::get('/claims/export', [ClaimController::class, 'export']);
             Route::get('/claims', [ClaimController::class, 'index']);
             Route::post('/claims', [ClaimController::class, 'store']);
             Route::post('/claims/bulk-transition', [ClaimController::class, 'bulkTransition']);
@@ -175,6 +182,38 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/reports/summary', [ReportController::class, 'summary']);
             Route::get('/reports/recovery-history', [ReportController::class, 'recoveryHistory']);
             Route::get('/reports/export', [ReportController::class, 'export']);
+
+            // Customization (v1.1.2): custom fields, evidence
+            // templates, deadline settings, and export templates.
+            // All write routes require manage-customization (owner,
+            // admin, operations manager).
+            Route::get('/custom-fields', [CustomFieldController::class, 'index']);
+            Route::post('/custom-fields', [CustomFieldController::class, 'store']);
+            Route::get('/custom-fields/{field}', [CustomFieldController::class, 'show']);
+            Route::put('/custom-fields/{field}', [CustomFieldController::class, 'update']);
+            Route::delete('/custom-fields/{field}', [CustomFieldController::class, 'destroy']);
+
+            Route::get('/evidence-templates', [EvidenceTemplateController::class, 'index']);
+            Route::post('/evidence-templates', [EvidenceTemplateController::class, 'store']);
+            Route::get('/evidence-templates/{template}', [EvidenceTemplateController::class, 'show']);
+            Route::put('/evidence-templates/{template}', [EvidenceTemplateController::class, 'update']);
+            Route::delete('/evidence-templates/{template}', [EvidenceTemplateController::class, 'destroy']);
+            Route::post('/evidence-templates/{template}/apply-to-claim/{claim}', [EvidenceTemplateController::class, 'applyToClaim']);
+
+            Route::get('/deadline-settings/resolve', [DeadlineSettingController::class, 'resolve']);
+            Route::get('/deadline-settings', [DeadlineSettingController::class, 'index']);
+            Route::post('/deadline-settings', [DeadlineSettingController::class, 'store']);
+            Route::get('/deadline-settings/{setting}', [DeadlineSettingController::class, 'show']);
+            Route::put('/deadline-settings/{setting}', [DeadlineSettingController::class, 'update']);
+            Route::delete('/deadline-settings/{setting}', [DeadlineSettingController::class, 'destroy']);
+
+            Route::get('/export-templates/available-columns', [ExportTemplateController::class, 'availableColumns']);
+            Route::get('/export-templates', [ExportTemplateController::class, 'index']);
+            Route::post('/export-templates', [ExportTemplateController::class, 'store']);
+            Route::get('/export-templates/{template}', [ExportTemplateController::class, 'show']);
+            Route::put('/export-templates/{template}', [ExportTemplateController::class, 'update']);
+            Route::delete('/export-templates/{template}', [ExportTemplateController::class, 'destroy']);
+            Route::post('/export-templates/{template}/set-default', [ExportTemplateController::class, 'setDefault']);
 
             // Operations (v1.1.1): detailed health, queue depth,
             // failed jobs, and recent errors. All require the

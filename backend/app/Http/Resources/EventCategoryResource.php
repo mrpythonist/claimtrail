@@ -20,6 +20,9 @@ class EventCategoryResource extends JsonResource
             'label' => $this->label,
             'description' => $this->description,
             'is_system' => $this->isSystem(),
+            'is_active' => $this->is_active ?? true,
+            'default_estimated_amount' => $this->default_estimated_amount,
+            'default_currency' => $this->default_currency,
         ];
     }
 }

@@ -550,6 +550,102 @@ is not tenant-scoped: keys embed the tenant-owned id they guard.
 - `claims`: `(organization_id, requested_amount)` for the
   amount-range list queries.
 
+## Tables in v1.1.2 (Phase 2, Customization)
+
+### custom_fields
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| resource_type | string | `shipment` or `claim` |
+| field_key | string | Slug-like key, unique per organization and resource type |
+| label | string | |
+| field_type | string | `text`, `number`, `date`, `select`, or `boolean` |
+| is_required | boolean, default false | |
+| options | json, nullable | Select choices (2 to 20 entries) |
+| sort_order | integer, default 0 | Display order |
+| is_active | boolean, default true | Only active definitions accept new values |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, resource_type, field_key)`. Index
+`(organization_id, resource_type, is_active)`. At most 20 active
+definitions per organization and resource type, enforced in
+application code.
+
+### evidence_templates
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| name | string | Unique per organization |
+| description | text, nullable | |
+| is_active | boolean, default true | |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, name)`.
+
+### evidence_template_items
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| evidence_template_id | uuid, FK to evidence_templates, cascade on delete | |
+| document_category | string | One of the `EvidenceDocumentCategory` values |
+| label | string | |
+| is_required | boolean, default true | |
+| sort_order | integer, default 0 | |
+| created_at, updated_at | timestamps | |
+
+Unique `(evidence_template_id, document_category)`.
+
+### deadline_settings
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| scope_type | string | `global`, `claim_category`, or `event_category` |
+| scope_value | string, nullable | Category slug; null for the global setting |
+| submit_within_days | integer | 1 to 365 |
+| reminder_days_before | json, nullable | Array of integers, 0 to 90 |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, scope_type, scope_value)`. A second global
+setting is prevented in application validation because unique
+indexes treat nulls as distinct. Resolution precedence: claim
+category, then event category, then global.
+
+### export_templates
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, PK | |
+| organization_id | uuid, FK to organizations, cascade on delete | |
+| resource_type | string | `shipment` or `claim` |
+| name | string | Unique per organization and resource type |
+| columns | json | Array of column keys, fixed or `custom:<field_key>` |
+| is_default | boolean, default false | At most one default per organization and resource type |
+| created_at, updated_at | timestamps | |
+
+Unique `(organization_id, resource_type, name)`. Index
+`(organization_id, resource_type, is_default)`.
+
+### event_categories: is_active and defaults (added in v1.1.2)
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| is_active | boolean, default true | Disabled categories reject new events; old events stay readable |
+| default_estimated_amount | decimal(12,2), nullable | Prefills an event amount when none is given |
+| default_currency | string(3), nullable | Prefills an event currency when none is given |
+
+### shipments and claims: custom_field_values (added in v1.1.2)
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| custom_field_values | json, nullable | Values keyed by custom field key, validated against the active definitions |
+
 ## Tables planned for later milestones
 
 None. Milestone 5 (hardening and release) adds no new tables.

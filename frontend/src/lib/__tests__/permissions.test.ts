@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canExportClaims,
   canExportReports,
+  canManageCustomization,
   canViewAuditLogs,
   canViewOperations,
   canViewReports,
@@ -68,6 +70,41 @@ describe("canViewAuditLogs", () => {
     expect(canViewAuditLogs("viewer")).toBe(false);
     expect(canViewAuditLogs(null)).toBe(false);
     expect(canViewAuditLogs(undefined)).toBe(false);
+  });
+});
+
+describe("canManageCustomization", () => {
+  it("allows owner, admin, and operations manager only", () => {
+    expect(ROLES.filter((role) => canManageCustomization(role))).toEqual([
+      "owner",
+      "admin",
+      "operations_manager",
+    ]);
+  });
+
+  it("denies billing staff, dispatchers, viewers, and missing roles", () => {
+    expect(canManageCustomization("billing_staff")).toBe(false);
+    expect(canManageCustomization("dispatcher")).toBe(false);
+    expect(canManageCustomization("viewer")).toBe(false);
+    expect(canManageCustomization(null)).toBe(false);
+    expect(canManageCustomization(undefined)).toBe(false);
+  });
+});
+
+describe("canExportClaims", () => {
+  it("allows owner, admin, operations manager, and billing staff", () => {
+    expect(ROLES.filter((role) => canExportClaims(role))).toEqual([
+      "owner",
+      "admin",
+      "operations_manager",
+      "billing_staff",
+    ]);
+  });
+
+  it("denies viewers and dispatchers", () => {
+    expect(canExportClaims("viewer")).toBe(false);
+    expect(canExportClaims("dispatcher")).toBe(false);
+    expect(canExportClaims(null)).toBe(false);
   });
 });
 

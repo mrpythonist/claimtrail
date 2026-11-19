@@ -68,6 +68,11 @@ enum Permission: string
     // and recent errors for the organization.
     case ViewOperations = 'view-operations';
 
+    // Customization (enforced from v1.1.2): custom fields, event
+    // category updates, evidence templates, deadline settings,
+    // and export templates.
+    case ManageCustomization = 'manage-customization';
+
     /**
      * Every permission value, for validation and documentation.
      *

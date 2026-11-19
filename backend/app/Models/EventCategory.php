@@ -25,7 +25,18 @@ class EventCategory extends Model
         'slug',
         'label',
         'description',
+        'is_active',
+        'default_estimated_amount',
+        'default_currency',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'default_estimated_amount' => 'decimal:2',
+        ];
+    }
 
     /**
      * The owning organization, or null for a system category.

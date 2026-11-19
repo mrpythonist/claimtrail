@@ -38,6 +38,7 @@ class ShipmentResource extends JsonResource
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'notes' => $this->notes,
+            'custom_field_values' => $this->custom_field_values ?? [],
             'created_by' => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->id,
                 'name' => $this->creator->name,

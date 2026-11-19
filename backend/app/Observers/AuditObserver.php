@@ -4,7 +4,12 @@ namespace App\Observers;
 
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
+use App\Models\CustomField;
+use App\Models\DeadlineSetting;
+use App\Models\EventCategory;
 use App\Models\EvidenceFile;
+use App\Models\EvidenceTemplate;
+use App\Models\ExportTemplate;
 use App\Models\OrganizationInvitation;
 use App\Models\OrganizationMember;
 use App\Models\Shipment;
@@ -59,6 +64,23 @@ class AuditObserver
         ],
         ClaimDeadline::class => [
             'deadline_at', 'timezone', 'status', 'source_reference',
+        ],
+        CustomField::class => [
+            'resource_type', 'field_key', 'label', 'field_type',
+            'is_required', 'is_active',
+        ],
+        EventCategory::class => [
+            'slug', 'label', 'is_active', 'default_estimated_amount',
+            'default_currency',
+        ],
+        EvidenceTemplate::class => [
+            'name', 'is_active',
+        ],
+        DeadlineSetting::class => [
+            'scope_type', 'scope_value', 'submit_within_days',
+        ],
+        ExportTemplate::class => [
+            'resource_type', 'name', 'is_default',
         ],
         OrganizationMember::class => [
             'user_id', 'role', 'status',

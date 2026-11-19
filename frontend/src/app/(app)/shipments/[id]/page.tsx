@@ -13,10 +13,11 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
+import { CategoryForm, type CategoryPayload } from "@/components/shipments/CategoryForm";
 import {
-  CategoryForm,
-  type CategoryPayload,
-} from "@/components/shipments/CategoryForm";
+  CustomFieldValuesDisplay,
+} from "@/components/customization/CustomFieldInputs";
+import { getCustomFields } from "@/lib/customization";
 import { EventForm, type EventPayload } from "@/components/shipments/EventForm";
 import {
   apiDownload,
@@ -51,6 +52,7 @@ import {
 } from "@/lib/shipments";
 import type { FieldErrors } from "@/lib/validation";
 import type {
+  CustomField,
   DocumentCategory,
   EventCategory,
   EvidenceFile,
@@ -102,6 +104,7 @@ function ShipmentDetailContent({
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [events, setEvents] = useState<ShipmentEvent[]>([]);
   const [categories, setCategories] = useState<EventCategory[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [evidence, setEvidence] = useState<EvidenceFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +177,16 @@ function ShipmentDetailContent({
     ).then((response) => {
       if (!cancelled) setEvidence(response.data);
     });
+
+    // Custom field definitions are secondary; the shipment still
+    // loads when this fetch fails.
+    getCustomFields(org.id, "shipment")
+      .then((fields) => {
+        if (!cancelled) setCustomFields(fields);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomFields([]);
+      });
 
     Promise.all([shipmentRequest, eventsRequest, categoriesRequest, evidenceRequest])
       .catch((err) => {
@@ -578,6 +591,24 @@ function ShipmentDetailContent({
           )}
         </CardBody>
       </Card>
+
+      {shipment.custom_field_values &&
+        Object.entries(shipment.custom_field_values).some(
+          ([, value]) => value !== null && value !== undefined && value !== "",
+        ) && (
+          <Card>
+            <CardHeader
+              title="Custom fields"
+              description="Extra fields set for this shipment."
+            />
+            <CardBody>
+              <CustomFieldValuesDisplay
+                fields={customFields}
+                values={shipment.custom_field_values}
+              />
+            </CardBody>
+          </Card>
+        )}
 
       <Card>
         <CardHeader

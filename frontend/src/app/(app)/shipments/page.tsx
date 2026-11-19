@@ -23,6 +23,7 @@ import {
   canExportShipments,
   canImportShipments,
 } from "@/lib/permissions";
+import { getExportTemplates } from "@/lib/customization";
 import {
   downloadBlob,
   SHIPMENT_STATUS_LABELS,
@@ -31,6 +32,7 @@ import {
 import type {
   Carrier,
   EventCategory,
+  ExportTemplate,
   Organization,
   PaginatedMeta,
   Shipment,
@@ -86,6 +88,8 @@ function ShipmentsContent({ org }: { org: Organization }) {
   const [sort, setSort] = useState("created_at:desc");
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [exportTemplates, setExportTemplates] = useState<ExportTemplate[]>([]);
+  const [exportTemplateId, setExportTemplateId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Bulk selection state.
@@ -118,6 +122,14 @@ function ShipmentsContent({ org }: { org: Organization }) {
       })
       .catch(() => {
         if (!cancelled) setCategories([]);
+      });
+    // Export templates are optional; the export still works without them.
+    getExportTemplates(org.id, "shipment")
+      .then((templates) => {
+        if (!cancelled) setExportTemplates(templates);
+      })
+      .catch(() => {
+        if (!cancelled) setExportTemplates([]);
       });
     return () => {
       cancelled = true;
@@ -257,8 +269,10 @@ function ShipmentsContent({ org }: { org: Organization }) {
     setError(null);
     setExporting(true);
     try {
+      const params = filterParams();
+      if (exportTemplateId) params.set("export_template_id", exportTemplateId);
       const blob = await apiDownload(
-        `/shipments/export?${filterParams().toString()}`,
+        `/shipments/export?${params.toString()}`,
         { orgId: org.id },
       );
       downloadBlob(blob, "shipments.csv");
@@ -367,14 +381,29 @@ function ShipmentsContent({ org }: { org: Organization }) {
             description="Loads, appointments, rates, and status. Export downloads the current filtered list as a CSV file."
             action={
               canExportShipments(myRole) ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={exporting}
-                  onClick={handleExport}
-                >
-                  Export CSV
-                </Button>
+                <span className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="Export template"
+                    value={exportTemplateId}
+                    onChange={(event) => setExportTemplateId(event.target.value)}
+                    className="min-h-9 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:border-brand-600 focus:outline-none"
+                  >
+                    <option value="">Default export</option>
+                    {exportTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={exporting}
+                    onClick={handleExport}
+                  >
+                    Export CSV
+                  </Button>
+                </span>
               ) : undefined
             }
           />

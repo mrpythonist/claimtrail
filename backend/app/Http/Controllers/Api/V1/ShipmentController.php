@@ -7,6 +7,7 @@ use App\Http\Resources\ShipmentResource;
 use App\Models\Organization;
 use App\Models\Shipment;
 use App\Permission;
+use App\Services\CustomFieldService;
 use App\Services\ShipmentRules;
 use App\ShipmentStatus;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -59,17 +60,25 @@ class ShipmentController extends Controller
     /**
      * Create a shipment in the resolved organization.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CustomFieldService $customFields): JsonResponse
     {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::CreateShipments->value, $organization);
 
-        $validated = $request->validate(
-            ShipmentRules::createRules($organization->getKey())
+        $validated = $request->validate(array_merge(
+            ShipmentRules::createRules($organization->getKey()),
+            ['custom_field_values' => ['nullable', 'array']],
+        ));
+
+        $values = $customFields->validateValues(
+            $organization,
+            'shipment',
+            $request->input('custom_field_values'),
         );
 
         $shipment = $organization->shipments()->create(array_merge($validated, [
+            'custom_field_values' => $values,
             'created_by' => $request->user()->id,
         ]));
 
@@ -105,7 +114,7 @@ class ShipmentController extends Controller
      * forward one step at a time, and archived shipments cannot be
      * edited at all (the policy enforces that).
      */
-    public function update(Request $request, Shipment $shipment): JsonResponse
+    public function update(Request $request, Shipment $shipment, CustomFieldService $customFields): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -115,9 +124,19 @@ class ShipmentController extends Controller
 
         Gate::authorize('update', $shipment);
 
-        $validated = $request->validate(
-            ShipmentRules::updateRules($organization->getKey(), $shipment->getKey())
-        );
+        $validated = $request->validate(array_merge(
+            ShipmentRules::updateRules($organization->getKey(), $shipment->getKey()),
+            ['custom_field_values' => ['nullable', 'array']],
+        ));
+
+        if (array_key_exists('custom_field_values', $validated)) {
+            $validated['custom_field_values'] = $customFields->validateValues(
+                $organization,
+                'shipment',
+                $validated['custom_field_values'],
+                $shipment->custom_field_values ?? [],
+            );
+        }
 
         if (isset($validated['status'])) {
             $target = ShipmentStatus::from($validated['status']);
@@ -270,7 +289,10 @@ class ShipmentController extends Controller
      * Export the filtered shipment list as CSV.
      *
      * Streams the file with a cursor so large exports do not load
-     * every shipment into memory at once.
+     * every shipment into memory at once. When an export template id
+     * is given, its columns are used instead of the default set; a
+     * template from another organization, or one for claims, is a
+     * 422.
      */
     public function export(Request $request): StreamedResponse
     {
@@ -278,57 +300,95 @@ class ShipmentController extends Controller
 
         Gate::authorize(Permission::ExportShipments->value, $organization);
 
+        $columns = CustomFieldService::SHIPMENT_COLUMNS;
+        $template = null;
+
+        if ($request->filled('export_template_id')) {
+            $template = $organization->exportTemplates()
+                ->whereKey($request->input('export_template_id'))
+                ->first();
+
+            if ($template === null || $template->resource_type !== 'shipment') {
+                abort(422, 'The export template does not belong to this organization or is not a shipment template.');
+            }
+
+            $columns = $template->columns ?? CustomFieldService::SHIPMENT_COLUMNS;
+        }
+
         $filename = 'claimtrail-shipments-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($request, $organization) {
+        return response()->streamDownload(function () use ($request, $organization, $columns) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
-                'internal_reference',
-                'external_load_reference',
-                'broker_or_customer_name',
-                'carrier',
-                'driver_name',
-                'driver_contact',
-                'pickup_location',
-                'delivery_location',
-                'pickup_appointment',
-                'delivery_appointment',
-                'actual_arrival_at',
-                'actual_departure_at',
-                'base_rate',
-                'currency',
-                'status',
-                'notes',
-            ]);
+            fputcsv($handle, $columns);
 
             $this->filteredQuery($request, $organization)
                 ->with('carrier')
                 ->orderBy('created_at')
                 ->cursor()
-                ->each(function (Shipment $shipment) use ($handle) {
-                    fputcsv($handle, [
-                        $shipment->internal_reference,
-                        $shipment->external_load_reference,
-                        $shipment->broker_or_customer_name,
-                        $shipment->carrier?->name,
-                        $shipment->driver_name,
-                        $shipment->driver_contact,
-                        $shipment->pickup_location,
-                        $shipment->delivery_location,
-                        $shipment->pickup_appointment?->format('Y-m-d H:i'),
-                        $shipment->delivery_appointment?->format('Y-m-d H:i'),
-                        $shipment->actual_arrival_at?->format('Y-m-d H:i'),
-                        $shipment->actual_departure_at?->format('Y-m-d H:i'),
-                        $shipment->base_rate,
-                        $shipment->currency,
-                        $shipment->status->value,
-                        $shipment->notes,
-                    ]);
+                ->each(function (Shipment $shipment) use ($handle, $columns) {
+                    fputcsv($handle, $this->shipmentRowValues($shipment, $columns));
                 });
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * One export row for a shipment, in the given column order.
+     * Unknown columns are skipped defensively by emitting an empty
+     * cell, so a stored template never breaks an export.
+     *
+     * @param  array<int, string>  $columns
+     * @return array<int, mixed>
+     */
+    protected function shipmentRowValues(Shipment $shipment, array $columns): array
+    {
+        $values = $shipment->custom_field_values ?? [];
+
+        $fixed = [
+            'internal_reference' => $shipment->internal_reference,
+            'external_load_reference' => $shipment->external_load_reference,
+            'broker_or_customer_name' => $shipment->broker_or_customer_name,
+            'carrier' => $shipment->carrier?->name,
+            'driver_name' => $shipment->driver_name,
+            'driver_contact' => $shipment->driver_contact,
+            'pickup_location' => $shipment->pickup_location,
+            'delivery_location' => $shipment->delivery_location,
+            'pickup_appointment' => $shipment->pickup_appointment?->format('Y-m-d H:i'),
+            'delivery_appointment' => $shipment->delivery_appointment?->format('Y-m-d H:i'),
+            'actual_arrival_at' => $shipment->actual_arrival_at?->format('Y-m-d H:i'),
+            'actual_departure_at' => $shipment->actual_departure_at?->format('Y-m-d H:i'),
+            'base_rate' => $shipment->base_rate,
+            'currency' => $shipment->currency,
+            'status' => $shipment->status->value,
+            'notes' => $shipment->notes,
+        ];
+
+        return array_map(function (string $column) use ($fixed, $values) {
+            if (str_starts_with($column, 'custom:')) {
+                return $this->customFieldCellValue($values[substr($column, 7)] ?? null);
+            }
+
+            return $fixed[$column] ?? '';
+        }, $columns);
+    }
+
+    /**
+     * A custom field value as a CSV cell: booleans read true/false,
+     * anything else passes through as-is.
+     */
+    protected function customFieldCellValue(mixed $value): mixed
+    {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_array($value)) {
+            return json_encode($value);
+        }
+
+        return $value;
     }
 
     /**

@@ -175,6 +175,7 @@ from them instead of inventing new patterns.
 | Reports | ReportService | reports page, CSV export | Done (M4) |
 | Dashboard metrics | DashboardService | rebuilt dashboard | Done (M4) |
 | Operations and reliability | HealthController, OpsController, HealthCheckService, QueueMonitorService, FailedJobService, ErrorLogService, ErrorReporter, job idempotency traits | operations page, ops.ts | Done (v1.1.1) |
+| Customization | CustomFieldController, EvidenceTemplateController, DeadlineSettingController, ExportTemplateController, EventCategoryController, CustomFieldService, ClaimReferenceService (prefix) | Not built (backend only in v1.1.2) | Done, backend only (v1.1.2) |
 
 ## Production notes (not implemented in Phase 1)
 
@@ -209,3 +210,35 @@ from them instead of inventing new patterns.
   Bindings are never logged.
 - Every response carries an `X-Response-Time` header. The
   event-categories list supports ETags (304 on `If-None-Match`).
+
+## Customization (v1.1.2, backend only)
+
+- Custom fields are definitions per organization and resource type
+  (`shipment` or `claim`), stored in `custom_fields`; values live
+  as a JSON map on the shipment or claim row. `CustomFieldService`
+  validates values (unknown keys, required fields, text/number/
+  date/select/boolean types), lists the available export columns,
+  and resolves deadline settings. At most 20 active definitions per
+  organization and resource type.
+- Event categories can be renamed (slug recomputed, collision-checked
+  against visible categories), disabled (new events rejected, old
+  events still readable), and given a default estimated amount and
+  currency that prefill new events. System categories cannot be
+  changed, and a category with events cannot be deleted.
+- Evidence templates (`evidence_templates` plus items) are named
+  checklists that apply to a claim by creating a `ClaimRequirement`
+  row per missing document category; applying twice creates nothing
+  the second time.
+- Deadline settings resolve by claim category, then event category,
+  then global, and apply at claim creation only when no explicit
+  submission deadline is given. The claim reference prefix comes
+  from organization settings (`claim_reference_prefix`, default
+  `CLM`) and only affects claims created after the setting is saved.
+- Export templates save a column selection per resource type; one
+  default per organization and resource type. Shipment and claim
+  CSV exports accept `?export_template_id=` and fall back to the
+  default column sets. A new permission, `manage-customization`
+  (owner, admin, operations manager), guards the customization
+  write endpoints. Notification preferences were verified
+  pre-existing and were not rebuilt in this version.
+- No frontend was built for customization in v1.1.2.

@@ -40,6 +40,7 @@ class Shipment extends Model
         'currency',
         'status',
         'notes',
+        'custom_field_values',
         'created_by',
     ];
 
@@ -51,6 +52,7 @@ class Shipment extends Model
             'actual_arrival_at' => 'datetime',
             'actual_departure_at' => 'datetime',
             'base_rate' => 'decimal:2',
+            'custom_field_values' => 'array',
             'status' => ShipmentStatus::class,
         ];
     }

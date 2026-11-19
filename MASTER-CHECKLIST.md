@@ -263,14 +263,16 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.1.2 — Customization
 
-- [ ] Custom shipment fields.
-- [ ] Custom claim fields.
-- [ ] Configurable event categories.
-- [ ] Evidence templates.
-- [ ] Custom deadline settings.
-- [ ] Notification preferences.
-- [ ] Export templates.
-- [ ] Organization-specific settings.
+> Verified 2026-11-19 (daily build run): backend 322 passed (1411 assertions), frontend 221 passed, `npm run build` succeeds (36/36 pages, incl. /settings/customization), `tsc --noEmit` clean, lint clean, fresh-DB `migrate:fresh` passes (6 new migrations), live HTTP smoke test over the built-in server passed 28/28 steps (org settings incl. claim prefix, custom fields + validation, deadline settings + resolve + auto-deadline, event categories incl. disable/reject/prefill, evidence template apply + idempotent re-apply, export templates + templated export, notification preferences, cross-tenant 404, viewer 403). One real bug found by the parent run's smoke test and fixed in this version: POST /event-categories silently dropped default_estimated_amount/default_currency (only PUT accepted them); create now accepts and persists them, with a new regression test. Notification preferences were already complete from v1.0.1 and were verified, not rebuilt. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers).
+
+- [x] Custom shipment fields.
+- [x] Custom claim fields.
+- [x] Configurable event categories.
+- [x] Evidence templates.
+- [x] Custom deadline settings.
+- [x] Notification preferences.
+- [x] Export templates.
+- [x] Organization-specific settings.
 
 ### v1.1.3 — Security and Operations
 

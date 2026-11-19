@@ -13,8 +13,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { TableCell } from "@/components/ui/Table";
 import { SavedViews } from "@/components/views/SavedViews";
-import { apiFetch, ApiRequestError } from "@/lib/api";
+import { apiDownload, apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { getExportTemplates } from "@/lib/customization";
 import {
   bulkClaimTargetNeeds,
   bulkResultSummary,
@@ -29,8 +30,12 @@ import {
   formatMoney,
 } from "@/lib/claims";
 import {
+  downloadBlob,
+} from "@/lib/shipments";
+import {
   canCreateClaims,
   canEditClaims,
+  canExportClaims,
   canTransitionClaimTo,
 } from "@/lib/permissions";
 import type {
@@ -38,6 +43,7 @@ import type {
   Claim,
   ClaimStatus,
   EventCategory,
+  ExportTemplate,
   Organization,
   PaginatedMeta,
 } from "@/lib/types";
@@ -93,6 +99,9 @@ function ClaimsContent({ org }: { org: Organization }) {
   const [sort, setSort] = useState("created_at:desc");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportTemplates, setExportTemplates] = useState<ExportTemplate[]>([]);
+  const [exportTemplateId, setExportTemplateId] = useState("");
 
   // Bulk selection state.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -124,6 +133,14 @@ function ClaimsContent({ org }: { org: Organization }) {
       })
       .catch(() => {
         if (!cancelled) setCategories([]);
+      });
+    // Export templates are optional; the export still works without them.
+    getExportTemplates(org.id, "claim")
+      .then((templates) => {
+        if (!cancelled) setExportTemplates(templates);
+      })
+      .catch(() => {
+        if (!cancelled) setExportTemplates([]);
       });
     return () => {
       cancelled = true;
@@ -244,6 +261,28 @@ function ClaimsContent({ org }: { org: Organization }) {
 
   function clearFilters() {
     applyFilters({});
+  }
+
+  async function handleExport() {
+    setError(null);
+    setExporting(true);
+    try {
+      const params = filterParams();
+      if (exportTemplateId) params.set("export_template_id", exportTemplateId);
+      const blob = await apiDownload(
+        `/claims/export?${params.toString()}`,
+        { orgId: org.id },
+      );
+      downloadBlob(blob, "claims.csv");
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Could not export claims.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   const hasFilters =
@@ -382,6 +421,33 @@ function ClaimsContent({ org }: { org: Organization }) {
           <CardHeader
             title="Claims"
             description="Detention, layover, TONU, lumper, and other claims against brokers. Requested amounts are potential amounts, never a guarantee of recovery."
+            action={
+              canExportClaims(myRole) ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="Export template"
+                    value={exportTemplateId}
+                    onChange={(event) => setExportTemplateId(event.target.value)}
+                    className="min-h-9 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:border-brand-600 focus:outline-none"
+                  >
+                    <option value="">Default export</option>
+                    {exportTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={exporting}
+                    onClick={handleExport}
+                  >
+                    Export CSV
+                  </Button>
+                </span>
+              ) : undefined
+            }
           />
           <SavedViews
             resourceType="claim"

@@ -283,6 +283,7 @@ export interface Shipment {
   created_by: { id: number; name: string } | null;
   events_count: number;
   evidence_count: number;
+  custom_field_values?: CustomFieldValues;
   created_at: string;
   updated_at: string;
 }
@@ -293,7 +294,93 @@ export interface EventCategory {
   label: string;
   description: string | null;
   is_system: boolean;
+  is_active?: boolean;
+  default_estimated_amount?: string | null;
+  default_currency?: string | null;
 }
+
+export type CustomFieldType = "text" | "number" | "date" | "select" | "boolean";
+
+export type CustomFieldResourceType = "shipment" | "claim";
+
+/** Values keyed by custom field field_key, as sent to and read from the API. */
+export type CustomFieldValues = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export interface CustomField {
+  id: string;
+  organization_id: string;
+  resource_type: CustomFieldResourceType;
+  field_key: string;
+  label: string;
+  field_type: CustomFieldType;
+  is_required: boolean;
+  options: string[] | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvidenceTemplateItem {
+  id: string;
+  document_category: DocumentCategory;
+  label: string;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface EvidenceTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  items: EvidenceTemplateItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type DeadlineScopeType = "global" | "claim_category" | "event_category";
+
+export interface DeadlineSetting {
+  id: string;
+  scope_type: DeadlineScopeType;
+  scope_value: string | null;
+  submit_within_days: number;
+  reminder_days_before: number[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExportTemplate {
+  id: string;
+  resource_type: CustomFieldResourceType;
+  name: string;
+  columns: string[];
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AvailableExportColumn {
+  key: string;
+  label: string;
+}
+
+/** Organization-level customization settings stored in organizations.settings. */
+export interface OrganizationSettings {
+  default_currency?: string;
+  date_format?: "Y-m-d" | "d/m/Y" | "m/d/Y";
+  claim_reference_prefix?: string;
+}
+
+export const DATE_FORMATS: { value: string; label: string }[] = [
+  { value: "Y-m-d", label: "2026-11-19 (Y-m-d)" },
+  { value: "d/m/Y", label: "19/11/2026 (d/m/Y)" },
+  { value: "m/d/Y", label: "11/19/2026 (m/d/Y)" },
+];
 
 export interface ShipmentEvent {
   id: string;
@@ -465,6 +552,7 @@ export interface Claim {
   evidence_count: number;
   active_deadline: ClaimDeadline | null;
   latest_document: GeneratedDocument | null;
+  custom_field_values?: CustomFieldValues;
   created_at: string;
   updated_at: string;
 }

@@ -1,14 +1,26 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { CustomFieldInputs } from "@/components/customization/CustomFieldInputs";
 import { apiFetch, ApiRequestError } from "@/lib/api";
+import {
+  cleanCustomFieldValues,
+  getCustomFields,
+  validateCustomFieldValues,
+} from "@/lib/customization";
 import { blankToNull, inputValueToIso, isoToInputValue } from "@/lib/shipments";
 import type { FieldErrors } from "@/lib/validation";
 import { validateShipmentForm } from "@/lib/validation";
-import type { Carrier, Shipment, ShipmentStatus } from "@/lib/types";
+import type {
+  Carrier,
+  CustomField,
+  CustomFieldValues,
+  Shipment,
+  ShipmentStatus,
+} from "@/lib/types";
 
 export interface ShipmentPayload {
   internal_reference: string;
@@ -27,6 +39,7 @@ export interface ShipmentPayload {
   currency: string;
   status?: ShipmentStatus;
   notes: string | null;
+  custom_field_values?: CustomFieldValues;
 }
 
 interface ShipmentFormProps {
@@ -94,6 +107,26 @@ export function ShipmentForm({
   const [status, setStatus] = useState<ShipmentStatus>(initial?.status ?? "draft");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>(
+    initial?.custom_field_values ?? {},
+  );
+
+  // Custom field definitions are optional: a failed fetch leaves
+  // the form working exactly as before.
+  useEffect(() => {
+    let cancelled = false;
+    getCustomFields(orgId, "shipment")
+      .then((fields) => {
+        if (!cancelled) setCustomFields(fields);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomFields([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   // Inline add-carrier form state.
   const [showCarrierForm, setShowCarrierForm] = useState(false);
@@ -115,6 +148,10 @@ export function ShipmentForm({
       base_rate: baseRate,
       currency,
     });
+    Object.assign(
+      formErrors,
+      validateCustomFieldValues(customFields, customValues),
+    );
     setErrors(formErrors);
     if (Object.keys(formErrors).length > 0) return;
 
@@ -135,6 +172,9 @@ export function ShipmentForm({
       currency: currency.trim().toUpperCase() || "USD",
       notes: blankToNull(notes),
     };
+    if (customFields.length > 0) {
+      payload.custom_field_values = cleanCustomFieldValues(customValues);
+    }
     // Status is only set at creation; after that it moves forward from
     // the shipment page.
     if (!isEdit) {
@@ -385,6 +425,13 @@ export function ShipmentForm({
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
         error={fieldError("notes")}
+      />
+
+      <CustomFieldInputs
+        fields={customFields}
+        values={customValues}
+        onChange={setCustomValues}
+        errors={{ ...serverErrors, ...errors }}
       />
 
       <Button type="submit" loading={submitting}>

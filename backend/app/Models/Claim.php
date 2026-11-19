@@ -46,6 +46,7 @@ class Claim extends Model
         'rejection_reason',
         'payment_reference',
         'status',
+        'custom_field_values',
         'created_by',
         'updated_by',
     ];
@@ -57,6 +58,7 @@ class Claim extends Model
             'requested_amount' => 'decimal:2',
             'accepted_amount' => 'decimal:2',
             'recovered_amount' => 'decimal:2',
+            'custom_field_values' => 'array',
             'submission_deadline_at' => 'datetime',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',

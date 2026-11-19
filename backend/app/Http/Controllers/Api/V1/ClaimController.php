@@ -9,6 +9,7 @@ use App\Http\Resources\ClaimResource;
 use App\Http\Resources\ClaimStatusHistoryResource;
 use App\Http\Resources\EvidenceFileResource;
 use App\Models\Claim;
+use App\Models\ClaimDeadline;
 use App\Models\EvidenceFile;
 use App\Models\Organization;
 use App\Models\Shipment;
@@ -17,6 +18,8 @@ use App\NotificationType;
 use App\Permission;
 use App\Services\ClaimReferenceService;
 use App\Services\ClaimTransitionService;
+use App\Services\CustomFieldService;
+use App\Services\DeadlineStatusService;
 use App\Services\NotificationService;
 use App\Services\ReadinessService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -26,6 +29,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ClaimController extends Controller
 {
@@ -49,9 +53,157 @@ class ClaimController extends Controller
 
         Gate::authorize(Permission::ViewClaims->value, $organization);
 
-        $claims = $organization->claims()->getQuery()
+        $claims = $this->filteredQuery($request, $organization)
             ->with(['shipment', 'event'])
             ->withCount('evidenceFiles')
+            ->orderBy(
+                $this->sortColumn($request),
+                $this->sortDirection($request)
+            )
+            ->paginate($this->perPage($request, 15));
+
+        return response()->json([
+            'data' => ClaimResource::collection($claims),
+            'meta' => $this->paginationMeta($claims),
+        ]);
+    }
+
+    /**
+     * Export the filtered claim list as CSV, using the same filters
+     * as the claim list. When an export template id is given, its
+     * columns are used; a template from another organization, or one
+     * for shipments, is a 422. Without a template the default claim
+     * column set is used.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ExportReports->value, $organization);
+
+        $columns = CustomFieldService::CLAIM_COLUMNS;
+
+        if ($request->filled('export_template_id')) {
+            $template = $organization->exportTemplates()
+                ->whereKey($request->input('export_template_id'))
+                ->first();
+
+            if ($template === null || $template->resource_type !== 'claim') {
+                abort(422, 'The export template does not belong to this organization or is not a claim template.');
+            }
+
+            $columns = $template->columns ?? CustomFieldService::CLAIM_COLUMNS;
+        }
+
+        $filename = 'claimtrail-claims-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($request, $organization, $columns) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, $columns);
+
+            $this->filteredQuery($request, $organization)
+                ->with(['shipment', 'event.category'])
+                ->orderBy('created_at')
+                ->cursor()
+                ->each(function (Claim $claim) use ($handle, $columns) {
+                    fputcsv($handle, $this->claimRowValues($claim, $columns));
+                });
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * One export row for a claim, in the given column order.
+     * Unknown columns are skipped defensively by emitting an empty
+     * cell, so a stored template never breaks an export.
+     *
+     * @param  array<int, string>  $columns
+     * @return array<int, mixed>
+     */
+    protected function claimRowValues(Claim $claim, array $columns): array
+    {
+        $values = $claim->custom_field_values ?? [];
+
+        $fixed = [
+            'claim_reference' => $claim->claim_reference,
+            'shipment_reference' => $claim->shipment?->internal_reference,
+            'broker_or_customer_name' => $claim->shipment?->broker_or_customer_name,
+            'claim_category' => $claim->claim_category->value,
+            'description' => $claim->description,
+            'requested_amount' => $claim->requested_amount,
+            'accepted_amount' => $claim->accepted_amount,
+            'recovered_amount' => $claim->recovered_amount,
+            'currency' => $claim->currency,
+            'status' => $claim->status->value,
+            'submission_deadline_at' => $claim->submission_deadline_at?->format('Y-m-d H:i'),
+            'submitted_at' => $claim->submitted_at?->format('Y-m-d H:i'),
+            'created_at' => $claim->created_at?->format('Y-m-d H:i'),
+        ];
+
+        return array_map(function (string $column) use ($fixed, $values) {
+            if (str_starts_with($column, 'custom:')) {
+                $value = $values[substr($column, 7)] ?? null;
+
+                if (is_bool($value)) {
+                    return $value ? 'true' : 'false';
+                }
+
+                if (is_array($value)) {
+                    return json_encode($value);
+                }
+
+                return $value;
+            }
+
+            return $fixed[$column] ?? '';
+        }, $columns);
+    }
+
+    /**
+     * Create the claim deadline from the organization deadline
+     * default, when one applies, and point the claim at it.
+     */
+    protected function applyDeadlineDefault(
+        Organization $organization,
+        Claim $claim,
+        ?ShipmentEvent $event,
+        CustomFieldService $customFields,
+        DeadlineStatusService $statuses,
+    ): void {
+        $setting = $customFields->resolveDeadlineSetting(
+            $organization,
+            $claim->claim_category->value,
+            $event?->category?->slug,
+        );
+
+        if ($setting === null) {
+            return;
+        }
+
+        $deadlineAt = now($organization->timezone ?? 'UTC')
+            ->addDays($setting->submit_within_days);
+
+        $deadline = $claim->deadlines()->create([
+            'organization_id' => $organization->getKey(),
+            'deadline_at' => $deadlineAt,
+            'timezone' => $organization->timezone ?? 'UTC',
+            'source_reference' => 'Organization deadline default',
+            'reminder_days_before' => $setting->reminder_days_before,
+        ]);
+
+        $deadline->update(['status' => $statuses->compute($deadline->fresh()->load('claim'))]);
+
+        $claim->update(['submission_deadline_at' => $deadlineAt]);
+    }
+
+    /**
+     * The filtered claim query shared by list and export.
+     */
+    protected function filteredQuery(Request $request, Organization $organization): Builder
+    {
+        return $organization->claims()->getQuery()
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = '%'.$request->string('search').'%';
                 $query->where(function ($query) use ($search) {
@@ -109,17 +261,7 @@ class ClaimController extends Controller
                 $broker = '%'.$request->string('broker').'%';
                 $query->whereHas('shipment', fn ($shipment) => $shipment->where('broker_or_customer_name', 'like', $broker));
             })
-            ->when($request->filled('carrier_id'), fn ($query) => $query->whereHas('shipment', fn ($shipment) => $shipment->where('carrier_id', $request->string('carrier_id'))))
-            ->orderBy(
-                $this->sortColumn($request),
-                $this->sortDirection($request)
-            )
-            ->paginate($this->perPage($request, 15));
-
-        return response()->json([
-            'data' => ClaimResource::collection($claims),
-            'meta' => $this->paginationMeta($claims),
-        ]);
+            ->when($request->filled('carrier_id'), fn ($query) => $query->whereHas('shipment', fn ($shipment) => $shipment->where('carrier_id', $request->string('carrier_id'))));
     }
 
     /**
@@ -129,8 +271,13 @@ class ClaimController extends Controller
      * When no category is given and the claim has an event, the
      * category is inherited from the event.
      */
-    public function store(Request $request, ClaimReferenceService $references, NotificationService $notifications): JsonResponse
-    {
+    public function store(
+        Request $request,
+        ClaimReferenceService $references,
+        NotificationService $notifications,
+        CustomFieldService $customFields,
+        DeadlineStatusService $statuses,
+    ): JsonResponse {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::CreateClaims->value, $organization);
@@ -151,6 +298,7 @@ class ClaimController extends Controller
             'internal_notes' => ['nullable', 'string', 'max:5000'],
             'external_broker_reference' => ['nullable', 'string', 'max:255'],
             'submission_deadline_at' => ['nullable', 'date'],
+            'custom_field_values' => ['nullable', 'array'],
         ]);
 
         $shipment = Shipment::forOrganization($organization->getKey())
@@ -178,12 +326,27 @@ class ClaimController extends Controller
                 ?? ClaimCategory::Other->value;
         }
 
+        $customValues = $customFields->validateValues(
+            $organization,
+            'claim',
+            $request->input('custom_field_values'),
+        );
+
         $claim = $organization->claims()->create(array_merge($validated, [
             'claim_reference' => $references->nextReference($organization),
             'claim_category' => $category ?? ClaimCategory::Other->value,
+            'custom_field_values' => $customValues,
             'created_by' => $request->user()->id,
             'updated_by' => $request->user()->id,
         ]));
+
+        // When no explicit deadline was given, the organization
+        // deadline default applies: the setting is resolved by claim
+        // category, then event category, then the global setting. An
+        // explicit submission_deadline_at always wins.
+        if (empty($validated['submission_deadline_at'])) {
+            $this->applyDeadlineDefault($organization, $claim, $event, $customFields, $statuses);
+        }
 
         // The audit row for the creation comes from the observer.
         // The notification is sent here, not from the observer, so
@@ -238,7 +401,7 @@ class ClaimController extends Controller
      * or closed. Status never changes through this endpoint: use the
      * transition endpoint.
      */
-    public function update(Request $request, Claim $claim): JsonResponse
+    public function update(Request $request, Claim $claim, CustomFieldService $customFields): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -260,7 +423,17 @@ class ClaimController extends Controller
             'internal_notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'external_broker_reference' => ['sometimes', 'nullable', 'string', 'max:255'],
             'submission_deadline_at' => ['sometimes', 'nullable', 'date'],
+            'custom_field_values' => ['sometimes', 'nullable', 'array'],
         ]);
+
+        if (array_key_exists('custom_field_values', $validated)) {
+            $validated['custom_field_values'] = $customFields->validateValues(
+                $organization,
+                'claim',
+                $validated['custom_field_values'],
+                $claim->custom_field_values ?? [],
+            );
+        }
 
         if (! $claim->allowsFieldEdits()) {
             $frozen = array_intersect(

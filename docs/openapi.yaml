@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.1.1
+  version: 1.1.2
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -14,7 +14,12 @@ info:
     review notes with an approve / request-changes review action.
     Version 1.1.1 adds a public health endpoint and operations
     endpoints (queue monitoring, failed-job handling, recent errors)
-    for organization admins.
+    for organization admins. Version 1.1.2 adds customization:
+    custom shipment and claim fields, event category updates and
+    defaults, evidence templates, deadline settings, export
+    templates, a claims CSV export, and organization settings
+    for a default currency, a date format, and a claim reference
+    prefix.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -40,6 +45,7 @@ tags:
   - name: Onboarding
   - name: SavedViews
   - name: Operations
+  - name: Customization
 paths:
   /auth/register:
     post:
@@ -1238,6 +1244,8 @@ paths:
               properties:
                 label: { type: string, maxLength: 255 }
                 description: { type: string, maxLength: 1000, nullable: true }
+                default_estimated_amount: { type: number, minimum: 0, nullable: true }
+                default_currency: { type: string, minLength: 3, maxLength: 3, nullable: true }
       responses:
         "201":
           description: Category created
@@ -1249,6 +1257,61 @@ paths:
                   data:
                     $ref: "#/components/schemas/EventCategory"
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /event-categories/{category}:
+    put:
+      tags: [Events]
+      summary: Update an organization category (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: category
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 255 }
+                description: { type: string, maxLength: 1000, nullable: true }
+                is_active: { type: boolean }
+                default_estimated_amount: { type: number, minimum: 0, nullable: true }
+                default_currency: { type: string, minLength: 3, maxLength: 3, nullable: true }
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EventCategory"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Events]
+      summary: Delete an organization category (requires manage-customization)
+      description: System categories and categories with events cannot be deleted
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: category
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /events/{event}:
     get:
@@ -1617,6 +1680,38 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/Claim"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /claims/export:
+    get:
+      tags: [Claims]
+      summary: Export the filtered claim list as CSV (requires export-reports)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: export_template_id
+          in: query
+          description: Optional claim export template id; without it the default claim columns are used
+          schema: { type: string, format: uuid }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimStatus"
+        - name: claim_category
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimCategory"
+        - name: shipment_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Streaming CSV download
+          content:
+            text/csv:
+              schema: { type: string }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /claims/bulk-transition:
@@ -2902,6 +2997,662 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /custom-fields:
+    get:
+      tags: [Customization]
+      summary: List custom field definitions for a resource type
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: resource_type
+          in: query
+          required: true
+          schema: { type: string, enum: [shipment, claim] }
+      responses:
+        "200":
+          description: Custom field definitions in display order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomField"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Customization]
+      summary: Create a custom field definition (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_type, label, field_type]
+              properties:
+                resource_type: { type: string, enum: [shipment, claim] }
+                field_key: { type: string, description: Auto-slugged from the label when omitted }
+                label: { type: string, maxLength: 255 }
+                field_type: { type: string, enum: [text, number, date, select, boolean] }
+                is_required: { type: boolean }
+                options:
+                  type: array
+                  items: { type: string }
+                  description: Required for select fields, 2 to 20 options
+                sort_order: { type: integer, minimum: 0 }
+                is_active: { type: boolean }
+      responses:
+        "201":
+          description: Custom field created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomField"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /custom-fields/{field}:
+    get:
+      tags: [Customization]
+      summary: Show one custom field definition
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: field
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Custom field
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomField"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Customization]
+      summary: Update a custom field definition (requires manage-customization)
+      description: The field key is immutable
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: field
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 255 }
+                is_required: { type: boolean }
+                options:
+                  type: array
+                  items: { type: string }
+                sort_order: { type: integer, minimum: 0 }
+                is_active: { type: boolean }
+      responses:
+        "200":
+          description: Custom field updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomField"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Customization]
+      summary: Delete a custom field definition (requires manage-customization)
+      description: Also strips the key from every shipment and claim value map in the organization
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: field
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Custom field deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /evidence-templates:
+    get:
+      tags: [Customization]
+      summary: List evidence templates (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Paginated evidence templates with items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EvidenceTemplate"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Customization]
+      summary: Create an evidence template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, items]
+              properties:
+                name: { type: string, maxLength: 255 }
+                description: { type: string, maxLength: 2000, nullable: true }
+                is_active: { type: boolean }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [document_category, label]
+                    properties:
+                      document_category: { type: string }
+                      label: { type: string, maxLength: 255 }
+                      is_required: { type: boolean }
+                      sort_order: { type: integer, minimum: 0 }
+      responses:
+        "201":
+          description: Evidence template created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /evidence-templates/{template}:
+    get:
+      tags: [Customization]
+      summary: Show one evidence template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evidence template
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Customization]
+      summary: Update an evidence template (requires manage-customization)
+      description: When items are given they replace the existing items wholesale
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 255 }
+                description: { type: string, maxLength: 2000, nullable: true }
+                is_active: { type: boolean }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [document_category, label]
+                    properties:
+                      document_category: { type: string }
+                      label: { type: string, maxLength: 255 }
+                      is_required: { type: boolean }
+                      sort_order: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Evidence template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EvidenceTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Customization]
+      summary: Delete an evidence template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evidence template deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /evidence-templates/{template}/apply-to-claim/{claim}:
+    post:
+      tags: [Customization]
+      summary: Apply an evidence template to a claim (requires manage-customization)
+      description: Creates a claim requirement row for each template document category the claim does not already have. Applying twice creates nothing the second time.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Template applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      created: { type: integer }
+                      skipped: { type: integer }
+                      template_id: { type: string, format: uuid }
+                      claim_id: { type: string, format: uuid }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /deadline-settings/resolve:
+    get:
+      tags: [Customization]
+      summary: Resolve the deadline setting for a claim (requires view-deadlines)
+      description: Precedence is claim category, then event category, then the global setting. Returns data null when no setting applies.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim_category
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimCategory"
+        - name: event_category
+          in: query
+          description: Event category slug
+          schema: { type: string }
+      responses:
+        "200":
+          description: Effective deadline setting, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/DeadlineSetting"
+                    nullable: true
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /deadline-settings:
+    get:
+      tags: [Customization]
+      summary: List deadline settings (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Paginated deadline settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DeadlineSetting"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Customization]
+      summary: Create a deadline setting (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope_type, submit_within_days]
+              properties:
+                scope_type: { type: string, enum: [global, claim_category, event_category] }
+                scope_value:
+                  type: string
+                  nullable: true
+                  description: Category slug; required unless the scope is global
+                submit_within_days: { type: integer, minimum: 1, maximum: 365 }
+                reminder_days_before:
+                  type: array
+                  items: { type: integer, minimum: 0, maximum: 90 }
+      responses:
+        "201":
+          description: Deadline setting created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeadlineSetting"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /deadline-settings/{setting}:
+    get:
+      tags: [Customization]
+      summary: Show one deadline setting (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: setting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deadline setting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeadlineSetting"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Customization]
+      summary: Update a deadline setting (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: setting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope_type: { type: string, enum: [global, claim_category, event_category] }
+                scope_value: { type: string, nullable: true }
+                submit_within_days: { type: integer, minimum: 1, maximum: 365 }
+                reminder_days_before:
+                  type: array
+                  items: { type: integer, minimum: 0, maximum: 90 }
+      responses:
+        "200":
+          description: Deadline setting updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeadlineSetting"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Customization]
+      summary: Delete a deadline setting (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: setting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deadline setting deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /export-templates/available-columns:
+    get:
+      tags: [Customization]
+      summary: List columns available for export templates (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: resource_type
+          in: query
+          required: true
+          schema: { type: string, enum: [shipment, claim] }
+      responses:
+        "200":
+          description: Fixed columns plus one custom entry per active custom field
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        label: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /export-templates:
+    get:
+      tags: [Customization]
+      summary: List export templates (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: resource_type
+          in: query
+          schema: { type: string, enum: [shipment, claim] }
+      responses:
+        "200":
+          description: Paginated export templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExportTemplate"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Customization]
+      summary: Create an export template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_type, name, columns]
+              properties:
+                resource_type: { type: string, enum: [shipment, claim] }
+                name: { type: string, maxLength: 255 }
+                columns:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items: { type: string }
+                is_default: { type: boolean }
+      responses:
+        "201":
+          description: Export template created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExportTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /export-templates/{template}:
+    get:
+      tags: [Customization]
+      summary: Show one export template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Export template
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExportTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Customization]
+      summary: Update an export template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 255 }
+                columns:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items: { type: string }
+                is_default: { type: boolean }
+      responses:
+        "200":
+          description: Export template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExportTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Customization]
+      summary: Delete an export template (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Export template deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /export-templates/{template}/set-default:
+    post:
+      tags: [Customization]
+      summary: Make an export template the default (requires manage-customization)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Export template is now the default
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExportTemplate"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3155,6 +3906,72 @@ components:
     ShipmentStatus:
       type: string
       enum: [draft, planned, in_transit, delivered, completed, archived]
+    CustomField:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        resource_type: { type: string, enum: [shipment, claim] }
+        field_key: { type: string }
+        label: { type: string }
+        field_type: { type: string, enum: [text, number, date, select, boolean] }
+        is_required: { type: boolean }
+        options:
+          type: array
+          items: { type: string }
+          nullable: true
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EvidenceTemplate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              document_category: { type: string }
+              document_category_label: { type: string }
+              label: { type: string }
+              is_required: { type: boolean }
+              sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DeadlineSetting:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        scope_type: { type: string, enum: [global, claim_category, event_category] }
+        scope_value: { type: string, nullable: true }
+        submit_within_days: { type: integer }
+        reminder_days_before:
+          type: array
+          items: { type: integer }
+          nullable: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ExportTemplate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        resource_type: { type: string, enum: [shipment, claim] }
+        name: { type: string }
+        columns:
+          type: array
+          items: { type: string }
+        is_default: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     Shipment:
       type: object
       properties:
@@ -3184,6 +4001,10 @@ components:
           $ref: "#/components/schemas/ShipmentStatus"
         status_label: { type: string }
         notes: { type: string, nullable: true }
+        custom_field_values:
+          type: object
+          additionalProperties: true
+          description: Values keyed by custom field key
         created_by:
           type: object
           nullable: true
@@ -3215,6 +4036,10 @@ components:
         status:
           $ref: "#/components/schemas/ShipmentStatus"
         notes: { type: string, maxLength: 5000, nullable: true }
+        custom_field_values:
+          type: object
+          additionalProperties: true
+          description: Values keyed by custom field key, validated against the active definitions
     ImportPreview:
       type: object
       properties:
@@ -3358,6 +4183,9 @@ components:
         label: { type: string }
         description: { type: string, nullable: true }
         is_system: { type: boolean }
+        is_active: { type: boolean }
+        default_estimated_amount: { type: string, nullable: true, description: Decimal string }
+        default_currency: { type: string, nullable: true }
     ShipmentEventStatus:
       type: string
       enum: [potential, under_review, dismissed]
@@ -3497,6 +4325,10 @@ components:
         status:
           $ref: "#/components/schemas/ClaimStatus"
         status_label: { type: string }
+        custom_field_values:
+          type: object
+          additionalProperties: true
+          description: Values keyed by custom field key
         allowed_transitions:
           type: array
           items:
@@ -3537,6 +4369,10 @@ components:
         internal_notes: { type: string, maxLength: 5000, nullable: true }
         external_broker_reference: { type: string, maxLength: 255, nullable: true }
         submission_deadline_at: { type: string, format: date-time, nullable: true }
+        custom_field_values:
+          type: object
+          additionalProperties: true
+          description: Values keyed by custom field key, validated against the active definitions
     ClaimTransitionInput:
       type: object
       required: [to_status]

@@ -97,7 +97,7 @@ a login page.
 | GET | `/organizations` | Yes | Organizations the user belongs to, with their role and status in each. |
 | POST | `/organizations` | Yes | Create an organization. Body: `name`, optional `timezone`. The creator becomes owner (201). |
 | GET | `/organizations/{organization}` | Yes | One organization. Members only (403 otherwise). |
-| PUT | `/organizations/{organization}` | Yes | Update `name`, `timezone`, `settings`. Requires `manage-organization`. |
+| PUT | `/organizations/{organization}` | Yes | Update `name`, `timezone`, `settings`. Requires `manage-organization`. `settings` accepts only `default_currency` (3 letters), `date_format` (`Y-m-d`, `d/m/Y`, or `m/d/Y`), and `claim_reference_prefix` (up to 10 characters, uppercase letters, digits, and hyphens); unknown keys are rejected, and given settings merge over the stored ones. |
 | POST | `/organizations/{organization}/switch` | Yes | Validates membership and returns the organization. The frontend stores the choice and sends it in the header afterwards. |
 
 ### Dashboard (tenant-scoped)
@@ -156,13 +156,13 @@ deactivated, or removed.
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
 | GET | `/shipments` | Yes + org header | Paginated shipments (15 per page, max 100). Query: `search` (reference, broker, driver, carrier name, pickup/delivery location), `status`, `carrier_id`, `date_from`, `date_to` (pickup appointment range), `delivery_date_from`, `delivery_date_to` (delivery appointment range), `amount_min`, `amount_max` (base rate), `event_type` (event category slug), `broker` (broker/customer substring), `sort` (`created_at`, `pickup_appointment`, `delivery_appointment`, `status`), `direction`, `page`. Requires `view-shipments`. |
-| POST | `/shipments` | Yes + org header | Create a shipment. Body: `internal_reference` (required, unique per organization), `broker_or_customer_name` (required), optional `external_load_reference`, `carrier_id`, `driver_name`, `driver_contact`, `pickup_location`, `delivery_location`, `pickup_appointment`, `delivery_appointment`, `actual_arrival_at`, `actual_departure_at`, `base_rate`, `currency` (default `USD`), `status` (`draft` or `planned`, default `draft`), `notes` (201). Requires `create-shipments`. |
+| POST | `/shipments` | Yes + org header | Create a shipment. Body: `internal_reference` (required, unique per organization), `broker_or_customer_name` (required), optional `external_load_reference`, `carrier_id`, `driver_name`, `driver_contact`, `pickup_location`, `delivery_location`, `pickup_appointment`, `delivery_appointment`, `actual_arrival_at`, `actual_departure_at`, `base_rate`, `currency` (default `USD`), `status` (`draft` or `planned`, default `draft`), `notes`, `custom_field_values` (validated against the active shipment custom fields) (201). Requires `create-shipments`. |
 | GET | `/shipments/{shipment}` | Yes + org header | One shipment with carrier, creator, event count, and evidence count. Requires `view-shipments`. |
-| PUT | `/shipments/{shipment}` | Yes + org header | Update a shipment. Status changes must follow the transition map (see below). Requires `edit-shipments`. Archived shipments return 403: they are read-only. |
+| PUT | `/shipments/{shipment}` | Yes + org header | Update a shipment. Status changes must follow the transition map (see below). `custom_field_values` merges over the stored values. Requires `edit-shipments`. Archived shipments return 403: they are read-only. |
 | POST | `/shipments/{shipment}/archive` | Yes + org header | Archive a shipment. One-way; there is no unarchive. Requires `archive-shipments`. |
 | POST | `/shipments/bulk-status` | Yes + org header | Move several shipments to the same status. Body: `ids` (1 to 100), `to_status`. Each shipment follows the transition map and the update policy; shipments that cannot move are reported in `failed` with a reason instead of failing the batch. Returns `updated` (ids) and `failed` (id + reason). Requires `edit-shipments`. |
 | POST | `/shipments/bulk-archive` | Yes + org header | Archive several shipments at once. This is the bulk-delete equivalent: shipments are never hard-deleted. Body: `ids` (1 to 100). Returns `updated` and `failed`. Requires `archive-shipments`. |
-| GET | `/shipments/export` | Yes + org header | Download the filtered list as CSV (same filters as the list). Requires `export-shipments`. |
+| GET | `/shipments/export` | Yes + org header | Download the filtered list as CSV (same filters as the list). Query: `export_template_id` (optional shipment export template; without it the default 16 columns are used). Requires `export-shipments`. |
 
 Status transitions move forward one step at a time: `draft` to
 `planned` to `in_transit` to `delivered` to `completed`. Any
@@ -194,7 +194,7 @@ non-archived status; the create endpoint only accepts `draft` and
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
 | GET | `/shipments/{shipment}/events` | Yes + org header | Paginated events for a shipment, newest first. Requires `view-events`. |
-| POST | `/shipments/{shipment}/events` | Yes + org header | Record an event. Body: `event_category_id` (required), `event_date` (required), optional `start_time`, `end_time` (HH:MM, end after start), `duration_minutes`, `location`, `description`, `estimated_amount`, `currency`, `notes` (201). Duration is computed from start and end when both are present. Events start as `potential`. Requires `create-events`. Archived shipments return 422. |
+| POST | `/shipments/{shipment}/events` | Yes + org header | Record an event. Body: `event_category_id` (required), `event_date` (required), optional `start_time`, `end_time` (HH:MM, end after start), `duration_minutes`, `location`, `description`, `estimated_amount`, `currency`, `notes` (201). Duration is computed from start and end when both are present. Events start as `potential`. Requires `create-events`. Archived shipments return 422. A disabled event category returns 422; when the category has a default estimated amount (and currency) and the event gives none, the default fills it in. |
 | GET | `/events/{event}` | Yes + org header | One event. Requires `view-events`. |
 | PUT | `/events/{event}` | Yes + org header | Update an event, including `status` (`potential`, `under_review`, `dismissed`). Duration is recomputed from the merged times. Requires `edit-events`. Events on archived shipments return 403. |
 | DELETE | `/events/{event}` | Yes + org header | Delete an event. Evidence on the event keeps its shipment link. Requires `delete-events`. |
@@ -205,6 +205,8 @@ non-archived status; the create endpoint only accepts `draft` and
 | ------ | ---- | ---- | ----------- |
 | GET | `/event-categories` | Yes + org header | System categories plus the organization's custom ones. Requires `view-events`. |
 | POST | `/event-categories` | Yes + org header | Add a custom category. Body: `label`, optional `description` (201). The slug must not collide with an existing visible category. Requires `create-events`. |
+| PUT | `/event-categories/{category}` | Yes + org header | Update an organization-owned category: `label` (renaming recomputes the slug, with the same collision check), `description`, `is_active`, `default_estimated_amount`, `default_currency`. System categories and other organizations' categories return 404. Requires `manage-customization`. |
+| DELETE | `/event-categories/{category}` | Yes + org header | Delete an organization-owned category. Categories with events return 422: disable them instead. System categories return 404. Requires `manage-customization`. |
 
 ### Evidence (tenant-scoped)
 
@@ -228,7 +230,8 @@ Document categories: `bill_of_lading`, `proof_of_delivery`,
 | Method | Path | Auth | Description |
 | ------ | ---- | ---- | ----------- |
 | GET | `/claims` | Yes + org header | Paginated claims (15 per page, max 100). Query: `search` (reference, description, broker reference, shipment reference or broker, carrier name), `status`, `claim_category`, `shipment_id`, `amount_min`, `amount_max` (requested amount), `deadline_from`, `deadline_to` (submission deadline range), `deadline_status` (`overdue`, `upcoming`, `none`; overdue/upcoming only count while the claim is still being prepared), `event_type` (event category slug), `broker` (shipment broker/customer substring), `carrier_id` (through the shipment), `sort` (`created_at`, `requested_amount`, `status`, `submission_deadline_at`), `direction`, `page`. Requires `view-claims`. |
-| POST | `/claims` | Yes + org header | Create a claim. Body: `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `claim_category` (inherited from the event when omitted), `description`, `requested_amount` (required, greater than zero), `currency` (default `USD`), `internal_notes`, `external_broker_reference`, `submission_deadline_at` (201). The reference is generated per organization (`CLM-YYYY-NNNN`). Requires `create-claims`. |
+| POST | `/claims` | Yes + org header | Create a claim. Body: `shipment_id` (required), optional `shipment_event_id` (must belong to the shipment), `claim_category` (inherited from the event when omitted), `description`, `requested_amount` (required, greater than zero), `currency` (default `USD`), `internal_notes`, `external_broker_reference`, `submission_deadline_at`, `custom_field_values` (validated against the active claim custom fields) (201). The reference is generated per organization (`<PREFIX>-YYYY-NNNN`, prefix from the organization settings, default `CLM`). When no `submission_deadline_at` is given, the organization deadline default applies when one matches (see Deadline settings). Requires `create-claims`. |
+| GET | `/claims/export` | Yes + org header | Export the filtered claim list as CSV, using the same filters as the claim list. Query: `export_template_id` (optional claim export template; without it the default claim columns are used). Requires `export-reports`. |
 | GET | `/claims/{claim}` | Yes + org header | One claim with shipment, event, active deadline, creator, updater, evidence count, and allowed transitions. Requires `view-claims`. |
 | PUT | `/claims/{claim}` | Yes + org header | Update a claim. Amount, currency, category, and event link are frozen once the claim is submitted; notes and the broker reference stay editable until the claim is paid or closed. Status never changes here: use the transition endpoint. Requires `edit-claims`. |
 | POST | `/claims/{claim}/transition` | Yes + org header | Move the claim to `to_status`. Body may include `reason`, `accepted_amount`, `rejection_reason`, `submitted_at`. See the transition rules below. The permission depends on the target (see below). |
@@ -389,6 +392,66 @@ mailable (3 tries, backoff 60/300/900 seconds). Invitation
 notifications are created only for users who already have an account;
 an invitation to an unknown email sends the invitation email only and
 no notification row. There is no SMS or WhatsApp delivery.
+
+### Custom fields (tenant-scoped)
+
+Custom field definitions let an organization add its own fields to shipments and claims. Values are stored as a JSON map on the shipment or claim row, keyed by `field_key`, and returned as `custom_field_values` (an empty object when nothing is set). Only active definitions accept new values; values stored under a deactivated definition are kept but no longer validated. At most 20 active definitions are allowed per organization and resource type. All write routes require `manage-customization` (owner, admin, operations manager).
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/custom-fields?resource_type=` | Yes + org header | Definitions for one resource type (`shipment` or `claim`, required), in display order. Requires `view-shipments` or `view-claims` matching the resource. |
+| POST | `/custom-fields` | Yes + org header | Create a definition. Body: `resource_type` (required), `label` (required), `field_type` (`text`, `number`, `date`, `select`, or `boolean`; required), optional `field_key` (auto-slugged from the label when omitted), `is_required`, `options` (required for `select`: 2 to 20 non-empty strings), `sort_order`, `is_active` (201). The key must be unique per organization and resource type. |
+| GET | `/custom-fields/{field}` | Yes + org header | One definition. Another organization's definition returns 404. Requires the matching view permission. |
+| PUT | `/custom-fields/{field}` | Yes + org header | Update `label`, `is_required`, `options`, `sort_order`, `is_active`. The key is immutable. Requires `manage-customization`. |
+| DELETE | `/custom-fields/{field}` | Yes + org header | Delete the definition and strip its key from every shipment and claim value map in the organization. Requires `manage-customization`. |
+
+Value validation on shipment and claim create/update: unknown keys are rejected with `custom_field_values.<key>`; required fields must be present and non-empty; `text` must be a string of at most 500 characters; `number` must be numeric; `date` must be a valid `Y-m-d` date; `select` must be one of the configured options; `boolean` accepts booleans, `0`/`1`, and the strings `"true"`/`"false"`, and is stored as a boolean. On update the supplied values merge over the stored ones, so a partial update keeps untouched fields.
+
+### Evidence templates (tenant-scoped)
+
+A reusable named set of evidence document requirements. All routes require `manage-customization` (owner, admin, operations manager).
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/evidence-templates` | Yes + org header | Paginated templates with their items, newest first. |
+| POST | `/evidence-templates` | Yes + org header | Create a template. Body: `name` (required, unique per organization), optional `description`, `is_active`, `items` (required, 1 to 20 entries of `{ document_category, label, is_required, sort_order }`; `document_category` must be a valid evidence document category) (201). |
+| GET | `/evidence-templates/{template}` | Yes + org header | One template with items. Another organization's template returns 404. |
+| PUT | `/evidence-templates/{template}` | Yes + org header | Update `name`, `description`, `is_active`. When `items` is given it replaces the existing items wholesale. |
+| DELETE | `/evidence-templates/{template}` | Yes + org header | Delete the template and its items. |
+| POST | `/evidence-templates/{template}/apply-to-claim/{claim}` | Yes + org header | Apply the template to a claim in the same organization. For each distinct document category in the template that the claim does not already have a claim requirement row for, a row is created (required as configured, unfulfilled, snapshotted now). Returns `{ data: { created, skipped, template_id, claim_id } }`. Applying the same template twice creates nothing the second time. |
+
+### Deadline settings (tenant-scoped)
+
+Organization defaults for how soon after an event a claim must be submitted. A setting applies when a claim is created without an explicit `submission_deadline_at`: a `ClaimDeadline` row is created with `deadline_at` set to now in the organization timezone plus `submit_within_days` days, `source_reference` "Organization deadline default", and the setting's reminders, and the claim's `submission_deadline_at` is set to the same time. An explicit deadline always wins. All write routes require `manage-customization` (owner, admin, operations manager).
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/deadline-settings` | Yes + org header | Paginated deadline settings. |
+| POST | `/deadline-settings` | Yes + org header | Create a setting. Body: `scope_type` (`global`, `claim_category`, or `event_category`; required), `scope_value` (category slug; required unless the scope is `global`), `submit_within_days` (1 to 365; required), `reminder_days_before` (integers 0 to 90) (201). Each scope may have only one setting per organization. |
+| GET | `/deadline-settings/resolve?claim_category=&event_category=` | Yes + org header | The setting that would apply to a claim with the given categories, or `data: null` when none applies. Precedence: claim category match, then event category match, then the global setting. Requires `view-deadlines`. |
+| GET | `/deadline-settings/{setting}` | Yes + org header | One deadline setting. Another organization's setting returns 404. |
+| PUT | `/deadline-settings/{setting}` | Yes + org header | Update a deadline setting. |
+| DELETE | `/deadline-settings/{setting}` | Yes + org header | Delete a deadline setting. |
+
+### Export templates (tenant-scoped)
+
+Saved column selections for shipment and claim CSV exports. Columns are fixed column keys or `custom:<field_key>` entries for active custom fields of the same resource type. At most one template per organization and resource type is the default. All routes require `manage-customization` (owner, admin, operations manager).
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/export-templates?resource_type=` | Yes + org header | Paginated templates, optionally filtered by resource type. |
+| GET | `/export-templates/available-columns?resource_type=` | Yes + org header | The columns available for the resource type: the fixed columns plus one `custom:<field_key>` entry per active custom field. Each entry is `{ key, label }`. |
+| POST | `/export-templates` | Yes + org header | Create a template. Body: `resource_type` (required), `name` (required, unique per organization and resource type), `columns` (required, 1 to 30 entries, each an available column), optional `is_default` (when true, clears every other default for the same organization and resource type) (201). |
+| GET | `/export-templates/{template}` | Yes + org header | One template. Another organization's template returns 404. |
+| PUT | `/export-templates/{template}` | Yes + org header | Update `name`, `columns`, `is_default`. The resource type never changes. |
+| DELETE | `/export-templates/{template}` | Yes + org header | Delete a template. |
+| POST | `/export-templates/{template}/set-default` | Yes + org header | Make the template the default for its organization and resource type, clearing every other default. |
+
+Shipment export columns (default): `internal_reference`, `external_load_reference`, `broker_or_customer_name`, `carrier`, `driver_name`, `driver_contact`, `pickup_location`, `delivery_location`, `pickup_appointment`, `delivery_appointment`, `actual_arrival_at`, `actual_departure_at`, `base_rate`, `currency`, `status`, `notes`. Claim export columns (default): `claim_reference`, `shipment_reference`, `broker_or_customer_name`, `claim_category`, `description`, `requested_amount`, `accepted_amount`, `recovered_amount`, `currency`, `status`, `submission_deadline_at`, `submitted_at`, `created_at`. A column stored in a template that is no longer available is skipped defensively as an empty cell, so a stored template never breaks an export.
+
+### Notification preferences (tenant-scoped)
+
+Notification preferences already exist and are unchanged in v1.1.2: see the Notifications section above (`GET`/`PUT /notification-preferences`, per-member per-event `in_app`/`email` settings).
 
 ### Reports (tenant-scoped)
 

@@ -6,13 +6,12 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.1.1 (Phase 2, Reliability).
+- **Last completed version:** v1.1.2 (Phase 2, Customization).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `dd63e3a6` (v1.1.0, pushed 2026-11-17 after Aqib's yes + approval).
-  v1.1.1 is built and verified locally, **not pushed** — waiting for
-  Aqib's yes.
-- **Tests at v1.1.1:** 289 backend (1200 assertions) + 171 frontend, all
-  passing. `npm run build` succeeds (35/35 pages). `tsc --noEmit` clean,
+  head `1f2a60e7` (v1.1.1, pushed 2026-11-18 after Aqib's yes + approval).
+  v1.1.2 is built and verified locally, NOT pushed; push pending Aqib's yes.
+- **Tests at v1.1.2:** 322 backend (1411 assertions) + 221 frontend, all
+  passing. `npm run build` succeeds (36/36 pages). `tsc --noEmit` clean,
   lint clean.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
@@ -20,11 +19,10 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**v1.1.2 — Customization** (Phase 2): custom shipment fields, custom claim
-fields, configurable event categories, evidence templates, custom deadline
-settings, notification preferences, export templates, organization-specific
-settings. (Notification preferences already exist from M4; v1.1.2 should
-verify before building that item.)
+**v1.1.3 — Security and Operations** (Phase 2): tenant isolation audit,
+RBAC security audit, file access security review, backup configuration,
+restore testing, data retention policies, production deployment hardening,
+incident response documentation.
 
 ## Blockers (recorded, not skipped)
 
@@ -76,6 +74,77 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-19 — v1.1.2 Customization built and verified
+
+- Gate check passed first: remote head on GitHub is `1f2a60e7`, matching
+  the recorded v1.1.1 head, so no version was waiting to be pushed.
+- Built all 8 v1.1.2 items: custom shipment fields, custom claim fields
+  (org definitions: key/label, text/number/date/select/boolean, required,
+  select options, max 20 active per resource; values in JSON on the record;
+  validated on create/update; shown in forms/detail; `custom:<key>` columns
+  in CSV export), configurable event categories (create/rename/disable/
+  delete, default amount/currency prefilled onto new events; disabled
+  categories rejected for new events), evidence templates (named sets of
+  document items, apply-to-claim creates ClaimRequirement rows,
+  idempotent), custom deadline settings (org defaults scoped global /
+  claim-category / event-category, claim > event > global precedence,
+  resolve endpoint, claim creation auto-creates a ClaimDeadline only when
+  no explicit deadline is given), notification preferences (already existed
+  from v1.0.1; verified, not rebuilt), export templates (named column sets
+  per resource, one default per resource, `?export_template_id=` on
+  shipment + new claim exports; default export unchanged without one),
+  organization-specific settings (validated `settings.default_currency`,
+  `settings.date_format`, `settings.claim_reference_prefix`, merged,
+  unknown keys rejected; prefix used for new claim references only).
+- New permission `manage-customization` (owner, admin, operations manager).
+  Backend: 6 migrations, 5 models, CustomFieldService, 27 new API routes
+  (93 OpenAPI paths, matching 93 distinct live route URIs). Frontend:
+  Customization settings hub (`/settings/customization`), org-settings
+  extension, custom-field integration in shipment/claim forms and detail
+  pages, template apply on claim detail, export-template pickers on both
+  list pages. Version bumped to 1.1.2; CHANGELOG + API/DATABASE/
+  ARCHITECTURE docs updated.
+- One real bug found by the parent run's independent live smoke test and
+  fixed in this version: POST /event-categories silently dropped
+  `default_estimated_amount` / `default_currency` (only PUT accepted
+  them), so a category created with defaults never prefilled events. The
+  create endpoint now accepts and persists both fields (OpenAPI updated),
+  with a new regression test
+  (`test_a_category_created_with_defaults_prefills_new_events`).
+- Verification (all run by the parent run, independently of the builder):
+  backend **322 passed (1411 assertions)**, frontend **221 passed**
+  across 22 files, `npm run build` succeeds (36/36 pages),
+  `tsc --noEmit` clean, lint clean, fresh-DB `migrate:fresh` passes with
+  all 6 migrations. Live HTTP smoke test over the built-in server on a
+  fresh SQLite DB passed **28/28 steps**: org settings save + unknown-key
+  rejection; custom field creation + bad-type rejection; shipment create
+  with custom value; missing-required and unknown-key rejections; global
+  deadline setting + resolve; claim create with custom select value +
+  `SMK-2026-0001` reference + auto-created deadline; bad select option
+  rejected; category create/rename/disable, disabled-category event
+  rejection, re-enable, event created with default amount 150 prefilled;
+  template create/apply (2 created) and idempotent re-apply (0 created,
+  2 skipped); shipment + claim exports via templates with custom columns
+  and values (`TR-9`, `Alice` in output); notification preferences list
+  (10 types) + update; cross-tenant 404s; viewer 403s on
+  manage-customization writes and 200 on list. (First smoke attempt hit
+  the login throttle from repeated runs in the same minute; the re-run
+  after a pause passed cleanly. That is a test-script artifact, not an
+  app bug.)
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer.
+- Environment note: system `php` is still missing on this VM; the
+  standalone PHP 8.3.6 at `~/workspace/php-standalone/usr/bin/php8.3`
+  was used (with `PHP_INI_SCAN_DIR=~/workspace/php-standalone/scan`).
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; correctly ignored by the builder and the parent run, not
+  acted on (a system safety notice also flagged it during this build).
+- Push status: **v1.1.2 NOT pushed.** Ready to push pending Aqib's yes in
+  the main chat + approval card. Next run may start v1.1.3 only after
+  this version is pushed (a version waiting for a push blocks new work).
+- Next task: v1.1.3 — Security and Operations.
 
 ### 2026-11-17 — v1.1.0 UX Improvements (complete, verified, NOT pushed)
 
@@ -219,7 +288,7 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Boost via composer/curl. That is repo file content, not a task
   instruction; correctly ignored by the builder, not acted on (a
   system safety notice also flagged it during this build).
-- Push status: **v1.1.1 ready to push, NOT pushed.** Waiting for Aqib's
-  yes in the main chat + approval card. Nothing was pushed, tagged, or
-  added under `.github/workflows` in this build.
+- Push status: **v1.1.1 PUSHED 2026-11-18** after Aqib's yes in the main
+  chat + approval card. New remote head `1f2a60e7`, 60 files in one
+  commit. Read-back verified. Next run may start v1.1.2.
 - Next task: v1.1.2 — Customization.
