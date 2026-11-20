@@ -169,7 +169,14 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Secure cookies are on by default in production (v1.1.3
+    // hardening). The API is token-based, but the session cookie
+    // settings still matter for the web routes (email verification
+    // redirects) and any future cookie use. SESSION_SECURE_COOKIE
+    // overrides the default in any environment. env() is used
+    // here, not app()->environment(): config files load before
+    // the application can answer that.
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

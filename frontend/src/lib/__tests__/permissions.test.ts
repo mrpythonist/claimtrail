@@ -6,6 +6,7 @@ import {
   canViewAuditLogs,
   canViewOperations,
   canViewReports,
+  canViewSecurity,
 } from "../permissions";
 import type { OrganizationRole } from "../types";
 
@@ -122,5 +123,23 @@ describe("canViewOperations", () => {
     expect(canViewOperations("viewer")).toBe(false);
     expect(canViewOperations(null)).toBe(false);
     expect(canViewOperations(undefined)).toBe(false);
+  });
+});
+
+describe("canViewSecurity", () => {
+  it("allows owner and admin only", () => {
+    expect(ROLES.filter((role) => canViewSecurity(role))).toEqual([
+      "owner",
+      "admin",
+    ]);
+  });
+
+  it("denies operations managers, billing staff, dispatchers, viewers, and missing roles", () => {
+    expect(canViewSecurity("operations_manager")).toBe(false);
+    expect(canViewSecurity("billing_staff")).toBe(false);
+    expect(canViewSecurity("dispatcher")).toBe(false);
+    expect(canViewSecurity("viewer")).toBe(false);
+    expect(canViewSecurity(null)).toBe(false);
+    expect(canViewSecurity(undefined)).toBe(false);
   });
 });

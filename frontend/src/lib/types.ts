@@ -732,3 +732,64 @@ export interface RecentErrors {
   entries: RecentErrorEntry[];
   scanned_lines: number;
 }
+
+/** One backup run from GET /backups. */
+export interface BackupRun {
+  id: string;
+  organization_id: string | null;
+  driver: string;
+  status: "running" | "completed" | "failed";
+  size_bytes: number | null;
+  checksum: string | null;
+  error_message: string | null;
+  restored_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Result of re-verifying a backup's checksums. */
+export interface BackupVerification {
+  ok: boolean;
+  mismatches: string[];
+}
+
+/** One production-readiness check from GET /security/check. */
+export interface SecurityCheckItem {
+  id: string;
+  label: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+}
+
+/** Production-readiness result from GET /security/check. */
+export interface SecurityCheckResult {
+  overall: "pass" | "warn" | "fail";
+  checks: SecurityCheckItem[];
+}
+
+/** Retention in days per kind. 0 keeps forever. */
+export interface RetentionDays {
+  audit_logs: number;
+  notifications: number;
+  job_executions: number;
+  failed_documents: number;
+  security_events: number;
+}
+
+/** Retention settings from GET /retention. */
+export interface RetentionSettings {
+  effective: RetentionDays;
+  defaults: RetentionDays;
+  overrides: Partial<RetentionDays>;
+}
+
+/** One security event from GET /security/events. */
+export interface SecurityEvent {
+  id: string;
+  organization_id: string | null;
+  user_id: number | null;
+  type: string;
+  ip_address: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}

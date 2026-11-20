@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\CarrierController;
 use App\Http\Controllers\Api\V1\ClaimController;
 use App\Http\Controllers\Api\V1\ClaimDeadlineController;
@@ -26,7 +27,9 @@ use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\ReportController;
+use App\Http\Controllers\Api\V1\RetentionController;
 use App\Http\Controllers\Api\V1\SavedViewController;
+use App\Http\Controllers\Api\V1\SecurityController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
@@ -227,6 +230,27 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/ops/failed-jobs/{uuid}/retry', [OpsController::class, 'retryFailedJob']);
             Route::post('/ops/failed-jobs/{uuid}/forget', [OpsController::class, 'forgetFailedJob']);
             Route::get('/ops/errors', [OpsController::class, 'errors']);
+
+            // Backups (v1.1.3): deployment-wide backups, attributed
+            // to the requesting organization. All require
+            // manage-security (owner and admin). Restores are not
+            // exposed here: restoring replaces the live database,
+            // so it stays an operator action (`backup:restore`).
+            Route::get('/backups', [BackupController::class, 'index']);
+            Route::post('/backups', [BackupController::class, 'store']);
+            Route::get('/backups/{backup}', [BackupController::class, 'show']);
+            Route::post('/backups/{backup}/verify', [BackupController::class, 'verify']);
+
+            // Retention (v1.1.3): effective retention settings and
+            // per-organization overrides, in days. 0 keeps forever.
+            Route::get('/retention', [RetentionController::class, 'show']);
+            Route::put('/retention', [RetentionController::class, 'update']);
+
+            // Security (v1.1.3): production-readiness checks and
+            // the security event log (failed logins, authorization
+            // denials). Both require manage-security.
+            Route::get('/security/check', [SecurityController::class, 'check']);
+            Route::get('/security/events', [SecurityController::class, 'events']);
         });
     });
 });

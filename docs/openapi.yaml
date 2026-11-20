@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.1.2
+  version: 1.1.3
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -19,7 +19,9 @@ info:
     defaults, evidence templates, deadline settings, export
     templates, a claims CSV export, and organization settings
     for a default currency, a date format, and a claim reference
-    prefix.
+    prefix. Version 1.1.3 adds security and operations: backups,
+    retention settings, production-readiness checks, and the
+    security event log, all for owners and admins.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -46,6 +48,7 @@ tags:
   - name: SavedViews
   - name: Operations
   - name: Customization
+  - name: Security
 paths:
   /auth/register:
     post:
@@ -3653,6 +3656,213 @@ paths:
                     $ref: "#/components/schemas/ExportTemplate"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /backups:
+    get:
+      tags: [Security]
+      summary: List backup runs (requires manage-security)
+      description: >
+        Backup runs requested by this organization, newest first.
+        Scheduled daily runs have no organization and are not
+        listed. The file path is never exposed.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Paginated backup runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BackupRun"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Security]
+      summary: Create a backup now (requires manage-security)
+      description: >
+        Copies the whole database plus every evidence and package
+        file, with a manifest of SHA-256 checksums. An in-memory
+        database or a missing pg_dump returns 422 with the reason
+        instead of a fake success.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "201":
+          description: Backup run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BackupRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /backups/{backup}:
+    get:
+      tags: [Security]
+      summary: Get one backup run (requires manage-security)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: backup
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Backup run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BackupRun"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /backups/{backup}/verify:
+    post:
+      tags: [Security]
+      summary: Verify a backup's checksums (requires manage-security)
+      description: >
+        Re-hashes the database copy and every stored file against
+        the backup manifest and returns the list of mismatches.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: backup
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BackupVerification"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /retention:
+    get:
+      tags: [Security]
+      summary: Get retention settings (requires manage-security)
+      description: >
+        Effective retention settings in days: config defaults
+        merged with this organization's overrides. 0 means keep
+        forever.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Retention settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RetentionSettings"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Security]
+      summary: Set retention overrides (requires manage-security)
+      description: >
+        Any of audit_logs, notifications, job_executions,
+        failed_documents, security_events: an integer 0 to 3650,
+        or null to clear the override and restore the default.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                audit_logs: { type: integer, minimum: 0, maximum: 3650, nullable: true }
+                notifications: { type: integer, minimum: 0, maximum: 3650, nullable: true }
+                job_executions: { type: integer, minimum: 0, maximum: 3650, nullable: true }
+                failed_documents: { type: integer, minimum: 0, maximum: 3650, nullable: true }
+                security_events: { type: integer, minimum: 0, maximum: 3650, nullable: true }
+      responses:
+        "200":
+          description: Effective retention settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RetentionSettings"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /security/check:
+    get:
+      tags: [Security]
+      summary: Production-readiness checks (requires manage-security)
+      description: >
+        The same ten checks as the security:check artisan command:
+        APP_DEBUG, APP_KEY, APP_URL, session cookies, Sanctum token
+        expiration, evidence disk, CORS origin, backup freshness,
+        mail driver, queue driver.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Security check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SecurityCheckResult"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /security/events:
+    get:
+      tags: [Security]
+      summary: List security events (requires manage-security)
+      description: >
+        Failed logins and authorization denials for this
+        organization, newest first. The password is never stored
+        in a failed-login event. Unattributed events (no
+        organization) are not listed here.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Security events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SecurityEvent"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3972,6 +4182,65 @@ components:
         is_default: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    BackupRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid, nullable: true }
+        driver: { type: string, enum: [sqlite, pgsql] }
+        status: { type: string, enum: [running, completed, failed] }
+        size_bytes: { type: integer, nullable: true }
+        checksum: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        restored_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    BackupVerification:
+      type: object
+      properties:
+        ok: { type: boolean }
+        mismatches:
+          type: array
+          items: { type: string }
+    SecurityCheckItem:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [pass, warn, fail] }
+        detail: { type: string }
+    SecurityCheckResult:
+      type: object
+      properties:
+        overall: { type: string, enum: [pass, warn, fail] }
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityCheckItem"
+    RetentionSettings:
+      type: object
+      properties:
+        effective:
+          type: object
+          additionalProperties: { type: integer }
+        defaults:
+          type: object
+          additionalProperties: { type: integer }
+        overrides:
+          type: object
+          additionalProperties: { type: integer }
+    SecurityEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid, nullable: true }
+        user_id: { type: integer, nullable: true }
+        type: { type: string }
+        ip_address: { type: string, nullable: true }
+        metadata:
+          type: object
+          nullable: true
+        created_at: { type: string, format: date-time }
     Shipment:
       type: object
       properties:

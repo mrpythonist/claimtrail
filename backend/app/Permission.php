@@ -73,6 +73,11 @@ enum Permission: string
     // and export templates.
     case ManageCustomization = 'manage-customization';
 
+    // Security (enforced from v1.1.3): backups, retention
+    // settings, production-readiness checks, and the security
+    // event log. Owner and admin only.
+    case ManageSecurity = 'manage-security';
+
     /**
      * Every permission value, for validation and documentation.
      *

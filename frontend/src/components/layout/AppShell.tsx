@@ -10,6 +10,7 @@ import {
   canViewAuditLogs,
   canViewOperations,
   canViewReports,
+  canViewSecurity,
 } from "@/lib/permissions";
 import type { OnboardingProgress, OrganizationRole } from "@/lib/types";
 
@@ -37,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Evidence Requirements", href: "/settings/evidence-requirements", section: "Settings" },
   { label: "Customization", href: "/settings/customization", section: "Settings", visibleFor: canManageCustomization },
   { label: "Operations", href: "/settings/operations", section: "Settings", visibleFor: canViewOperations },
+  { label: "Security", href: "/settings/security", section: "Settings", visibleFor: canViewSecurity },
   { label: "Profile", href: "/settings/profile", section: "Settings" },
 ];
 
@@ -315,7 +317,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Menu
           </button>
           <p className="hidden text-sm text-slate-500 md:block">
-            ClaimTrail v1.1.2
+            ClaimTrail v1.1.3
           </p>
 
           <div className="relative" ref={menuRef}>
@@ -368,7 +370,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
 
         <footer className="border-t border-slate-200 px-4 py-4 text-center text-xs text-slate-500 sm:px-6">
-          ClaimTrail v1.1.2. Claim amounts shown anywhere in the product are
+          ClaimTrail v1.1.3. Claim amounts shown anywhere in the product are
           potential amounts, never a guarantee of recovery.
         </footer>
       </div>

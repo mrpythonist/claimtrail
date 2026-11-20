@@ -178,3 +178,97 @@ single view is needed.
   delivery appointment, and claims by requested amount. If a
   list endpoint is slow, check the slow-query log before adding
   more indexes.
+
+## Backups and restores (v1.1.3)
+
+Backups run on a schedule (daily 02:00, `backup:create`) and can
+be started on demand from the Security settings hub or with the
+artisan command:
+
+```sh
+php artisan backup:create            # all organizations (no attribution)
+php artisan backup:create --organization=<uuid>
+```
+
+A backup copies the whole database plus every evidence and
+package file into `storage/app/private/backups/<timestamp>`,
+with a `manifest.json` of SHA-256 checksums, and records a
+`backup_runs` row (status, size, checksum). The backup directory
+lives on the private disk and is never served publicly. The API
+(`GET /backups`, `POST /backups`, `GET /backups/{backup}`, `POST
+/backups/{backup}/verify`) is for owners and admins; the file
+path is never exposed.
+
+- SQLite: the database file is copied. An in-memory database
+  cannot be backed up and fails with a clear message.
+- PostgreSQL: the backup shells out to `pg_dump` (custom format).
+  `pg_dump` must be installed on the server; if it is missing the
+  command fails with a clear message instead of a fake success.
+  This path was never run against live PostgreSQL on the
+  development VM.
+
+Verify a backup before relying on it: `POST
+/backups/{backup}/verify` from the Security settings hub
+re-hashes the database copy and every stored file against the
+manifest and returns any mismatches. There is no artisan verify
+command; the API endpoint is the verification path.
+
+Restore procedure (operator action only, no API endpoint):
+
+```sh
+php artisan backup:restore <run-id>      # confirms first; --force skips the prompt
+```
+
+The command verifies every manifest checksum before touching
+live data and refuses on any mismatch, on a failed run, or on an
+unknown run id. For SQLite it replaces the database file and
+reconnects; for PostgreSQL it shells out to `pg_restore`.
+Restoring replaces the live database: confirm the run id, stop
+the queue worker first, and take a fresh backup of the current
+state before restoring. A successful restore sets
+`restored_at` on the run. The PostgreSQL restore path was never
+run against live PostgreSQL on the development VM.
+
+Retention for backups themselves is `config/backup.php`
+(`keep_days`, default 30). Backups are deployment-wide: a
+restore restores every organization at once, so it is not a
+per-tenant operation.
+
+## Retention (v1.1.3)
+
+Retention defaults live in `config/retention.php` (audit logs
+365 days, notifications 90, job executions 30, failed documents
+30, security events 180; 0 keeps forever). Owners and admins can
+override per organization from the Security settings hub or
+`PUT /retention`. The purge runs weekly (Sundays 03:00):
+
+```sh
+php artisan retention:purge            # all organizations
+php artisan retention:purge --dry-run  # report only, delete nothing
+php artisan retention:purge --organization=<uuid>
+```
+
+The purge deletes audit logs, notifications, failed generated
+documents (with their stored object), and security events older
+than the cutoff, per organization, and writes one
+`retention.purged` audit row per organization with the counts.
+Job executions and unattributed security events (failed logins
+have no organization) are purged by the all-organizations run
+only. Ready claim packages are never deleted by retention.
+
+## Security checks (v1.1.3)
+
+```sh
+php artisan security:check        # table output, exit 1 if any check fails
+php artisan security:check --json # machine-readable output
+```
+
+The same ten checks are available to owners and admins at
+`GET /security/check` and on the Security settings hub: APP_DEBUG
+off in production, APP_KEY set, APP_URL HTTPS in production,
+session cookies secure in production, Sanctum token expiration
+configured, evidence disk private, CORS origin not `*` with
+credentials, a completed backup in the last 7 days, a real mail
+driver in production, and a real queue driver in production.
+Fix every `fail` before a production deploy; a `warn` is
+acceptable only with a recorded reason.

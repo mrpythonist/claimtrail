@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\SecurityEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,10 @@ use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        protected SecurityEventService $securityEvents,
+    ) {}
+
     /**
      * Register a new user and issue an API token.
      */
@@ -56,6 +61,11 @@ class AuthController extends Controller
         // Credential checks always use the session guard, even if the
         // request itself arrived authenticated some other way.
         if (! Auth::guard('web')->attempt($validated)) {
+            // Failed logins are recorded as security events (v1.1.3)
+            // so repeated attempts against one account are visible.
+            // The password is never recorded.
+            $this->securityEvents->recordLoginFailed($validated['email'], $request);
+
             return response()->json([
                 'message' => 'These credentials do not match our records.',
             ], 422);

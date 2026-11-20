@@ -481,6 +481,55 @@ no conversion and no invented rate.
   claim over claims in `accepted`, `partially_accepted`, or `paid`,
   then summed per currency.
 
+### Backups (tenant-scoped, v1.1.3)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/backups` | Yes + org header | Backup runs of the organization, newest first (25 per page). Requires `manage-security` (owner, admin). |
+| POST | `/backups` | Yes + org header | Create a backup now. Returns the run row (201). An in-memory database or a missing `pg_dump` returns 422 with the reason instead of a fake success. Requires `manage-security`. |
+| GET | `/backups/{backup}` | Yes + org header | One backup run. A run of another organization returns 404. Requires `manage-security`. |
+| POST | `/backups/{backup}/verify` | Yes + org header | Re-verify the backup's checksums (database copy and every stored file against the manifest). Returns `{ "data": { "ok": bool, "mismatches": [...] } }`. Requires `manage-security`. |
+
+Backups are deployment-wide: the whole database plus a copy of
+every evidence and package file, with a `manifest.json` of SHA-256
+checksums. A run is attributed to the organization that requested
+it; scheduled runs (daily 02:00) have no organization and are not
+listed here. Restores are deliberately not an API endpoint:
+restoring replaces the live database, so it stays an operator
+action (`backup:restore` on the server), which verifies every
+manifest checksum first and refuses on any mismatch. See
+docs/OPERATIONS.md for the runbook.
+
+### Retention (tenant-scoped, v1.1.3)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/retention` | Yes + org header | Effective retention settings (config defaults merged with the organization's overrides), in days. Requires `manage-security`. |
+| PUT | `/retention` | Yes + org header | Set per-organization retention overrides. Body: any of `audit_logs`, `notifications`, `job_executions`, `failed_documents`, `security_events`, each an integer 0 to 3650 (0 keeps forever) or null to clear the override and restore the default. Returns the effective settings. Requires `manage-security`. |
+
+The weekly purge (`retention:purge`, Sundays 03:00) deletes
+audit logs, notifications, failed generated documents, and
+security events older than the cutoff, per organization, and
+writes one `retention.purged` audit row per organization with the
+counts. Job executions and unattributed security events are global
+and are purged by the all-organizations run only. Ready claim
+packages are never deleted by retention: only failed documents
+are purged, with their stored object when one exists.
+
+### Security (tenant-scoped, v1.1.3)
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/security/check` | Yes + org header | Production-readiness checks. Returns `{ "data": { "overall": "pass" \| "warn" \| "fail", "checks": [{ "id", "label", "status", "detail" }] } }`. The same ten checks as the `security:check` artisan command. Requires `manage-security`. |
+| GET | `/security/events` | Yes + org header | Security events of the organization, newest first (50 per call, `limit` 1-100). Requires `manage-security`. |
+
+Security events are failed logins (`login.failed`, with the email
+in the metadata; the password is never stored) and authorization
+denials (`authorization.denied`, with method and path). A failed
+login has no organization and is only visible through the
+all-organizations retention purge, not through this endpoint. See
+docs/SECURITY.md and docs/INCIDENT-RESPONSE.md.
+
 ## Example: register, create an organization, invite someone
 
 ```sh

@@ -6,12 +6,13 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.1.2 (Phase 2, Customization).
+- **Last completed version:** v1.1.3 (Phase 2, Security and Operations).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `1f2a60e7` (v1.1.1, pushed 2026-11-18 after Aqib's yes + approval).
-  v1.1.2 is built and verified locally, NOT pushed; push pending Aqib's yes.
-- **Tests at v1.1.2:** 322 backend (1411 assertions) + 221 frontend, all
-  passing. `npm run build` succeeds (36/36 pages). `tsc --noEmit` clean,
+  head `1e0e197d` (v1.1.2, pushed 2026-11-19 after Aqib's yes + approval).
+  v1.1.3 is built and verified locally only; **NOT pushed** — waiting for
+  Aqib's yes in the main chat + approval card.
+- **Tests at v1.1.3:** 382 backend (1902 assertions) + 241 frontend, all
+  passing. `npm run build` succeeds (37/37 pages). `tsc --noEmit` clean,
   lint clean.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
@@ -19,10 +20,13 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**v1.1.3 — Security and Operations** (Phase 2): tenant isolation audit,
-RBAC security audit, file access security review, backup configuration,
-restore testing, data retention policies, production deployment hardening,
-incident response documentation.
+**v1.2.0 — Subscription Billing** (Phase 3, Commercial Launch): Stripe
+integration, subscription plans, monthly/annual billing, checkout, free
+trials, upgrades/downgrades, renewals, cancellations, invoice history,
+failed payment handling, Stripe webhooks, billing portal. **Blocked on
+input: Stripe keys from Aqib.** Per the standing rules, report the block
+once in the main chat; the next run decides whether to move to the next
+unblocked version.
 
 ## Blockers (recorded, not skipped)
 
@@ -74,6 +78,86 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-20 — v1.1.3 Security and Operations built and verified
+
+- Built all 8 v1.1.3 items: tenant isolation audit (automated
+  cross-tenant sweep across every API resource asserting 404, plus a
+  code audit finding no unscoped queries), RBAC security audit (role
+  matrix tests + a sweep asserting every non-public API route requires
+  `auth:sanctum` and every tenant-scoped route resolves an
+  organization), file access security review (`StorageKey::isSafe`
+  traversal/prefix guard on evidence and package downloads/previews;
+  downloads were already behind auth, tenant checks, and policy
+  gates), backup configuration (`config/backup.php`,
+  `backup:create` daily 02:00, `backup_runs` table, manifest with
+  SHA-256 checksums; SQLite file copy supported, `pg_dump` path
+  fails clearly when the binary is missing), restore testing
+  (`backup:restore` verifies the manifest first and refuses on any
+  mismatch; round-trip test wipes the DB and a stored file, restores,
+  asserts both back), data retention policies (`config/retention.php`
+  defaults, per-organization overrides via `GET`/`PUT /retention`,
+  `retention:purge` with `--dry-run`, weekly Sunday 03:00,
+  tenant-scoped, audit-logged, ready packages never purged),
+  production deployment hardening (CSP + HSTS in the
+  security-headers middleware, secure session cookies by default in
+  production, `security:check` command + `GET /security/check` with
+  ten production-readiness checks), incident response documentation
+  (`docs/INCIDENT-RESPONSE.md`: severity levels, first response,
+  containment, eradication/recovery, rollback, data-breach steps,
+  communication templates, on-call placeholders) plus security-event
+  logging (failed logins and authorization denials in
+  `security_events`, listed at `GET /security/events`).
+- New permission `manage-security` (owner, admin). Backend: 2
+  migrations, 2 models, BackupService, RetentionService,
+  SecurityCheckService, SecurityEventService, StorageKey,
+  BackupException, 4 artisan commands, 8 new API routes (99 OpenAPI
+  paths, matching 99 distinct live route URIs). Frontend: Security
+  settings hub (`/settings/security`), `src/lib/security.ts` typed
+  client, `canViewSecurity` helper. Version bumped to 1.1.3;
+  CHANGELOG + API/openapi/ARCHITECTURE/DATABASE/OPERATIONS/SECURITY
+  docs updated.
+- Verification: backend **382 passed (1902 assertions)**, frontend
+  **241 passed** across 24 files, `npm run build` succeeds (37/37
+  pages, incl. `/settings/security`), `tsc --noEmit` clean, lint
+  clean, fresh-DB `migrate:fresh` passes with both new migrations.
+  Live HTTP smoke test over the built-in server on a fresh SQLite DB
+  passed: security check admin 200 (overall warn: Sanctum token
+  expiration unset) / viewer 403 / unauthenticated 401; backup
+  create 201 (completed, 664,764 bytes) + verify `ok: true`;
+  retention get defaults + put override applied; failed login and
+  denial recorded as security events (login.failed is unattributed
+  and correctly not listed per organization); cross-tenant backup
+  404; CSP header present, HSTS absent over plain HTTP in local env
+  (correct); `security:check` CLI 9 pass / 1 warn; `retention:purge
+  --dry-run` deletes nothing.
+- Two doc corrections caught during verification: the summary's
+  "93 → 101 OpenAPI paths" was wrong — the real count is 91 → 99
+  (verified by diffing every route URI against the spec); and the
+  runbook initially named a `backup:verify` artisan command that
+  does not exist — verification is API/hub only, and the runbook
+  was fixed.
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. v1.1.3-specific: the
+  PostgreSQL backup/restore paths (`pg_dump`/`pg_restore`) were
+  never run against live PostgreSQL (no server or client tools on
+  this VM); queue monitoring is still database-driver only; the
+  errors endpoint still reads the local log file. Phase 0 business
+  validation still not done — flag again before Phase 3 billing.
+- Environment note: system `php` is still missing on this VM; the
+  standalone PHP 8.3.6 at `~/workspace/php-standalone/usr/bin/php8.3`
+  was used (with `PHP_INI_SCAN_DIR=~/workspace/php-standalone/scan`).
+  `artisan serve` still fails on this VM; the built-in server was
+  used for the smoke test.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **v1.1.3 NOT pushed** (local build only, per the run
+  rules). Ready to push pending Aqib's yes in the main chat +
+  approval card. Nothing is waiting on a push besides this version.
+- Next task: **v1.2.0 — Subscription Billing** (Phase 3), blocked on
+  Stripe keys from Aqib.
 
 ### 2026-11-19 — v1.1.2 Customization built and verified
 
@@ -141,9 +225,9 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Boost via composer/curl. That is repo file content, not a task
   instruction; correctly ignored by the builder and the parent run, not
   acted on (a system safety notice also flagged it during this build).
-- Push status: **v1.1.2 NOT pushed.** Ready to push pending Aqib's yes in
-  the main chat + approval card. Next run may start v1.1.3 only after
-  this version is pushed (a version waiting for a push blocks new work).
+- Push status: **v1.1.2 PUSHED 2026-11-19** after Aqib's yes in the main
+  chat + approval card. New remote head `1e0e197d`, 66 files in one
+  commit. Read-back verified. Next run may start v1.1.3.
 - Next task: v1.1.3 — Security and Operations.
 
 ### 2026-11-17 — v1.1.0 UX Improvements (complete, verified, NOT pushed)

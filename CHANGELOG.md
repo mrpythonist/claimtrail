@@ -3,6 +3,109 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.1.3] - 2026-11-20
+
+Phase 2, Security and Operations. One new permission
+(`manage-security`: owner, admin).
+
+### Added
+
+- Tenant isolation audit: an automated sweep
+  (`TenantIsolationAuditTest`) attempts cross-tenant access (show,
+  update, delete, plus nested resources: events and evidence under
+  another organization's shipment, evidence attached across
+  organizations) across every API resource and asserts 404. The
+  code audit found no unscoped queries: every tenant-owned model
+  uses the `BelongsToOrganization` global scope, and the five
+  `withoutGlobalScope` call sites are legitimate (invitation
+  acceptance, queued jobs, queue monitoring). Findings in
+  docs/SECURITY.md.
+- RBAC security audit: a role-matrix test
+  (`RbacAuditTest`) asserts viewer cannot write, billing staff
+  cannot manage the organization or members, dispatcher limits
+  (cannot delete events, review claims, read audit logs or
+  operations), and operations managers cannot manage security;
+  plus a sweep over every registered API route asserting that every
+  route except the six documented public ones requires
+  `auth:sanctum` and every tenant-scoped route resolves an
+  organization. The matrix is documented in docs/SECURITY.md.
+- File access security review: evidence and package downloads now
+  refuse storage keys that escape their prefix (`StorageKey::isSafe`,
+  checked on every download and preview). Tests cover
+  unauthenticated 401, cross-tenant 404, traversal attempts
+  refused, and disallowed upload types rejected by content
+  (`FileAccessSecurityTest`). Downloads were already behind auth,
+  tenant checks, and policy gates; the traversal guard is new.
+- Backup configuration: `config/backup.php`, `backup:create`
+  artisan command (daily 02:00 schedule), and `GET`/`POST
+  /backups`, `GET /backups/{backup}`, `POST
+  /backups/{backup}/verify`. A backup copies the whole database
+  plus every evidence and package file, with a manifest.json of
+  SHA-256 checksums. SQLite file databases are fully supported;
+  an in-memory database and a missing `pg_dump` fail with a clear
+  message instead of a fake success. Runs are recorded in
+  `backup_runs` (status running/completed/failed, size, checksum,
+  restore timestamp).
+- Restore testing: `backup:restore` verifies every manifest
+  checksum before touching live data and refuses on any mismatch;
+  `BackupRestoreTest` creates a backup, wipes the database and a
+  stored file, restores, and asserts the data and the file bytes
+  are back. The PostgreSQL restore path (`pg_restore`) is
+  implemented but never run against live PostgreSQL on this VM.
+- Data retention policies: `config/retention.php` defaults (audit
+  logs 365 days, notifications 90, job executions 30, failed
+  documents 30, security events 180; 0 keeps forever),
+  per-organization overrides via `GET`/`PUT /retention`, and
+  `retention:purge` with `--dry-run` (weekly Sunday 03:00
+  schedule). Purging is tenant-scoped, writes one `retention.purged`
+  audit row per organization, and never deletes ready claim
+  packages.
+- Production deployment hardening: the security-headers middleware
+  now also sends a strict Content-Security-Policy and HSTS (when
+  the request is HTTPS or HSTS is enabled, on by default in
+  production); session cookies are secure by default in
+  production; and a new `security:check` command (with `--json`)
+  and `GET /security/check` report ten production-readiness
+  checks (APP_DEBUG, APP_KEY, APP_URL HTTPS, session cookies,
+  Sanctum token expiration, evidence disk, CORS origin, backup
+  freshness, mail and queue drivers) with a failing exit code.
+- Incident response documentation: `docs/INCIDENT-RESPONSE.md`
+  (severity levels, first-response steps, containment, eradication
+  and recovery, rollback, data-breach steps, communication
+  templates, on-call placeholders). Failed logins and
+  authorization denials are now recorded as security events
+  (`security_events` table, `GET /security/events`), and surfaced
+  on the new Security settings hub.
+- Security settings hub (`/settings/security`, owner/admin only):
+  production-readiness check results, backup status with create
+  and verify actions, retention settings, recent security events,
+  and links to the security, incident-response, and operations
+  runbooks. New `canViewSecurity` permission helper and
+  `src/lib/security.ts` typed client.
+
+### Changed
+
+- API version is now 1.1.3 (backend `APP_VERSION`, frontend
+  `package.json`, shell and landing page). OpenAPI grows from 91
+  to 99 paths (all routes documented).
+- `docs/SECURITY.md` now carries the v1.1.3 audit findings, the
+  role matrix, the hardening notes, and the updated open items
+  (backups and retention are done; token lifetime and upload
+  malware scanning are still open).
+
+### Verification
+
+- Backend 382 tests (1902 assertions), all passing; frontend 241
+  tests, all passing; `npm run build` succeeds (37/37 pages,
+  including `/settings/security`); `tsc --noEmit` clean; lint
+  clean. `migrate:fresh` passes with the 2 new migrations.
+- Still unverified (standing blockers, unchanged): browser E2E,
+  live Postgres, live Redis, Docker, real mailer. v1.1.3-specific
+  notes: the PostgreSQL backup/restore paths were never run
+  against live PostgreSQL (no server or client tools on this VM);
+  queue monitoring is still database-driver only; the errors
+  endpoint still reads the local log file.
+
 ## [1.1.2] - 2026-11-19
 
 Phase 2, Customization (backend only; no frontend was built for

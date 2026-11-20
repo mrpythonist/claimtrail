@@ -13,9 +13,11 @@ use Symfony\Component\HttpFoundation\Response;
  * nosniff stops browsers from guessing a content type for a
  * response, DENY keeps the app out of frames entirely, and the
  * permissions policy disables browser features this API never uses.
- * No Content-Security-Policy is set here: the API serves no HTML
- * of its own (the only HTML page is the default Laravel welcome
- * view), and CSP belongs on the Next.js frontend instead.
+ *
+ * v1.1.3 adds a strict Content-Security-Policy (the API serves no
+ * HTML, so nothing may load and it may not be framed) and HSTS,
+ * sent when the request arrived over HTTPS or when it is enabled
+ * in config/security.php (on by default in production).
  */
 class SecurityHeaders
 {
@@ -30,6 +32,17 @@ class SecurityHeaders
             'Permissions-Policy',
             'camera=(), microphone=(), geolocation=()'
         );
+        $response->headers->set('Content-Security-Policy', (string) config('security.csp'));
+
+        if ($request->secure() || config('security.hsts.enabled')) {
+            $hsts = 'max-age='.(int) config('security.hsts.max_age', 31536000);
+
+            if (config('security.hsts.include_subdomains')) {
+                $hsts .= '; includeSubDomains';
+            }
+
+            $response->headers->set('Strict-Transport-Security', $hsts);
+        }
 
         return $response;
     }

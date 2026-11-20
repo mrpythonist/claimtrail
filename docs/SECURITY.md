@@ -142,14 +142,22 @@ product is compliant with any regulation; no compliance is claimed.
   from its callers, and now also enforces an allowlist that rejects
   anything else.
 
-### Security headers (Milestone 5)
+### Security headers (Milestone 5, extended in v1.1.3)
 
 - A global middleware (`App\Http\Middleware\SecurityHeaders`) sets
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, and a minimal `Permissions-Policy`
   (camera, microphone, geolocation all disabled) on every API
-  response. No Content-Security-Policy is set on the API: it serves
-  no HTML of its own, so CSP belongs on the Next.js frontend.
+  response. Since v1.1.3 it also sends a strict
+  Content-Security-Policy (`default-src 'none'; frame-ancestors
+  'none'; base-uri 'none'`) and HSTS (max-age 31536000,
+  includeSubDomains) when the request is HTTPS or HSTS is enabled
+  in config (on by default in production). The API serves no HTML
+  of its own, so the CSP is a defense-in-depth header; the Next.js
+  frontend still needs its own CSP.
+- Session cookies are secure by default in production
+  (`SESSION_SECURE_COOKIE` defaults to true when `APP_ENV` is
+  production).
 - CORS allows only the configured frontend origin (`FRONTEND_URL`,
   default `http://localhost:3000`), with credentials disabled. It is
   never `*` with credentials.
@@ -176,6 +184,79 @@ product is compliant with any regulation; no compliance is claimed.
   git-ignored and never pushed.
 - The demo seeder credentials are development-only and documented as such.
 
+## Security audits (v1.1.3)
+
+These audits ran in v1.1.3 and are now automated tests, so they
+re-run on every suite run. No gaps were found; the findings below
+are what the audits prove.
+
+### Tenant isolation audit
+
+`TenantIsolationAuditTest` attempts cross-tenant access on every
+API resource and asserts 404: shipments, events, evidence, claims,
+deadlines, packages, carriers, requirements, custom fields,
+deadline settings, export templates, evidence templates, saved
+views, and notifications, plus nested cases (an event under
+another organization's shipment, attaching evidence across
+organizations returns 422, detaching returns 404) and a non-member
+viewing an organization (403). Every resource returned 404 for
+cross-tenant direct-id access.
+
+The code audit found no unscoped queries. Every tenant-owned
+model uses the `BelongsToOrganization` global scope, and
+controllers do an explicit organization check because
+route-model binding runs before the organization middleware sets
+the current organization — the scope is defense in depth, not
+the only guard. The five models without the trait are legitimate
+globals: `ClaimSequence` (scoped by explicit queries),
+`EvidenceTemplateItem` (child of a template), `JobExecution`
+(global), `Organization`, and `User`. The `withoutGlobalScope`
+call sites are legitimate: invitation acceptance, queued jobs,
+and queue monitoring.
+
+### RBAC audit
+
+`RbacAuditTest` asserts the role matrix on sensitive endpoints:
+
+| Role | Restrictions verified |
+| ---- | --------------------- |
+| viewer | cannot write anywhere |
+| billing staff | cannot manage the organization, members, or invitations |
+| dispatcher | cannot delete events, review claims, read audit logs, or view operations |
+| operations manager | cannot manage security (backups, retention, checks, events) |
+| admin | can manage security |
+
+The same test sweeps every registered API route and asserts that
+every route except the six documented public ones (health, auth
+register/login/forgot-password/reset-password, email verify)
+requires `auth:sanctum`, and that every tenant-scoped route
+resolves an organization. No unguarded endpoint was found.
+
+### File access review
+
+Evidence and generated-document downloads and previews were
+already behind auth, tenant checks, and policy gates, and uploads
+reject disallowed types by content (`mimes` rule). v1.1.3 adds a
+storage-key guard (`StorageKey::isSafe`): downloads and previews
+refuse keys that do not start with the expected prefix
+(`evidence/...` or `packages/...`) or that contain traversal
+segments. Tests (`FileAccessSecurityTest`) cover unauthenticated
+401, cross-tenant 404, traversal attempts refused, and disallowed
+upload types rejected. There is no public storage URL: the
+evidence disk is private, and S3 access is by signed URLs that
+expire in 5 minutes.
+
+### Security events
+
+Failed logins and authorization denials are recorded in
+`security_events` and listed at `GET /security/events` (owner,
+admin). A failed login records the email only, never the
+password. A denial records the method and path. Failed logins
+have no organization (none is known yet) and are therefore not
+listed per organization; they are purged by the
+all-organizations retention run. Recording never throws: a
+logging failure must not break the request it is logging.
+
 ## Open review items
 
 These are known gaps, not oversights. Each needs a decision before the
@@ -188,9 +269,11 @@ product handles real customer data.
    Milestone 1, but an httpOnly cookie session (Sanctum SPA mode) should
    be evaluated before production.
 3. **Security headers.** API responses now carry nosniff, DENY,
-   no-referrer, and a minimal Permissions-Policy (Milestone 5). No
-   Content-Security-Policy or HSTS is configured yet. Add them at the
-   nginx or Next.js config level before production.
+   no-referrer, a minimal Permissions-Policy, a strict
+   Content-Security-Policy, and HSTS (v1.1.3), and session cookies
+   are secure by default in production. The Next.js frontend still
+   needs its own CSP and HSTS at the nginx or Next.js config
+   level before production.
 4. **Upload scanning.** Uploaded files are type-checked by content but
    not scanned for malware. Add antivirus scanning before the product
    handles uploads from untrusted users.
@@ -200,8 +283,12 @@ product handles real customer data.
 7. **Dependency scanning.** No automated vulnerability scanning is wired
    up yet (Dependabot or equivalent, plus `composer audit` / `npm audit`
    in CI).
-8. **Backups and deletion.** No backup, retention, or account-deletion
-   procedures exist yet.
+8. **Backups and retention.** Done in v1.1.3: daily backups with
+   checksum verification, weekly retention purge with per-organization
+   overrides, and a restore procedure. Still open: account deletion
+   (no self-service delete or data-export flow yet) and the
+   PostgreSQL backup/restore paths, which were never run against
+   live PostgreSQL.
 9. **Production secrets.** The Docker Compose defaults are development
    values. Production needs generated secrets managed outside the
    repository.

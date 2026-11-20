@@ -276,14 +276,16 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.1.3 — Security and Operations
 
-- [ ] Tenant isolation audit.
-- [ ] RBAC security audit.
-- [ ] File access security review.
-- [ ] Backup configuration.
-- [ ] Restore testing.
-- [ ] Data retention policies.
-- [ ] Production deployment hardening.
-- [ ] Incident response documentation.
+> Verified 2026-11-20 (daily build run): backend 382 passed (1902 assertions), frontend 241 passed, `npm run build` succeeds (37/37 pages, incl. /settings/security), `tsc --noEmit` clean, lint clean, fresh-DB `migrate:fresh` passes (2 new migrations: backup_runs, security_events), live HTTP smoke test over the built-in server passed (security check admin 200 / viewer 403 / unauthenticated 401, backup create 201 + verify ok:true on a file SQLite DB, retention get/put with override applied, failed login + denial recorded as security events, cross-tenant backup 404, CSP header present, `security:check` CLI 9 pass / 1 warn, `retention:purge --dry-run` deletes nothing). Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer. v1.1.3-specific: the PostgreSQL backup/restore paths (`pg_dump`/`pg_restore`) were never run against live PostgreSQL (no server or client tools on this VM); queue monitoring is still database-driver only; the errors endpoint still reads the local log file. Phase 0 business validation still not done — flag again before Phase 3 billing.
+
+- [x] Tenant isolation audit.
+- [x] RBAC security audit.
+- [x] File access security review.
+- [x] Backup configuration.
+- [x] Restore testing.
+- [x] Data retention policies.
+- [x] Production deployment hardening.
+- [x] Incident response documentation.
 
 ---
 

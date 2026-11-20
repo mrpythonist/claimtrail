@@ -646,6 +646,39 @@ Unique `(organization_id, resource_type, name)`. Index
 | ------ | ---- | ----- |
 | custom_field_values | json, nullable | Values keyed by custom field key, validated against the active definitions |
 
+## Tables added in v1.1.3
+
+### backup_runs
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, primary key | |
+| organization_id | uuid, nullable, FK organizations | Null for scheduled runs |
+| driver | string | `sqlite` or `pgsql` |
+| status | string | `running`, `completed`, `failed` |
+| path | string, nullable | Storage path of the backup directory; never exposed by the API |
+| size_bytes | integer, nullable | Total bytes of the stored backup |
+| checksum | string, nullable | SHA-256 of the database copy |
+| error_message | text, nullable | Failure reason when status is `failed` |
+| restored_at | timestamp, nullable | Set when a restore from this run succeeds |
+| created_at, updated_at | timestamps | |
+
+Index `(organization_id, created_at)`.
+
+### security_events
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| id | uuid, primary key | |
+| organization_id | uuid, nullable, FK organizations | Null for failed logins (no organization is known yet) |
+| user_id | integer, nullable, FK users | The authenticated user when one exists |
+| type | string | `login.failed`, `authorization.denied` |
+| ip_address | string, nullable | Request IP when one exists |
+| metadata | json, nullable | Email for a failed login; method and path for a denial |
+| created_at, updated_at | timestamps | |
+
+Index `(organization_id, created_at)`.
+
 ## Tables planned for later milestones
 
 None. Milestone 5 (hardening and release) adds no new tables.

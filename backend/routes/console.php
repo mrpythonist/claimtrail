@@ -17,3 +17,13 @@ Schedule::command('claimtrail:refresh-deadline-statuses')->hourly();
 // did not) are swept weekly. The command only touches objects
 // older than one hour, so in-flight uploads are safe.
 Schedule::command('claimtrail:cleanup-orphan-evidence')->weekly();
+
+// A full backup (database + stored files) is taken daily at
+// 02:00. The run is unattributed (no organization); an operator
+// can also trigger one from the security page.
+Schedule::command('backup:create')->dailyAt('02:00');
+
+// Records older than the configured retention are purged
+// weekly on Sunday at 03:00. The command is tenant-scoped per
+// organization and writes one audit row per organization.
+Schedule::command('retention:purge')->weeklyOn(0, '03:00');

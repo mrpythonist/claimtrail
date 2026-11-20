@@ -242,3 +242,53 @@ from them instead of inventing new patterns.
   write endpoints. Notification preferences were verified
   pre-existing and were not rebuilt in this version.
 - No frontend was built for customization in v1.1.2.
+
+## Security and Operations (v1.1.3)
+
+- A new permission, `manage-security` (owner, admin), guards
+  backups, retention, the production-readiness check, and the
+  security event log. The Security settings hub
+  (`/settings/security`) is the frontend surface for all four.
+- Backups live in `BackupService`: a run copies the whole database
+  plus every evidence and package file and writes a manifest of
+  SHA-256 checksums. SQLite file databases are supported; the
+  PostgreSQL path shells out to `pg_dump`/`pg_restore` and fails
+  with a clear message when the binary is missing. Restores verify
+  the manifest first and refuse on any mismatch. Runs are recorded
+  in `backup_runs`. See `docs/OPERATIONS.md`.
+- Retention lives in `RetentionService`: config defaults in
+  `config/retention.php` (audit logs 365 days, notifications 90,
+  job executions 30, failed documents 30, security events 180;
+  0 keeps forever), per-organization overrides in organization
+  settings (`retention.*`), a weekly `retention:purge` with
+  `--dry-run`, and one `retention.purged` audit row per
+  organization. Ready claim packages are never purged.
+- Security events (`security_events`) record failed logins
+  (`login.failed`, email only, never the password) and
+  authorization denials (`authorization.denied`, with method and
+  path). Denials are recorded in the exception render callback in
+  `bootstrap/app.php`, because Laravel's internal dont-report list
+  means a report callback never fires for authorization
+  exceptions. Recording never throws.
+- `SecurityCheckService` runs ten production-readiness checks
+  (APP_DEBUG, APP_KEY, APP_URL, session cookies, Sanctum token
+  expiration, evidence disk, CORS origin, backup freshness, mail
+  driver, queue driver) and reports pass/warn/fail per check plus
+  an overall status. It is exposed as `security:check` (exit 1 on
+  any failure) and `GET /security/check`. The check reads
+  `config('app.env')`, not `app()->environment()`, so test
+  overrides are honored.
+- The security-headers middleware now also sends a strict
+  Content-Security-Policy (`default-src 'none'; frame-ancestors
+  'none'; base-uri 'none'`) and HSTS when the request is HTTPS or
+  HSTS is enabled (on by default in production). Session cookies
+  are secure by default in production.
+- File downloads are guarded by `StorageKey::isSafe`, which
+  rejects storage keys that escape their prefix (evidence or
+  packages) or contain traversal segments.
+- Audit sweeps: `TenantIsolationAuditTest` asserts 404 on
+  cross-tenant access for every API resource; `RbacAuditTest`
+  asserts the role matrix and that every non-public API route
+  requires `auth:sanctum` and every tenant-scoped route resolves
+  an organization. Findings are in `docs/SECURITY.md`; the
+  incident-response procedure is in `docs/INCIDENT-RESPONSE.md`.

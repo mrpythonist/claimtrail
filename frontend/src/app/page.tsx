@@ -129,7 +129,7 @@ export default function Home() {
       <footer className="border-t border-slate-200">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6">
           <p className="text-sm text-slate-500">
-            ClaimTrail v1.1.2. Transportation revenue recovery, done carefully.
+            ClaimTrail v1.1.3. Transportation revenue recovery, done carefully.
           </p>
           <nav className="flex gap-4 text-sm">
             <Link href="/privacy" className="text-slate-500 hover:text-slate-900">
