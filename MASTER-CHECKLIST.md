@@ -18,11 +18,28 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v0.1.0 — Market Research
 
-- [ ] Research trucking revenue leakage.
-- [ ] Identify missed accessorial charges.
-- [ ] Research target customer segments.
-- [ ] Document existing solutions.
-- [ ] Identify market opportunities.
+> Verified 2026-11-21 (daily build run): research document
+> `docs/validation/0.1.0-market-research.md` built from public sources
+> accessed 2026-11-21 (ATRI Sep 2024 detention study, DOT OIG ST2018019,
+> FMCSA census, ATA, accessorial rate guides, GetDockPay / Detention
+> Buddy / Tezify / TenTrucks public pages). No interviews and no primary
+> data in this version — that is v0.2.0's job; every willingness-to-pay
+> and sizing figure is labelled sourced vs. estimate in the document.
+> No code changed in this version; backend 382 + frontend 241 tests
+> re-run and passing, `npm run build` succeeds, confirming the repo is
+> still green at v1.1.3. One real defect caught by the verification:
+> the backend suite failed 4 SecurityCheckTest tests in a clean
+> checkout because phpunit.xml set no APP_KEY; fixed with a test-only
+> key in phpunit.xml (382 tests, 1902 assertions — the v1.1.3 counts).
+> One finding for a future version: GPS-stamped
+> mobile capture is the most valuable feature this research surfaced
+> and is not in any checklist version yet.
+
+- [x] Research trucking revenue leakage.
+- [x] Identify missed accessorial charges.
+- [x] Research target customer segments.
+- [x] Document existing solutions.
+- [x] Identify market opportunities.
 
 ### v0.2.0 — Customer Interviews
 

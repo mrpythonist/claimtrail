@@ -3,6 +3,45 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [0.1.0] - 2026-11-21
+
+Phase 0, Business Validation — Market Research. Research and
+documentation only; no code changed, app version stays 1.1.3.
+
+### Added
+
+- Market research document `docs/validation/0.1.0-market-research.md`:
+  trucking revenue leakage (ATRI Sep 2024: detention at 39.3% of stops,
+  135M+ hours, $15.1B in 2023; 94.5% of fleets charge detention but
+  fewer than 50% of invoices are paid; DOT OIG 2018: $1.1–1.3B/yr driver
+  earnings impact), missed accessorial charges with sourced rate ranges
+  (detention $50–$75/hr, layover $250–$350/day, TONU $200–$300, lumper
+  $150–$250, plus liftgate/tarp/hazmat/driver-assist/stops/redelivery),
+  target segments (FMCSA census: ~1.11M authorized-for-hire carriers,
+  66% single-truck, 92% five or fewer; ATA: $906B freight revenue 2024),
+  existing solutions (GetDockPay Pro $24.99/mo, Detention Buddy Pro
+  $34.99/yr, Tezify/TenTrucks TMS detention billing, dispatch services
+  as human substitutes), and market opportunities with TAM/SAM/SOM
+  labelled as estimates (SOM sketch: 10,000 paying orgs at $39/mo =
+  $4.7M ARR). Recommended beachhead, as a hypothesis for v0.2.0 to
+  test: dispatch agencies and 2–20 truck fleets running reefer or spot
+  freight. Key risks recorded: willingness to pay unproven against
+  $2.92–$24.99/mo driver apps, small-carrier churn, TMS absorption,
+  relationship fear, broker power.
+- Research finding for a future version: GPS-stamped mobile capture
+  (driver taps arrival/departure) is the most valuable feature this
+  research surfaced and is not in any checklist version yet; proposed
+  for a Phase 2/4 slot after validation.
+
+### Fixed
+
+- Test suite no longer depends on an ambient `APP_KEY`: the full
+  backend suite failed 4 `SecurityCheckTest` tests in a clean checkout
+  (no `.env` present) because `phpunit.xml` set no key. A fixed
+  test-only key is now set in `phpunit.xml`, so the suite is
+  self-contained. Verified: 382 tests, 1902 assertions, all passing —
+  the same counts as v1.1.3.
+
 ## [1.1.3] - 2026-11-20
 
 Phase 2, Security and Operations. One new permission

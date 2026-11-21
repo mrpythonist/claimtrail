@@ -6,33 +6,37 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.1.3 (Phase 2, Security and Operations).
+- **Last completed version:** v0.1.0 (Phase 0, Market Research).
+  App version stays 1.1.3 — Phase 0 work is research/docs, not code.
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `1e0e197d` (v1.1.2, pushed 2026-11-19 after Aqib's yes + approval).
-  v1.1.3 is built and verified locally only; **NOT pushed** — waiting for
-  Aqib's yes in the main chat + approval card.
-- **Tests at v1.1.3:** 382 backend (1902 assertions) + 241 frontend, all
-  passing. `npm run build` succeeds (37/37 pages). `tsc --noEmit` clean,
-  lint clean.
+  head `e6e7488d` (v1.1.3, pushed 2026-11-20 after Aqib's yes + approval).
+  v0.1.0 is complete and verified locally, NOT pushed (push rule).
+- **Tests at v0.1.0:** 382 backend (1902 assertions) + 241 frontend, all
+  passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.2.0 — Subscription Billing** (Phase 3, Commercial Launch): Stripe
-integration, subscription plans, monthly/annual billing, checkout, free
-trials, upgrades/downgrades, renewals, cancellations, invoice history,
-failed payment handling, Stripe webhooks, billing portal. **Blocked on
-input: Stripe keys from Aqib.** Per the standing rules, report the block
-once in the main chat; the next run decides whether to move to the next
-unblocked version.
+**Phase 0 — Business Validation, v0.2.0 Customer Interviews**
+(questions, targets, 15+ interviews, pain points, workflow examples).
+Interviews need real people — Aqib's help finding interviewees, or a
+decision on how to reach carriers/dispatchers, will be needed; do not
+fabricate them. Then v0.3.0 Workflow Validation, v0.4.0 Competitor
+Analysis (the 2026-11-14 DockClock competitor check is a head start),
+v0.5.0 Pricing Validation.
+**v1.2.0 — Subscription Billing** (Phase 3) stays queued after Phase 0:
+still blocked on Stripe keys from Aqib, and the checklist requires the
+Phase 0 outcome before billing work.
 
 ## Blockers (recorded, not skipped)
 
 **Disposition 2026-11-18:** Aqib accepted blockers 1-5 as documented
 limitations (main chat, ~10:52 PKT). They stay listed here as known
-unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
+unverified items, not as gates. Blocker 6 (Phase 0) DECIDED 2026-11-20:
+Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
+2026-11-21 run.
 
 1. **Live PostgreSQL verification.** Migrations never ran against real
    Postgres; all tests used SQLite. Needs a machine or VPS with Postgres.
@@ -51,10 +55,12 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
    with a fake mailer only; the configured mailer is `log`. Needs real SMTP
    credentials (Aqib supplies them) and a live send test. Unblocks: full
    verification of email notifications and automated reminders.
-6. **Phase 0 validation never done.** No customer interviews, no pilot
-   customers, no validated willingness to pay. The checklist's starting
-   point is v1.0.1, so building continues, but this is a business risk
-   before Phase 3 billing work. Aqib's call.
+6. **Phase 0 validation — DECIDED 2026-11-20, work starting.** No
+   customer interviews, no pilot customers, no validated willingness
+   to pay yet. Aqib chose Phase 0 validation next (over pausing or
+   billing first); the daily runs now work through v0.1.0–v0.5.0
+   before Phase 3 billing. v1.2.0 billing stays blocked on Stripe
+   keys as well.
 
 ## Standing rules for daily runs
 
@@ -78,6 +84,72 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-21 — v0.1.0 Market Research built and verified
+
+- Gate check passed first: remote head on GitHub is `e6e7488d`,
+  matching the recorded v1.1.3 head, so no version was waiting to be
+  pushed.
+- Built all 5 v0.1.0 items as `docs/validation/0.1.0-market-research.md`
+  (plus a `docs/validation/README.md` index): revenue leakage (ATRI
+  Sep 2024, 2023 data: detention at 39.3% of stops, 135M+ hours,
+  $15.1B — $3.6B direct + $11.5B lost productivity; 94.5% of fleets
+  charge detention but fewer than 50% of invoices are paid; DOT OIG
+  2018: $1.1–1.3B/yr driver earnings impact; OOIDA 2023: 72% of
+  owner-operators waited 2+ hours weekly), missed accessorial charges
+  with sourced rate ranges (detention $50–$75/hr, layover $250–$350/day,
+  TONU $200–$300, lumper $150–$250, plus liftgate/tarp/hazmat/
+  driver-assist/stops/redelivery), target segments (FMCSA census:
+  ~1.11M authorized-for-hire carriers, 66% single-truck, 92% five or
+  fewer; ATA: $906B freight revenue 2024), existing solutions
+  (GetDockPay Pro $24.99/mo, Detention Buddy Pro $34.99/yr, Tezify/
+  TenTrucks TMS detention billing, dispatch services as human
+  substitutes), and market opportunities with TAM/SAM/SOM labelled as
+  estimates (SOM sketch: 10,000 paying orgs at $39/mo = $4.7M ARR).
+  Recommended beachhead, as a hypothesis for v0.2.0 to test: dispatch
+  agencies and 2–20 truck fleets running reefer or spot freight.
+  Risks recorded: willingness to pay unproven against $2.92–$24.99/mo
+  driver apps, small-carrier churn, TMS absorption, relationship fear,
+  broker power. Every figure in the document is labelled sourced vs.
+  estimate; sources listed with access date 2026-11-21.
+- Research finding for a future version: GPS-stamped mobile capture
+  (driver taps arrival/departure) is the most valuable feature this
+  research surfaced and is not in any checklist version yet; proposed
+  for a Phase 2/4 slot after validation.
+- Verification: no code changed in this version (docs only), but the
+  suites were re-run to confirm the repo is still green: backend
+  **382 passed (1902 assertions)**, frontend **241 passed** across 24
+  files, `npm run build` succeeds (37/37 pages) — identical counts to
+  v1.1.3. One real defect caught by the verification and fixed in this
+  version: the backend suite failed 4 `SecurityCheckTest` tests in a
+  clean checkout (no `.env` present) because `phpunit.xml` set no
+  `APP_KEY` — the suite depended on an ambient key. Fixed with a
+  test-only key in `backend/phpunit.xml`; the suite is now
+  self-contained. (An earlier stray `.env` created by a `cp` during
+  this run was removed again; the repo never had a committed `.env`.)
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. Phase 0: no interviews,
+  no pilot customers, no validated willingness to pay yet — v0.2.0's
+  job, and it needs real people; Aqib's help reaching carriers or
+  dispatchers will be needed.
+- Environment note: system `php` is present on this VM now (PHP 8.3.6,
+  built Nov 18 2026) — the standalone PHP at
+  `~/workspace/php-standalone/` was not needed this run. `artisan
+  serve` was not used; no live HTTP smoke test was needed for a
+  docs-only version (no behaviour changed), but the security check was
+  exercised via the test suite.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **v0.1.0 COMPLETE and VERIFIED, NOT pushed.** Awaiting
+  Aqib's yes in the main chat + approval card. 6 files: 2 new docs
+  (`docs/validation/0.1.0-market-research.md`,
+  `docs/validation/README.md`), `CHANGELOG.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md`, `backend/phpunit.xml` (test-only APP_KEY).
+  Next run may start v0.2.0 once this version is pushed.
+- Next task: **v0.2.0 — Customer Interviews** (needs real people;
+  do not fabricate interviews).
 
 ### 2026-11-20 — v1.1.3 Security and Operations built and verified
 
@@ -153,11 +225,14 @@ unverified items, not as gates. Blocker 6 (Phase 0) is still undecided.
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **v1.1.3 NOT pushed** (local build only, per the run
-  rules). Ready to push pending Aqib's yes in the main chat +
-  approval card. Nothing is waiting on a push besides this version.
-- Next task: **v1.2.0 — Subscription Billing** (Phase 3), blocked on
-  Stripe keys from Aqib.
+- Push status: **v1.1.3 PUSHED 2026-11-20** after Aqib's yes in the main
+  chat + approval card. New remote head `e6e7488d`, 63 files in one
+  commit. Read-back verified (commit file list matches the manifest
+  exactly). Next run may start the next version once its direction is
+  decided (see the Phase 0 / pause / billing decision).
+- Next task: **Phase 0 — Business Validation, v0.1.0 Market Research**
+  (Aqib chose Phase 0 next on 2026-11-20; v1.2.0 billing stays queued
+  after it, still blocked on Stripe keys).
 
 ### 2026-11-19 — v1.1.2 Customization built and verified
 
