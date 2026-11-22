@@ -51,11 +51,37 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v0.3.0 — Workflow Validation
 
-- [ ] Document shipment-to-claim workflow.
-- [ ] Define claim lifecycle.
-- [ ] Define evidence requirements.
-- [ ] Document deadline handling.
-- [ ] Define financial terminology.
+> Verified 2026-11-22 (daily build run): research document
+> `docs/validation/0.3.0-workflow-validation.md` (8,621 words) built
+> from the ClaimTrail code as read 2026-11-22 plus public trade
+> sources accessed 2026-11-22 (listed in the document §9). Every
+> app-behaviour claim was spot-checked against the code by the parent
+> run: the 10-status transition table matches `ClaimStatus.php`
+> exactly; readiness returns `ready` with zero requirements
+> (`ReadinessService.php`); the deadline clock runs from claim
+> creation (`ClaimController.php`, `applyDeadlineDefault`); the seven
+> seeded event categories match `EventCategorySeeder.php`; payment
+> only via record-payment from accepted/partially accepted, rejection
+> and pre-submission close both require a reason
+> (`ClaimTransitionService.php`); deadline comparisons use the
+> deadline's own timezone (`DeadlineStatusService.php`); v0.1.0
+> figures reused (75% billed × 55% paid = 41% collected; 67% of
+> carriers use 2-hour free time). No code changed in this version;
+> backend 382 + frontend 241 tests re-run and passing, `npm run
+> build` succeeds (37/37 pages), confirming the repo is still green
+> at v1.1.3. The document records 14 app-vs-workflow gaps (no
+> submission channel, no GPS/ELD capture, deadline from creation not
+> delivery, no default evidence requirements, accepted-but-unpaid has
+> no follow-up state, one claim per event, evidence on claims not
+> events, and more) and 14 open questions for v0.2.0 interviews.
+> No interviews, no pilot customers, no primary data — that is
+> v0.2.0's job, still deferred pending Aqib's help with outreach.
+
+- [x] Document shipment-to-claim workflow.
+- [x] Define claim lifecycle.
+- [x] Define evidence requirements.
+- [x] Document deadline handling.
+- [x] Define financial terminology.
 
 ### v0.4.0 — Competitor Analysis
 

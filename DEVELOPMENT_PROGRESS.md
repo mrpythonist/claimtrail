@@ -6,12 +6,13 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v0.1.0 (Phase 0, Market Research).
+- **Last completed version:** v0.3.0 (Phase 0, Workflow Validation).
   App version stays 1.1.3 — Phase 0 work is research/docs, not code.
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `e6e7488d` (v1.1.3, pushed 2026-11-20 after Aqib's yes + approval).
-  v0.1.0 is complete and verified locally, NOT pushed (push rule).
-- **Tests at v0.1.0:** 382 backend (1902 assertions) + 241 frontend, all
+  head `707fa462` (v0.1.0, pushed 2026-11-21 after Aqib's yes + approval).
+  **v0.3.0 is complete and verified but NOT yet pushed** — it is ready
+  to push pending Aqib's yes in the main chat.
+- **Tests at v0.3.0:** 382 backend (1902 assertions) + 241 frontend, all
   passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
@@ -19,13 +20,14 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**Phase 0 — Business Validation, v0.2.0 Customer Interviews**
-(questions, targets, 15+ interviews, pain points, workflow examples).
-Interviews need real people — Aqib's help finding interviewees, or a
-decision on how to reach carriers/dispatchers, will be needed; do not
-fabricate them. Then v0.3.0 Workflow Validation, v0.4.0 Competitor
-Analysis (the 2026-11-14 DockClock competitor check is a head start),
-v0.5.0 Pricing Validation.
+**Phase 0 — Business Validation, v0.4.0 Competitor Analysis**
+(research competing products, compare features and pricing, identify
+product gaps, define ClaimTrail differentiation; the 2026-11-14
+DockClock competitor check is a head start). **v0.2.0 Customer
+Interviews stays DEFERRED, not dropped:** Aqib said 2026-11-21 to
+skip what needs him right now, and interviews need his help reaching
+carriers/dispatchers. It returns to the front of the queue when he is
+ready to do outreach. Then v0.5.0 Pricing Validation.
 **v1.2.0 — Subscription Billing** (Phase 3) stays queued after Phase 0:
 still blocked on Stripe keys from Aqib, and the checklist requires the
 Phase 0 outcome before billing work.
@@ -85,6 +87,75 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
 
 ## Daily log
 
+### 2026-11-22 — v0.3.0 Workflow Validation built and verified
+
+- Gate check passed first: remote head on GitHub is `707fa462`,
+  matching the recorded v0.1.0 head, so no version was waiting to be
+  pushed.
+- Built all 5 v0.3.0 items as `docs/validation/0.3.0-workflow-validation.md`
+  (8,621 words, plus a `docs/validation/README.md` index update marking
+  v0.3.0 Done and correcting v0.2.0 to Deferred): the 10-stage
+  shipment-to-claim workflow (load booked through payment/closure,
+  each stage with real-world action, app record, and app status); the
+  claim lifecycle (all 10 statuses, transition table transcribed from
+  `ClaimStatus.php`, enforced rules: payment only via record-payment,
+  rejection needs a reason, pre-submission close needs a reason,
+  submitted is a one-way door); evidence requirements (app mechanics
+  plus a recommended required/recommended matrix per event type,
+  labelled [hypothesis]); deadline handling (real-world 24-48h norm
+  and 30-90 day contractual windows, app mechanics: scope precedence,
+  hourly refresh, timezone-aware comparison, 7-day default reminder
+  window); and a 20-term financial glossary with v0.1.0 rate ranges
+  kept as reference and wider 2026 trade-guide ranges flagged as
+  unresolved differences. 14 open questions for v0.2.0 interviews,
+  14 app-vs-workflow gaps, validation status, and sources with access
+  date 2026-11-22 (16 trade/vendor sources plus the code itself).
+- Most significant gaps recorded: no submission channel (`submitted`
+  is a hand-recorded status, the PDF package is never sent); no
+  GPS/ELD time capture (all times typed in); deadline clock starts at
+  claim creation, not delivery; no deadline when the org configures no
+  setting; no default evidence requirements, so readiness reports
+  100%/ready for a claim with no evidence; accepted-but-unpaid has no
+  follow-up state; no shipment cancellation state despite TONU; one
+  claim links to at most one event; evidence attaches to claims, not
+  events; a single file cannot serve two categories (signed BOL as
+  POD); readiness counts files, not quality; no rate-confirmation
+  parsing or amount calculation; no broker-response tracking beyond
+  the status; submission cannot be corrected without rejection first.
+- Verification (all run by the parent run, independently of the
+  builder): every app-behaviour claim spot-checked against the code
+  (transition table, readiness zero-total, deadline clock, seven
+  seeded categories, payment/rejection/close rules, timezone handling,
+  v0.1.0 figures 75%/55%/41% and 67% free time, backdatable
+  `submitted_at`, `submit_within_days` 1-365) — all confirmed, no
+  corrections needed. No code changed in this version (docs only),
+  but the suites were re-run to confirm the repo is still green:
+  backend **382 passed (1902 assertions)**, frontend **241 passed**,
+  `npm run build` succeeds (37/37 pages) — identical counts to
+  v1.1.3. No em dashes in the document (grep-verified).
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. Phase 0: no interviews,
+  no pilot customers, no validated willingness to pay yet — v0.2.0's
+  job, and it needs real people; Aqib's help reaching carriers or
+  dispatchers will be needed.
+- Environment note: system `php` is present on this VM (PHP 8.3.6) —
+  the standalone PHP at `~/workspace/php-standalone/` was not needed
+  this run. No live HTTP smoke test was needed for a docs-only version
+  (no behaviour changed).
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **v0.3.0 COMPLETE and VERIFIED, NOT pushed.** Ready to
+  push pending Aqib's yes in the main chat. 2 files in one commit
+  (`docs/validation/0.3.0-workflow-validation.md` new,
+  `docs/validation/README.md` updated). Next run must gate-check the
+  remote head first; if v0.3.0 is still unpushed, it must not start
+  v0.4.0.
+- Next task: **v0.4.0 — Competitor Analysis.** v0.2.0 Customer
+  Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
+  interviews.
+
 ### 2026-11-21 — v0.1.0 Market Research built and verified
 
 - Gate check passed first: remote head on GitHub is `e6e7488d`,
@@ -142,14 +213,13 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **v0.1.0 COMPLETE and VERIFIED, NOT pushed.** Awaiting
-  Aqib's yes in the main chat + approval card. 6 files: 2 new docs
-  (`docs/validation/0.1.0-market-research.md`,
-  `docs/validation/README.md`), `CHANGELOG.md`, `MASTER-CHECKLIST.md`,
-  `DEVELOPMENT_PROGRESS.md`, `backend/phpunit.xml` (test-only APP_KEY).
-  Next run may start v0.2.0 once this version is pushed.
-- Next task: **v0.2.0 — Customer Interviews** (needs real people;
-  do not fabricate interviews).
+- Push status: **v0.1.0 PUSHED 2026-11-21** after Aqib's yes in the main
+  chat + approval card. New remote head `707fa462`, 6 files in one
+  commit. Read-back verified. Next run may start v0.2.0.
+- Next task: **v0.3.0 — Workflow Validation.** v0.2.0 Customer Interviews
+  DEFERRED 2026-11-21 per Aqib ("skip what needs me right now") — it
+  needs his help reaching carriers/dispatchers and returns when he is
+  ready to do outreach; do not fabricate interviews.
 
 ### 2026-11-20 — v1.1.3 Security and Operations built and verified
 
