@@ -85,10 +85,36 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v0.4.0 — Competitor Analysis
 
-- [ ] Research competing products.
-- [ ] Compare features and pricing.
-- [ ] Identify product gaps.
-- [ ] Define ClaimTrail differentiation.
+> Verified 2026-11-23 (daily build run): research document
+> `docs/validation/0.4.0-competitor-analysis.md` (8,573 words) built
+> from public sources accessed 2026-11-23. Eleven competitor pages
+> opened and read in full (GetDockPay, DOCK2BILL + dispatchers page,
+> Detention Buddy, TruckersClaims, DetentionHero, Triporto, Eden One
+> product + pricing, Run Your Rig home + features); Tezify and
+> TenTrucks read via search results; Toro/StackViro/Vektor carried
+> from 2026-11-14. New finds: Triporto (driver app, early access),
+> Eden One (office product with detention workflow, founder $69/mo),
+> Run Your Rig (owner-operator TMS, AI rate-con parsing,
+> $9.99/driver/mo). Headline changes since November 14: GetDockPay
+> shipped v1.1 with direct deposit; TruckersClaims Pro priced at
+> $29/mo per truck but still not shipping; DOCK2BILL opened a
+> dispatcher partner program (20-25% commission); Tezify published
+> full pricing ($49-$799) and deeper detention docs. Feature and
+> pricing comparison tables (ClaimTrail vs 8 rivals), 10 product
+> gaps (no submission channel and no GPS capture are the most
+> important), differentiation revised to 4-5/10 at the carrier desk
+> (was 5-6/10) and 7-8/10 [estimate] at the multi-tenant agency
+> desk, plus 6 added interview questions for v0.2.0, pricing
+> questions for v0.5.0 (agency pricing, free tier too thin at 3
+> days) and 6 roadmap proposals (submission channel first). No code
+> changed in this version; backend 382 + frontend 241 tests
+> re-run and passing, `npm run build` succeeds (37/37 pages),
+> confirming the repo is still green at v1.1.3.
+
+- [x] Research competing products.
+- [x] Compare features and pricing.
+- [x] Identify product gaps.
+- [x] Define ClaimTrail differentiation.
 
 ### v0.5.0 — Pricing Validation
 

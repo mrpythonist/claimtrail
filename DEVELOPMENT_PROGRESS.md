@@ -6,13 +6,13 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v0.3.0 (Phase 0, Workflow Validation).
+- **Last completed version:** v0.4.0 (Phase 0, Competitor Analysis).
   App version stays 1.1.3 — Phase 0 work is research/docs, not code.
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `707fa462` (v0.1.0, pushed 2026-11-21 after Aqib's yes + approval).
-  **v0.3.0 is complete and verified but NOT yet pushed** — it is ready
-  to push pending Aqib's yes in the main chat.
-- **Tests at v0.3.0:** 382 backend (1902 assertions) + 241 frontend, all
+  head `6195b9f9` (v0.3.0, pushed 2026-11-22 after Aqib's yes + approval).
+  **v0.4.0 is complete and verified but NOT pushed yet** — see the
+  2026-11-23 log entry; it waits for Aqib's yes in the main chat.
+- **Tests at v0.4.0:** 382 backend (1902 assertions) + 241 frontend, all
   passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
@@ -20,14 +20,16 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**Phase 0 — Business Validation, v0.4.0 Competitor Analysis**
-(research competing products, compare features and pricing, identify
-product gaps, define ClaimTrail differentiation; the 2026-11-14
-DockClock competitor check is a head start). **v0.2.0 Customer
-Interviews stays DEFERRED, not dropped:** Aqib said 2026-11-21 to
-skip what needs him right now, and interviews need his help reaching
-carriers/dispatchers. It returns to the front of the queue when he is
-ready to do outreach. Then v0.5.0 Pricing Validation.
+**Phase 0 — Business Validation, v0.5.0 Pricing Validation**
+(research pricing models, validate willingness to pay, define
+initial pricing hypotheses, document subscription structure; uses
+the v0.4.0 pricing comparison and its open questions: agency
+pricing, the 3-day free tier, pay-when-it-bills-clean as an
+alternative). **v0.2.0 Customer Interviews stays DEFERRED, not
+dropped:** Aqib said 2026-11-21 to skip what needs him right now,
+and interviews need his help reaching carriers/dispatchers. It
+returns to the front of the queue when he is ready to do outreach.
+Then v0.6.0 Pilot Preparation.
 **v1.2.0 — Subscription Billing** (Phase 3) stays queued after Phase 0:
 still blocked on Stripe keys from Aqib, and the checklist requires the
 Phase 0 outcome before billing work.
@@ -86,6 +88,88 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-23 — v0.4.0 Competitor Analysis built and verified
+
+- Gate check passed first: remote head on GitHub is `6195b9f9`,
+  matching the recorded v0.3.0 head, so no version was waiting to be
+  pushed.
+- Built all 4 v0.4.0 items as `docs/validation/0.4.0-competitor-analysis.md`
+  (8,573 words, plus a `docs/validation/README.md` index update marking
+  v0.4.0 Done): 11 competitor pages opened and read in full
+  2026-11-23 (GetDockPay, DOCK2BILL + its new dispatchers page,
+  Detention Buddy, TruckersClaims, DetentionHero, Triporto, Eden One
+  product + pricing, Run Your Rig home + features); Tezify and
+  TenTrucks read via search results; Toro/StackViro/Vektor carried
+  from 2026-11-14. Feature comparison table (ClaimTrail vs 8 rivals)
+  and normalized pricing table (1 / 5 / 10 trucks, agency).
+  10 product gaps, differentiation revised, 6 added v0.2.0 interview
+  questions, v0.5.0 pricing questions, 6 roadmap proposals.
+- Headline findings: GetDockPay shipped v1.1 with direct deposit
+  (brokers pay invoices online); TruckersClaims Pro now priced at
+  $29/mo per truck but still not shipping; DOCK2BILL opened a
+  dispatcher partner program (20% commission free, Partner Pro
+  $149/mo for 25%, co-branding) — the first rival move into the
+  dispatch-agency beachhead, referral not operations; Tezify
+  published full pricing ($49 1 truck, $249 3-5, $399 6-10) and its
+  detention workflow is deeper than v0.1.0 recorded (approval,
+  receipt requests, POD-times flag, automated notices, collections
+  and AR aging). New rivals: Triporto (driver app, early access,
+  fleet dashboard claimed not shipping), Eden One (office product
+  with detention workflow, founder $69/mo for 1-5 trucks — the
+  strongest new rival), Run Your Rig (owner-operator TMS, AI
+  rate-con parsing, $9.99/driver/mo, 90 days free, web live, phone
+  apps coming soon).
+- Differentiation revised: carrier/dispatcher desk 5-6/10 down to
+  4-5/10 (Eden One, Run Your Rig, DOCK2BILL partner program,
+  Tezify depth); multi-tenant agency desk 7-8/10 [estimate] — no
+  rival offers multi-tenant operations. ClaimTrail's planned Growth
+  $49/mo is still the cheapest desk price in the table, but the
+  agency beachhead has a pricing problem: per-organization pricing
+  with no agency plan means 10 carriers at $49 = $490/mo, against
+  DOCK2BILL Partner Pro at $149/mo. Free tier (3 days) is too thin
+  to contain a claim's life cycle, against 30-90 day rival trials.
+  Biggest gaps: no submission channel (every shipping rival sends
+  the claim), no GPS capture, no driver capture flow, no rate-con
+  parsing, no broker-pay intelligence, no follow-up that sends.
+  The one-sentence pitch that survives: the desk where a dispatcher
+  or agency runs every detention/layover/TONU/lumper claim for
+  every carrier they serve, through evidence, deadlines and payment,
+  in one account — true only if the submission channel and GPS
+  capture are built.
+- Source note: the 2026-11-14 DockClock competitor check at
+  `~/workspace/your_files/dockclock-siteorder-competitor-check-2026-11-14.md`
+  is a broken symlink (its goal folder no longer exists); the
+  document was read from the surviving copy under
+  `~/workspace/your_files/deleted-goal-files/driftline-saas-validation/`.
+  The v0.4.0 document records this so the next run does not chase
+  the dead link.
+- Verification: no code changed in this version (docs only), but the
+  suites were re-run to confirm the repo is still green: backend
+  **382 passed (1902 assertions)**, frontend **241 passed**,
+  `npm run build` succeeds (37/37 pages) — identical counts to
+  v1.1.3. No em dashes in the document (grep-verified, 0 found).
+  No live HTTP smoke test was needed for a docs-only version (no
+  behaviour changed). ClaimTrail's side of the comparison tables
+  comes from the master checklist as verified through v1.1.3 and
+  the v0.3.0 workflow validation, not from new code reading.
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. Phase 0: no interviews,
+  no pilot customers, no validated willingness to pay yet — v0.2.0's
+  job, and it needs real people; Aqib's help reaching carriers or
+  dispatchers will be needed.
+- Environment note: system `php` is present on this VM (PHP 8.3.6) —
+  the standalone PHP at `~/workspace/php-standalone/` was not needed
+  this run.
+- Push status: **v0.4.0 COMPLETE and VERIFIED, NOT pushed.** 4 files
+  changed locally (`docs/validation/0.4.0-competitor-analysis.md`
+  new, `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md` updated). Ready to push pending Aqib's
+  yes in the main chat. Next run must gate-check the remote head
+  before starting v0.5.0.
+- Next task: **v0.5.0 — Pricing Validation.** v0.2.0 Customer
+  Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
+  interviews.
 
 ### 2026-11-22 — v0.3.0 Workflow Validation built and verified
 
@@ -146,12 +230,12 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **v0.3.0 COMPLETE and VERIFIED, NOT pushed.** Ready to
-  push pending Aqib's yes in the main chat. 2 files in one commit
-  (`docs/validation/0.3.0-workflow-validation.md` new,
-  `docs/validation/README.md` updated). Next run must gate-check the
-  remote head first; if v0.3.0 is still unpushed, it must not start
-  v0.4.0.
+- Push status: **v0.3.0 PUSHED 2026-11-22** after Aqib's yes in the main
+  chat + approval card. New remote head `6195b9f9`, 4 files in one
+  commit (`docs/validation/0.3.0-workflow-validation.md` new,
+  `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md` updated). Read-back verified. Next run may
+  start v0.4.0.
 - Next task: **v0.4.0 — Competitor Analysis.** v0.2.0 Customer
   Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
   interviews.
