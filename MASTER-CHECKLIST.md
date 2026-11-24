@@ -118,10 +118,49 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v0.5.0 — Pricing Validation
 
-- [ ] Research pricing models.
-- [ ] Validate willingness to pay.
-- [ ] Define initial pricing hypotheses.
-- [ ] Document subscription structure.
+> Verified 2026-11-24 (daily build run): research document
+> `docs/validation/0.5.0-pricing-validation.md` (8,587 words) built
+> from public sources accessed 2026-11-24. Six pricing models plus
+> hybrid and outcome variants researched with 2025-2026 benchmarks
+> (Poyar 2026 survey: hybrid 37% most common, outcome-based primary
+> 5%; tiered packaging used by 67% of SaaS companies; subscription
+> the primary model for over 80% of B2B SaaS). Willingness to pay
+> validated by proxy only, stated honestly: dispatch services at
+> 5-8% of gross linehaul ($1,000-1,600/mo per truck at $20,000 gross)
+> against $19-49/mo for the tool; trial benchmarks (opt-in median
+> about 18.5%, 7-day 24%, 14-day 19%, 30-day 14%; freemium 2-5%;
+> card-required about 49%); trial length tested against the claim
+> life cycle, which needs 30 days to see a claim submitted and
+> followed up. Pay-when-it-bills-clean tested against the
+> success-fee precedents (DueWell $500-2,000/mo plus 8-15% of
+> recovered cash; ChurnBack $49/mo plus 25%; Amazon recovery
+> contingency 15-25%). Revised pricing hypotheses: Free (1 truck, 5
+> claims/mo), Starter $19 (1-2 trucks), Growth $49 (3-10 trucks,
+> default), Fleet $99 (11-30 trucks, new), Agency $149/mo base for up
+> to 10 carriers plus $12 per extra carrier (new, set against
+> DOCK2BILL Partner Pro $149/mo); success-fee plan $0 base, 15% of
+> amounts recorded as paid, capped at $49/mo for the first year;
+> permanent Free tier replaced as the entry offer by a 30-day
+> no-card trial on Growth. Limits rewritten from internal units
+> (events, days of history) to buyer units (trucks, claims, members,
+> storage). Subscription structure specified for v1.2.0/v1.2.1
+> (plans, entitlements, upgrade prompts, no card for trial, no data
+> deletion on downgrade). Market sizing revised to $4-6M ARR at
+> 10,000 paying organizations (was $4.7M). Two new data points:
+> CabCommand flat fleet tiers ($29.99/$69.99/$129.99/$249.99) and 3
+> Lakes Logistics automated recovery at $300/mo. Triporto and
+> DetentionHero re-checked 2026-11-24, both still early access with
+> no price. No code changed in this version; backend 382 + frontend
+> 241 tests re-run and passing, `npm run build` succeeds (37/37
+> pages), confirming the repo is still green at v1.1.3. No
+> interviews: willingness to pay is proxy-only until v0.2.0, and
+> section 10 of the document carries 10 interview questions plus
+> kill criteria.
+
+- [x] Research pricing models.
+- [x] Validate willingness to pay.
+- [x] Define initial pricing hypotheses.
+- [x] Document subscription structure.
 
 ### v0.6.0 — Pilot Preparation
 

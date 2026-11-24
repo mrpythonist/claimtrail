@@ -6,13 +6,15 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v0.4.0 (Phase 0, Competitor Analysis).
+- **Last completed version:** v0.5.0 (Phase 0, Pricing Validation).
   App version stays 1.1.3 — Phase 0 work is research/docs, not code.
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `6195b9f9` (v0.3.0, pushed 2026-11-22 after Aqib's yes + approval).
-  **v0.4.0 is complete and verified but NOT pushed yet** — see the
-  2026-11-23 log entry; it waits for Aqib's yes in the main chat.
-- **Tests at v0.4.0:** 382 backend (1902 assertions) + 241 frontend, all
+  head `e473ddc7` (v0.4.0, pushed 2026-11-23 after Aqib's yes + approval).
+  **v0.5.0 is complete and verified but NOT pushed** — ready to push
+  pending Aqib's yes in the main chat. The next run must gate-check
+  first: if the remote head is still `e473ddc7`, v0.5.0 is waiting to
+  be pushed and no new version work starts.
+- **Tests at v0.5.0:** 382 backend (1902 assertions) + 241 frontend, all
   passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
@@ -20,19 +22,21 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**Phase 0 — Business Validation, v0.5.0 Pricing Validation**
-(research pricing models, validate willingness to pay, define
-initial pricing hypotheses, document subscription structure; uses
-the v0.4.0 pricing comparison and its open questions: agency
-pricing, the 3-day free tier, pay-when-it-bills-clean as an
-alternative). **v0.2.0 Customer Interviews stays DEFERRED, not
-dropped:** Aqib said 2026-11-21 to skip what needs him right now,
-and interviews need his help reaching carriers/dispatchers. It
-returns to the front of the queue when he is ready to do outreach.
-Then v0.6.0 Pilot Preparation.
+**Phase 0 — Business Validation, v0.6.0 Pilot Preparation**
+(identify at least 3 potential pilot customers, prepare onboarding
+process, prepare sample datasets, define pilot success metrics; uses
+the v0.5.0 trial targets: 15% no-card trial-to-paid as good, 8% as
+the floor, 3-5% free-to-paid as good).
+**v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
+2026-11-21 to skip what needs him right now, and interviews need his
+help reaching carriers/dispatchers. It returns to the front of the
+queue when he is ready to do outreach. v0.5.0's 10 interview
+questions and kill criteria (section 10 of the v0.5.0 document) are
+ready for it.
 **v1.2.0 — Subscription Billing** (Phase 3) stays queued after Phase 0:
 still blocked on Stripe keys from Aqib, and the checklist requires the
-Phase 0 outcome before billing work.
+Phase 0 outcome before billing work. v0.5.0 adds a second billing
+input: the metered-billing decision for the success-fee plan.
 
 ## Blockers (recorded, not skipped)
 
@@ -88,6 +92,83 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-24 — v0.5.0 Pricing Validation built and verified
+
+- Gate check passed first: remote head on GitHub is `e473ddc7`,
+  matching the recorded v0.4.0 head, so no version was waiting to be
+  pushed. (Unauthenticated GitHub API was rate-limited this run; the
+  head was confirmed via the connected GitHub MCP `list_commits`.)
+- Built all 4 v0.5.0 items as `docs/validation/0.5.0-pricing-validation.md`
+  (8,587 words, plus a `docs/validation/README.md` index update marking
+  v0.5.0 Done): six pricing models plus hybrid/outcome variants with
+  2025-2026 benchmarks (Poyar 2026 survey: hybrid 37% most common,
+  outcome-based primary 5%; tiered packaging 67%; subscription primary
+  for 80%+ of B2B SaaS); willingness to pay by proxy only, stated
+  honestly (dispatch 5-8% of gross linehaul, $1,000-1,600/mo per truck
+  at $20,000 gross, against $19-49/mo for the tool; trial benchmarks
+  opt-in median ~18.5%, 7-day 24%, 14-day 19%, 30-day 14%, freemium
+  2-5%, card-required ~49%; trial length tested against the claim life
+  cycle, which needs 30 days); pay-when-it-bills-clean tested against
+  success-fee precedents (DueWell $500-2,000/mo plus 8-15% of recovered
+  cash, ChurnBack $49/mo plus 25%, Amazon recovery contingency 15-25%);
+  revised pricing hypotheses (Free 1 truck/5 claims, Starter $19 for
+  1-2 trucks, Growth $49 for 3-10 trucks as default, Fleet $99 for
+  11-30 trucks new, Agency $149/mo base for up to 10 carriers plus $12
+  per extra carrier new, success-fee plan $0 base plus 15% of amounts
+  recorded as paid capped at $49/mo for the first year); permanent Free
+  tier replaced as the entry offer by a 30-day no-card trial on Growth;
+  limits rewritten from internal units (events, days of history) to
+  buyer units (trucks, claims, members, storage); subscription structure
+  specified for v1.2.0/v1.2.1 (plans, entitlements, upgrade prompts, no
+  card for trial, no data deletion on downgrade, shipment caps rejected
+  with reasoning). Market sizing refined to $4-6M ARR at 10,000 paying
+  orgs (was $4.7M). New data points: CabCommand flat fleet tiers
+  ($29.99/$69.99/$129.99/$249.99) and 3 Lakes Logistics automated
+  recovery at $300/mo. Triporto and DetentionHero re-checked
+  2026-11-24, both still early access with no price.
+- Headline findings: the agency price is now set against DOCK2BILL
+  Partner Pro $149/mo, not against the $490/mo of the old per-org
+  pricing; the success-fee plan is an option at trial exit, not the
+  default, because it invites adverse selection if offered to everyone;
+  the 30-day trial trades worse median conversion (14% vs 19% for
+  14-day) for conversions of buyers who have seen the outcome, which is
+  what survives first renewal; one collected detention claim ($75-300)
+  pays for 1.5-4 months of Growth/Starter, so the price is defensible
+  only if the buyer collects, which is why the success fee exists.
+- One arithmetic error caught during verification and fixed before
+  reporting: the agency per-carrier price at 20 carriers is $13.45,
+  not $12.90 as first written (20 carriers cost $269/mo). All other
+  figures in the document were re-checked against the sources (blended
+  $52/mo average, $6.2M ARR at 10,000 orgs, per-truck prices,
+  break-even months).
+- Verification: no code changed in this version (docs only), but the
+  suites were re-run to confirm the repo is still green: backend
+  **382 passed (1902 assertions)**, frontend **241 passed** across 24
+  files, `npm run build` succeeds (37/37 pages) — identical counts to
+  v1.1.3. No em dashes in the document (grep-verified, 0 found).
+  No live HTTP smoke test was needed for a docs-only version (no
+  behaviour changed). No interviews: willingness to pay is proxy-only
+  until v0.2.0; the document's section 10 carries 10 interview
+  questions plus kill criteria.
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. Phase 0: no interviews,
+  no pilot customers, no validated willingness to pay yet — v0.2.0's
+  job, and it needs real people; Aqib's help reaching carriers or
+  dispatchers will be needed.
+- Environment note: system `php` is present on this VM (PHP 8.3.6) —
+  the standalone PHP at `~/workspace/php-standalone/` was not needed
+  this run.
+- Push status: **v0.5.0 COMPLETE and verified, NOT pushed** — ready to
+  push pending Aqib's yes in the main chat. Files: new
+  `docs/validation/0.5.0-pricing-validation.md`,
+  `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md` updated. Next run must gate-check first
+  (remote head still `e473ddc7` means v0.5.0 is waiting).
+- Next task: **v0.6.0 — Pilot Preparation** (last Phase 0 version).
+  v0.2.0 Customer Interviews stays DEFERRED per Aqib 2026-11-21 — do
+  not fabricate interviews. v1.2.0 billing stays blocked on Stripe
+  keys, plus the metered-billing decision for the success-fee plan.
 
 ### 2026-11-23 — v0.4.0 Competitor Analysis built and verified
 
@@ -161,12 +242,12 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
 - Environment note: system `php` is present on this VM (PHP 8.3.6) —
   the standalone PHP at `~/workspace/php-standalone/` was not needed
   this run.
-- Push status: **v0.4.0 COMPLETE and VERIFIED, NOT pushed.** 4 files
-  changed locally (`docs/validation/0.4.0-competitor-analysis.md`
-  new, `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
-  `DEVELOPMENT_PROGRESS.md` updated). Ready to push pending Aqib's
-  yes in the main chat. Next run must gate-check the remote head
-  before starting v0.5.0.
+- Push status: **v0.4.0 PUSHED 2026-11-23** after Aqib's yes in the main
+  chat + approval card. New remote head `e473ddc7`, 4 files in one
+  commit (`docs/validation/0.4.0-competitor-analysis.md` new,
+  `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md` updated). Read-back verified. Next run may
+  start v0.5.0.
 - Next task: **v0.5.0 — Pricing Validation.** v0.2.0 Customer
   Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
   interviews.
