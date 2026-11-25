@@ -77,6 +77,37 @@ const FREE_SUBSCRIPTION: BillingSubscription = {
     accrued_fee_cents: 0,
     cap_cents: null,
     cap_remaining_cents: null,
+    entitlements: {
+      plan: "free",
+      plan_name: "Free",
+      status: "active",
+      period_start: "2026-11-10T00:00:00Z",
+      period_end: "2026-12-10T00:00:00Z",
+      carriers: 1,
+      limits: {
+        plan: "free",
+        plan_name: "Free",
+        claims_per_month: 5,
+        members: 1,
+        storage_bytes: 104857600,
+        pdf_packages: false,
+        reports: false,
+      },
+      usage: {
+        claims_created: 2,
+        claims_carryover: 0,
+        members: 1,
+        pending_invitations: 0,
+        storage_bytes: 10485760,
+      },
+      upgrade: {
+        claims: { key: "starter", name: "Starter" },
+        members: { key: "starter", name: "Starter" },
+        storage: { key: "starter", name: "Starter" },
+        pdf_packages: { key: "starter", name: "Starter" },
+        reports: { key: "starter", name: "Starter" },
+      },
+    },
   },
 };
 
@@ -191,6 +222,28 @@ describe("BillingPage", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Billing portal")).toBeInTheDocument();
+  });
+
+  it("shows plan usage against the plan limits with upgrade prompts", async () => {
+    render(<BillingPage />);
+
+    expect(await screen.findByText("Plan usage")).toBeInTheDocument();
+    expect(screen.getByText("2 of 5")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    expect(screen.getByText("10 MB of 100 MB")).toBeInTheDocument();
+    expect(screen.getByText("Not included on this plan")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard only")).toBeInTheDocument();
+    expect(
+      screen.getByText("At the limit. Upgrade to Starter for more members."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Upgrade to Starter to generate PDF claim packages.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Upgrade to Starter for full reports."),
+    ).toBeInTheDocument();
   });
 
   it("shows an access-denied alert for viewers", async () => {

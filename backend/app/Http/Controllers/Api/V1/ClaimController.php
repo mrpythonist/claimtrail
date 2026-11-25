@@ -20,6 +20,7 @@ use App\Services\ClaimReferenceService;
 use App\Services\ClaimTransitionService;
 use App\Services\CustomFieldService;
 use App\Services\DeadlineStatusService;
+use App\Services\EntitlementService;
 use App\Services\NotificationService;
 use App\Services\ReadinessService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -277,10 +278,15 @@ class ClaimController extends Controller
         NotificationService $notifications,
         CustomFieldService $customFields,
         DeadlineStatusService $statuses,
+        EntitlementService $entitlements,
     ): JsonResponse {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::CreateClaims->value, $organization);
+
+        // Plan limits (v1.2.1): claim creation above the monthly
+        // cap is refused with a 402 upgrade prompt.
+        $entitlements->authorizeClaimCreation($organization);
 
         $validated = $request->validate([
             'shipment_id' => [

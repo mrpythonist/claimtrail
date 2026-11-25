@@ -664,6 +664,7 @@ paths:
                   data:
                     $ref: "#/components/schemas/OrganizationInvitation"
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /invitations/accept:
     post:
@@ -1460,6 +1461,7 @@ paths:
                   data:
                     $ref: "#/components/schemas/EvidenceFile"
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /evidence/{evidence}:
     get:
@@ -1684,6 +1686,7 @@ paths:
                   data:
                     $ref: "#/components/schemas/Claim"
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /claims/export:
     get:
@@ -2263,6 +2266,7 @@ paths:
                   data:
                     $ref: "#/components/schemas/GeneratedDocument"
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /evidence-requirements:
@@ -2703,6 +2707,7 @@ paths:
                     $ref: "#/components/schemas/ReportSummary"
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /reports/recovery-history:
@@ -2733,6 +2738,7 @@ paths:
                       $ref: "#/components/schemas/RecoveryHistoryMonth"
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /reports/export:
@@ -2757,6 +2763,7 @@ paths:
               schema: { type: string }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /health:
@@ -4463,6 +4470,24 @@ components:
                 additionalProperties:
                   type: array
                   items: { type: string }
+    PlanLimitExceeded:
+      description: The organization's plan limit was hit. The response names the limit and the upgrade that raises it.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              error: { type: string, example: plan_limit_exceeded }
+              limit:
+                type: object
+                properties:
+                  resource: { type: string }
+                  limit: { type: integer, nullable: true }
+                  used: { type: integer }
+                  plan: { type: string }
+                  upgrade_plan: { type: string, nullable: true }
+                  upgrade_plan_name: { type: string, nullable: true }
   schemas:
     Message:
       type: object
@@ -5711,6 +5736,73 @@ components:
         accrued_fee_cents: { type: integer }
         cap_cents: { type: integer, nullable: true, description: 4900 while the first-year cap applies }
         cap_remaining_cents: { type: integer, nullable: true }
+        entitlements:
+          $ref: "#/components/schemas/EntitlementSummary"
+    EntitlementSummary:
+      type: object
+      properties:
+        plan: { type: string }
+        plan_name: { type: string }
+        status: { type: string }
+        period_start: { type: string, format: date-time, nullable: true }
+        period_end: { type: string, format: date-time, nullable: true }
+        carriers: { type: integer, description: The organization's carrier count; Agency limits scale per carrier }
+        limits:
+          type: object
+          properties:
+            plan: { type: string }
+            plan_name: { type: string }
+            claims_per_month: { type: integer, nullable: true, description: null means unlimited (Success Fee plan) }
+            members: { type: integer, nullable: true, description: null means unlimited }
+            storage_bytes: { type: integer, nullable: true, description: null means unlimited }
+            pdf_packages: { type: boolean }
+            reports: { type: boolean, description: false means dashboard only }
+        usage:
+          type: object
+          properties:
+            claims_created: { type: integer, description: Claims created in the current period plus any carried over from the previous period when a move to a lower plan took effect at this renewal }
+            claims_carryover: { type: integer, description: Claims carried over from the previous period after a downgrade; cleared at the next renewal }
+            members: { type: integer, description: Active members }
+            pending_invitations: { type: integer, description: Pending invitations; they count toward the member cap }
+            storage_bytes: { type: integer, description: Evidence plus generated documents, in bytes }
+        upgrade:
+          type: object
+          description: One entry per resource; null when no listed plan raises that limit, otherwise the cheapest listed plan that does
+          properties:
+            claims:
+              allOf:
+                - $ref: "#/components/schemas/EntitlementUpgradeOption"
+              nullable: true
+            members:
+              allOf:
+                - $ref: "#/components/schemas/EntitlementUpgradeOption"
+              nullable: true
+            storage:
+              allOf:
+                - $ref: "#/components/schemas/EntitlementUpgradeOption"
+              nullable: true
+            pdf_packages:
+              allOf:
+                - $ref: "#/components/schemas/EntitlementUpgradeOption"
+              nullable: true
+            reports:
+              allOf:
+                - $ref: "#/components/schemas/EntitlementUpgradeOption"
+              nullable: true
+    EntitlementUpgradeOption:
+      type: object
+      properties:
+        key: { type: string }
+        name: { type: string }
+    EntitlementLimitInfo:
+      type: object
+      properties:
+        resource: { type: string }
+        limit: { type: integer, nullable: true }
+        used: { type: integer }
+        plan: { type: string }
+        upgrade_plan: { type: string, nullable: true }
+        upgrade_plan_name: { type: string, nullable: true }
     BillingPortalSession:
       type: object
       properties:

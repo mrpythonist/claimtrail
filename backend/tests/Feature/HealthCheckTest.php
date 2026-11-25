@@ -67,7 +67,7 @@ class HealthCheckTest extends TestCase
             ->getJson('/api/v1/ops/health')
             ->assertOk()
             ->assertJsonPath('data.status', 'ok')
-            ->assertJsonPath('data.version', '1.2.0')
+            ->assertJsonPath('data.version', '1.2.1')
             ->assertJsonStructure([
                 'data' => [
                     'status',

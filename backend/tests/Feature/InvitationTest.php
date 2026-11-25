@@ -21,6 +21,7 @@ class InvitationTest extends TestCase
         Mail::fake();
 
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
 
         $response = $this->withHeaders($this->orgHeaders($organization))
             ->postJson('/api/v1/invitations', [
@@ -49,6 +50,7 @@ class InvitationTest extends TestCase
         Mail::fake();
 
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $member = User::factory()->create();
         $this->addMember($organization, $member, OrganizationRole::Viewer);
 
@@ -66,6 +68,7 @@ class InvitationTest extends TestCase
         Mail::fake();
 
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
 
         $this->withHeaders($this->orgHeaders($organization))
             ->postJson('/api/v1/invitations', [
@@ -83,6 +86,7 @@ class InvitationTest extends TestCase
     public function test_an_admin_cannot_invite_an_owner(): void
     {
         [$admin, $organization] = $this->actingAsMemberOf(OrganizationRole::Admin);
+        $this->subscribe($organization, 'starter');
 
         $this->withHeaders($this->orgHeaders($organization))
             ->postJson('/api/v1/invitations', [
@@ -96,6 +100,7 @@ class InvitationTest extends TestCase
         Mail::fake();
 
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
 
         $this->withHeaders($this->orgHeaders($organization))
             ->postJson('/api/v1/invitations', [

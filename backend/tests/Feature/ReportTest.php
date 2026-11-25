@@ -24,6 +24,7 @@ class ReportTest extends TestCase
     public function test_summary_counts_claims_by_status_and_event_type(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
 
         $this->claimInStatus($organization, $shipment, ClaimStatus::Potential, ['claim_category' => 'detention']);
@@ -50,6 +51,7 @@ class ReportTest extends TestCase
     public function test_summary_money_follows_the_financial_definitions(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
 
         // Potential: requested 250, still being prepared.
@@ -105,6 +107,7 @@ class ReportTest extends TestCase
     public function test_currencies_are_never_mixed(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
 
         $this->claimInStatus($organization, $shipment, ClaimStatus::Potential, [
@@ -131,6 +134,7 @@ class ReportTest extends TestCase
     public function test_summary_honors_the_date_range(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
 
         $old = $this->claimInStatus($organization, $shipment, ClaimStatus::Potential, ['requested_amount' => 250.00]);
@@ -151,6 +155,7 @@ class ReportTest extends TestCase
     public function test_recovery_history_groups_paid_claims_by_month_and_currency(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
 
         $this->claimInStatus($organization, $shipment, ClaimStatus::Paid, [
@@ -187,6 +192,7 @@ class ReportTest extends TestCase
     public function test_report_export_contains_summary_and_claim_rows(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
         $this->claimInStatus($organization, $shipment, ClaimStatus::Potential, [
             'claim_reference' => 'CLM-2026-0099',
@@ -209,6 +215,7 @@ class ReportTest extends TestCase
     public function test_reports_are_permission_gated(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Viewer);
+        $this->subscribe($organization, 'starter');
 
         // Viewers can read reports.
         $this->withHeaders($this->orgHeaders($organization))
@@ -224,10 +231,12 @@ class ReportTest extends TestCase
     public function test_reports_are_org_scoped(): void
     {
         [, $organizationA] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organizationA, 'starter');
         $shipment = $this->createShipment($organizationA);
         $this->claimInStatus($organizationA, $shipment, ClaimStatus::Potential, ['requested_amount' => 250.00]);
 
         [, $organizationB] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organizationB, 'starter');
 
         $money = $this->withHeaders($this->orgHeaders($organizationB))
             ->getJson('/api/v1/reports/summary')

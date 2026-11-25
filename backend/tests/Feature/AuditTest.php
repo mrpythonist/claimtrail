@@ -193,6 +193,7 @@ class AuditTest extends TestCase
     public function test_invitation_lifecycle_is_audited(): void
     {
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $invitee = User::factory()->create(['email' => 'invitee@example.com']);
 
         $response = $this->withHeaders($this->orgHeaders($organization))
@@ -289,6 +290,7 @@ class AuditTest extends TestCase
     {
         Storage::fake('private');
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
         $claim = $this->createClaim($organization, $shipment);
 

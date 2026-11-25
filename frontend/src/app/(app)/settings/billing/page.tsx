@@ -17,6 +17,7 @@ import {
   changePlan,
   completeCheckout,
   createPortalSession,
+  formatBytes,
   formatCents,
   getInvoices,
   getPlans,
@@ -462,7 +463,7 @@ function BillingContent({ org }: { org: Organization }) {
           <Card>
             <CardHeader
               title="Plans"
-              description="Monthly or annual billing. Annual is 10x the monthly price, two months free. Plan limits are shown here; enforcement comes in v1.2.1."
+              description="Monthly or annual billing. Annual is 10x the monthly price, two months free. Plan limits are enforced: an action above a limit is refused with an upgrade prompt."
               action={
                 <div className="flex gap-1" role="group" aria-label="Billing interval">
                   <Button
@@ -642,6 +643,130 @@ function BillingContent({ org }: { org: Organization }) {
               )}
             </CardBody>
           </Card>
+
+          {usage?.entitlements && (
+            <Card>
+              <CardHeader
+                title="Plan usage"
+                description={`Usage against the ${usage.entitlements.plan_name} plan limits for this period. Limits are enforced: an action above a limit is refused and names the upgrade that raises it.`}
+              />
+              <CardBody>
+                <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt className="text-slate-500">Claims this period</dt>
+                    <dd className="font-medium text-slate-900">
+                      {usage.entitlements.usage.claims_created}
+                      {usage.entitlements.limits.claims_per_month === null
+                        ? " (unlimited)"
+                        : ` of ${usage.entitlements.limits.claims_per_month}`}
+                    </dd>
+                    {usage.entitlements.usage.claims_carryover > 0 && (
+                      <dd className="mt-1 text-xs text-slate-500">
+                        Includes{" "}
+                        {usage.entitlements.usage.claims_carryover} carried
+                        over from the previous period after a downgrade.
+                      </dd>
+                    )}
+                    {usage.entitlements.limits.claims_per_month !== null &&
+                      usage.entitlements.usage.claims_created >=
+                        usage.entitlements.limits.claims_per_month &&
+                      usage.entitlements.upgrade.claims && (
+                        <dd className="mt-1 text-xs text-amber-700">
+                          At the limit. Upgrade to{" "}
+                          {usage.entitlements.upgrade.claims.name} for more
+                          claims.
+                        </dd>
+                      )}
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Members</dt>
+                    <dd className="font-medium text-slate-900">
+                      {usage.entitlements.usage.members +
+                        usage.entitlements.usage.pending_invitations}
+                      {usage.entitlements.limits.members === null
+                        ? " (unlimited)"
+                        : ` of ${usage.entitlements.limits.members}`}
+                    </dd>
+                    {usage.entitlements.usage.pending_invitations > 0 && (
+                      <dd className="mt-1 text-xs text-slate-500">
+                        Includes{" "}
+                        {usage.entitlements.usage.pending_invitations} pending
+                        invitation
+                        {usage.entitlements.usage.pending_invitations === 1
+                          ? ""
+                          : "s"}
+                        .
+                      </dd>
+                    )}
+                    {usage.entitlements.limits.members !== null &&
+                      usage.entitlements.usage.members +
+                        usage.entitlements.usage.pending_invitations >=
+                        usage.entitlements.limits.members &&
+                      usage.entitlements.upgrade.members && (
+                        <dd className="mt-1 text-xs text-amber-700">
+                          At the limit. Upgrade to{" "}
+                          {usage.entitlements.upgrade.members.name} for more
+                          members.
+                        </dd>
+                      )}
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Storage used</dt>
+                    <dd className="font-medium text-slate-900">
+                      {formatBytes(usage.entitlements.usage.storage_bytes)}
+                      {usage.entitlements.limits.storage_bytes === null
+                        ? " (unlimited)"
+                        : ` of ${formatBytes(usage.entitlements.limits.storage_bytes)}`}
+                    </dd>
+                    {usage.entitlements.limits.storage_bytes !== null &&
+                      usage.entitlements.usage.storage_bytes >=
+                        usage.entitlements.limits.storage_bytes &&
+                      usage.entitlements.upgrade.storage && (
+                        <dd className="mt-1 text-xs text-amber-700">
+                          At the limit. Upgrade to{" "}
+                          {usage.entitlements.upgrade.storage.name} for more
+                          storage.
+                        </dd>
+                      )}
+                  </div>
+                </dl>
+                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-slate-500">PDF claim packages</dt>
+                    <dd className="font-medium text-slate-900">
+                      {usage.entitlements.limits.pdf_packages
+                        ? "Included"
+                        : "Not included on this plan"}
+                    </dd>
+                    {!usage.entitlements.limits.pdf_packages &&
+                      usage.entitlements.upgrade.pdf_packages && (
+                        <dd className="mt-1 text-xs text-amber-700">
+                          Upgrade to{" "}
+                          {usage.entitlements.upgrade.pdf_packages.name} to
+                          generate PDF claim packages.
+                        </dd>
+                      )}
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Reports</dt>
+                    <dd className="font-medium text-slate-900">
+                      {usage.entitlements.limits.reports
+                        ? "Full reports"
+                        : "Dashboard only"}
+                    </dd>
+                    {!usage.entitlements.limits.reports &&
+                      usage.entitlements.upgrade.reports && (
+                        <dd className="mt-1 text-xs text-amber-700">
+                          Upgrade to{" "}
+                          {usage.entitlements.upgrade.reports.name} for full
+                          reports.
+                        </dd>
+                      )}
+                  </div>
+                </dl>
+              </CardBody>
+            </Card>
+          )}
 
           {subscription?.plan === "success_fee" && usage && (
             <Card>

@@ -11,6 +11,7 @@ use App\Models\OrganizationInvitation;
 use App\Models\User;
 use App\NotificationType;
 use App\OrganizationRole;
+use App\Services\EntitlementService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class OrganizationInvitationController extends Controller
      * Only an owner can invite another owner. The raw token is sent in
      * the email; only its hash is stored.
      */
-    public function store(Request $request, NotificationService $notifications): JsonResponse
+    public function store(Request $request, NotificationService $notifications, EntitlementService $entitlements): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -62,6 +63,10 @@ class OrganizationInvitationController extends Controller
             'email' => ['required', 'string', 'email', 'max:255'],
             'role' => ['required', 'string', Rule::in(OrganizationRole::values())],
         ]);
+
+        // Plan limits (v1.2.1): invitations above the member cap
+        // are refused with a 402 upgrade prompt.
+        $entitlements->authorizeInvitation($organization);
 
         $actor = $request->user()->membershipIn($organization);
 

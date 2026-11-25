@@ -473,6 +473,7 @@ class NotificationTest extends TestCase
         Mail::fake();
 
         [$owner, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $invitee = User::factory()->create(['email' => 'invitee@example.com']);
 
         $this->withHeaders($this->orgHeaders($organization))
@@ -495,6 +496,7 @@ class NotificationTest extends TestCase
     public function test_inviting_an_unknown_email_creates_no_notification(): void
     {
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
 
         $this->withHeaders($this->orgHeaders($organization))
             ->postJson('/api/v1/invitations', [

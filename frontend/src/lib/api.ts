@@ -10,12 +10,15 @@ const ORG_KEY = "claimtrail_org_id";
 export class ApiRequestError extends Error {
   status: number;
   fields: Record<string, string[]>;
+  /** The full parsed error body, so callers can read machine-readable fields such as a 402 `limit` block. */
+  body: ApiError;
 
   constructor(status: number, body: ApiError) {
     super(body.message || "Request failed");
     this.name = "ApiRequestError";
     this.status = status;
     this.fields = body.errors ?? {};
+    this.body = body;
   }
 
   /** First error message for a field, if any. */
@@ -114,8 +117,8 @@ function handleUnauthorized(redirectOnUnauthorized: boolean): void {
 function errorFromBody(status: number, body: unknown): ApiRequestError {
   const errorBody = body as ApiError;
   return new ApiRequestError(status, {
+    ...errorBody,
     message: errorBody.message || `Request failed (${status})`,
-    errors: errorBody.errors,
   });
 }
 

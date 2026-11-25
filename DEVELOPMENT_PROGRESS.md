@@ -6,28 +6,27 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.2.0 (Phase 3, Subscription Billing,
-  mock provider). App version is now **1.2.0**. Phase 0 is complete
+- **Last completed version:** v1.2.1 (Phase 3, Plans and
+  Entitlements). App version is now **1.2.1**. Phase 0 is complete
   (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
   deferred, still open).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `3b6300d7` (v0.6.0, pushed 2026-11-25). **v1.2.0 is built and
-  verified but NOT PUSHED** — it waits for Aqib's yes in the main chat.
-- **Tests at v1.2.0:** 421 backend (2169 assertions) + 268 frontend, all
-  passing. `npm run build` succeeds (38/38 pages, including the new
-  `/settings/billing`). Live HTTP smoke test: 59/59 steps on a fresh
-  SQLite DB (see the 2026-11-25 v1.2.0 log entry).
+  head `704c09e3` (v1.2.0, pushed 2026-11-25 after Aqib's yes + approval).
+  v1.2.1 is built and verified locally, NOT pushed.
+- **Tests at v1.2.1:** 435 backend (2277 assertions) + 270 frontend, all
+  passing. `npm run build` succeeds (38/38 pages). Live HTTP smoke test:
+  55/55 steps on a fresh SQLite DB (see the 2026-11-25 v1.2.1 log entry).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.2.1 — Plans and Entitlements** (MASTER-CHECKLIST.md): shipment
-limits, claim limits, organization member limits, storage limits,
-document limits, reporting restrictions, backend entitlement
-enforcement, usage tracking, upgrade prompts. The v1.2.0 plan limits
-are shown on the billing page but not enforced; v1.2.1 enforces them.
+**v1.2.2 — Marketing and Acquisition** (MASTER-CHECKLIST.md):
+marketing website, product overview page, feature pages, pricing
+page, product screenshots, product demonstration, demo request form,
+lead capture, SEO optimization, analytics integration, customer
+onboarding.
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
@@ -91,6 +90,124 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-25 — v1.2.1 Plans and Entitlements built and verified
+
+- Gate check passed first: remote head on GitHub is `704c09e3`,
+  matching the recorded v1.2.0 head, so no version was waiting to be
+  pushed. Build started 2026-11-25 ~19:24 PKT on Aqib's "Start v1.2.1
+  — Plans and Entitlements now" in the main chat, the same evening
+  v1.2.0 was pushed — not the scheduled 2026-11-26 10:10 PKT run.
+- Spec: MASTER-CHECKLIST.md v1.2.1 (9 items) + v0.5.0 sections 8 and
+  9.2. Limits from section 8: claims/month Free 5, Starter 20,
+  Growth 100, Fleet 300, Agency 100 per carrier, Success Fee
+  unlimited; members Free 1, Starter 3, Growth 10, Fleet 25, Agency
+  unlimited; storage Free 100 MB, Starter 1 GB, Growth 10 GB, Fleet
+  50 GB, Agency 10 GB per carrier; PDF packages not on Free,
+  unlimited on paid plans; reports dashboard-only on Free, full on
+  Starter+. Shipments are NOT capped (claim cap is the binding
+  limit). Enforcement is backend; the frontend shows usage and
+  upgrade prompts.
+- Backend (new): `app/Services/EntitlementService.php` (resolves the
+  org's current plan from its subscription — trialing orgs are on
+  Growth, canceled subscriptions fall back to Free — and its limits
+  from `config/billing.php`; `limits()`, `limitsForPlan()` with the
+  Agency per-carrier multiplier, `usage()`, `summary()`,
+  `nextPlanFor()` = cheapest listed plan raising the limit,
+  `authorizeClaimCreation` / `authorizeInvitation` /
+  `authorizeUpload` / `authorizePackageGeneration` /
+  `authorizeReports`); `app/Exceptions/EntitlementExceededException.php`
+  (renders 402 JSON with `error: "plan_limit_exceeded"` and a `limit`
+  block: resource, limit, used, plan, upgrade_plan,
+  upgrade_plan_name). Wired into `ClaimController@store`,
+  `OrganizationInvitationController@store`,
+  `EvidenceFileController@store` (before the Storage write),
+  `ClaimPackageController@store`, `ReportController` (summary,
+  recoveryHistory, export); `BillingController::usage` gains an
+  `entitlements` block. Migration
+  `2026_11_25_100100_add_claims_carryover_to_subscriptions.php`
+  (`claims_carryover` on subscriptions) + model fillable/cast.
+- **Downgrade carryover (real defect found by the live smoke test,
+  not by the suite):** the claim-cap count used only the current
+  billing period, so a renewal reset the count and a downgrade
+  handed out a fresh allowance at once — the downgrade never
+  blocked anything except when the claims and the renewal landed
+  in the same second (one-second race; the backend downgrade test
+  passed twice in the full suite on that luck, then failed alone).
+  Fix: when a move to a lower plan takes effect
+  (`applyPendingDowngrade`, `applyFreePlan` for cancellation /
+  dunning / trial lapse, immediate cancel), the claims created
+  since the old period began are carried into the new period
+  (`claims_carryover`) and still count toward the new lower cap
+  for one period. The next renewal clears it (trial conversion,
+  success-fee renewal, paid renewal all reset it to 0), so a
+  normal renewal still resets the monthly allowance. New test
+  `test_claim_carryover_clears_at_the_next_renewal` covers the
+  clearing; the downgrade test now passes 5/5 runs. The test
+  backdates the claims (created days before the renewal in
+  reality) because timestamps here have one-second precision and
+  the whole test otherwise runs inside one second.
+- **Second real defect (frontend, found while wiring the 402
+  prompt):** `errorFromBody` in `src/lib/api.ts` dropped every
+  error-body field except `message` and `errors`, so a 402 `limit`
+  block never reached the page. The full parsed body is now
+  carried on `ApiRequestError.body`. Covered by a new api test.
+- Frontend: `src/lib/types.ts` (`ApiError.error`/`limit`,
+  `EntitlementSummary` with the real API shape: limits with
+  `plan_name` and boolean `pdf_packages`/`reports`, usage with
+  `claims_created`/`claims_carryover`/`members`/
+  `pending_invitations`/`storage_bytes`, upgrade options as
+  `{key, name}`); `src/lib/api.ts` (`body` on the error);
+  `src/lib/billing.ts` (`formatBytes`); billing page Plan usage
+  card (claims/members/storage vs limits, PDF packages, reports,
+  at-limit upgrade prompts naming the tier, carryover note);
+  claims/new page renders a 402 as an upgrade alert linking to
+  `/settings/billing`; stale "enforcement comes in v1.2.1" copy
+  updated. New frontend tests: billing page usage section, api 402
+  body.
+- Docs: `docs/BILLING.md` entitlements section (limits, 402 shape,
+  guarded actions, caps never delete data, the carryover rule,
+  usage shape, vendor-dashboard gap); `docs/openapi.yaml`:
+  `EntitlementSummary` + `EntitlementUpgradeOption` schemas,
+  `PlanLimitExceeded` 402 response referenced from the 7 guarded
+  endpoints, `entitlements` on `BillingUsageSummary` (still 116
+  paths); `CHANGELOG.md` [1.2.1] entry.
+- Verification: backend **435 tests, 2277 assertions** (421 at
+  v1.2.0 + 13 entitlement tests + 1 carryover test; 21 pre-existing
+  tests in Report/Invitation/ClaimPackage/Audit/Notification
+  needed a Starter subscription after the new gates — subscribed
+  in the tests, no behaviour change); frontend **270 tests**
+  (268 + 2 new); `npm run build` 38/38 pages. Live HTTP smoke test
+  **55/55** on a fresh SQLite DB (script + runner in
+  `~/workspace/claimtrail-scratch-v121/smoke/`): Free 5 claims then
+  6th 402 with Starter upgrade, invitation/reports/package/storage
+  402s, 10 shipments uncapped, trial org on Growth limits (6
+  claims, reports/packages/invite work, cross-tenant isolation),
+  Starter downgrade to Free keeps 6 claims and blocks the 7th with
+  used=6 via the carryover. Smoke run twice, 55/55 both times.
+- Gaps (not built, per the spec): no vendor dashboard surface for
+  usage (operations dashboard is per-org queue monitoring, no
+  org-listing view); no per-claim cap on evidence files or
+  generated documents (v0.5.0 section 8 specifies none; storage
+  governs). Standing unverified items unchanged: browser E2E, live
+  Postgres, live Redis, Docker, real mailer.
+- Note: the compacted handoff for this build misdescribed the
+  `EntitlementService::summary()` shape (usage keys and upgrade
+  entries); the smoke test caught the mismatch against the real
+  API, and the frontend, OpenAPI and docs were corrected to the
+  real shape before verification. The backend test suite passing
+  does not prove the frontend mock matches the API; the live smoke
+  test is what caught it.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.** Awaiting Aqib's
+  yes in the main chat + approval card. Do not push from a
+  scheduled run.
+- Next task: **v1.2.2 — Marketing and Acquisition.** v0.2.0 Customer
+  Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
+  interviews.
 
 ### 2026-11-25 — v1.2.0 Subscription Billing built and verified (mock provider)
 
@@ -213,9 +330,10 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.** v1.2.0 waits
-  for Aqib's yes in the main chat + approval card. Remote head is
-  still `3b6300d7` (v0.6.0).
+- Push status: **v1.2.0 PUSHED 2026-11-25** after Aqib's yes in the main
+  chat + approval card. New remote head `704c09e3`, 44 files in one
+  commit (18 changed + 26 new). Read-back verified. Next run may
+  start v1.2.1.
 - Next task: **v1.2.1 — Plans and Entitlements.** v0.2.0 Customer
   Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
   interviews.

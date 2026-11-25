@@ -454,15 +454,15 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.2.1 — Plans and Entitlements
 
-- [ ] Shipment limits.
-- [ ] Claim limits.
-- [ ] Organization member limits.
-- [ ] Storage limits.
-- [ ] Document limits.
-- [ ] Reporting restrictions.
-- [ ] Backend entitlement enforcement.
-- [ ] Usage tracking.
-- [ ] Upgrade prompts.
+- [x] Shipment limits.
+- [x] Claim limits.
+- [x] Organization member limits.
+- [x] Storage limits.
+- [x] Document limits.
+- [x] Reporting restrictions.
+- [x] Backend entitlement enforcement.
+- [x] Usage tracking.
+- [x] Upgrade prompts.
 
 ### v1.2.2 — Marketing and Acquisition
 

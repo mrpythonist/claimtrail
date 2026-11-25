@@ -134,6 +134,68 @@ billing, which is deferred with real Stripe).
   subscription (12 months from the first Success Fee period). After
   it passes, the fee is uncapped.
 
+## Entitlements (v1.2.1)
+
+Plan limits from v0.5.0 section 8 are enforced in the backend, not
+just shown. The frontend shows usage and upgrade prompts; the
+backend refuses the action.
+
+- **Limits per plan** (`config/billing.php`): claims per month Free
+  5, Starter 20, Growth 100, Fleet 300, Agency 100 per carrier
+  (carrier count is the org's carriers; the Success Fee plan has no
+  claim cap); members Free 1, Starter 3, Growth 10, Fleet 25,
+  Agency unlimited; storage Free 100 MB, Starter 1 GB, Growth
+  10 GB, Fleet 50 GB, Agency 10 GB per carrier; PDF claim packages
+  are not on Free, unlimited on every paid plan; reports are
+  dashboard-only on Free and full on Starter and above. **Shipments
+  are not capped**: a shipment is not the billed unit, the claim
+  cap is the binding limit.
+- **The current plan** is read from the org's subscription
+  (`EntitlementService::effectivePlan`): a trialing org is on the
+  Growth trial, a canceled subscription falls back to Free, an org
+  with no subscription is Free.
+- **Refusals are 402** with `error: "plan_limit_exceeded"` and a
+  `limit` block: the resource, the limit, how much is used, the
+  plan, and the cheapest listed plan that raises the limit (plus
+  its name). When no listed plan raises it the upgrade fields are
+  null: a Fleet org with one carrier cannot buy more claims, since
+  Agency gives 100 per carrier. The frontend renders the message
+  with a link to the billing page.
+- **Guarded actions**: claim creation, member invitations
+  (pending invitations count toward the member cap), evidence
+  uploads (evidence plus generated documents count toward
+  storage), PDF package generation, full reports. The upload check
+  runs before the file is stored.
+- **Caps never delete data**: claims already created stay
+  listable, and a downgrade keeps everything. After a downgrade
+  the lower cap blocks only new claims above it, and the billing
+  page warns the org. A claim created above the new cap by a
+  downgrade still counts toward the new cap's usage.
+- **The downgrade carryover**: a renewal starts a fresh billing
+  period, so claims created in the old period would stop counting
+  the moment a downgrade applies, and the lower cap would hand
+  out a fresh allowance at once. Instead, when a move to a lower
+  plan takes effect (scheduled downgrade, cancellation, dunning
+  downgrade, trial lapse, immediate cancel), the claims created
+  since the old period began are carried into the new period
+  (`claims_carryover` on the subscription) and still count toward
+  the new cap. The carryover covers one period only: the next
+  renewal clears it, and the following period starts with a clean
+  allowance. A same-plan renewal also clears it, so a normal
+  renewal still resets the monthly allowance.
+- **Usage** (`GET /billing/usage`, `entitlements` block, also
+  included in `GET /billing/subscription`): claims created in the
+  current period plus the carryover, active members, pending
+  invitations, storage used, and per-resource upgrade options
+  (`{key, name}` of the cheapest listed plan that raises the
+  limit, null when none does). There is no vendor dashboard
+  surface for usage: the operations dashboard is per-org queue
+  monitoring with no org-listing view, so vendor visibility is
+  not built in v1.2.1.
+- **Limits not specified in v0.5.0 section 8 are not enforced**:
+  there is no per-claim cap on evidence files (storage is the
+  governor), and no per-claim cap on generated documents.
+
 ## Webhooks
 
 The provider posts to `POST /api/v1/billing/webhooks`. It is

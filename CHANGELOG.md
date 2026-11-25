@@ -3,6 +3,74 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.2.1] - 2026-11-25
+
+Phase 3, Plans and Entitlements — the plan limits from v0.5.0
+section 8 are now enforced in the backend. App version bumped to
+1.2.1; OpenAPI still at 116 paths (no new endpoints).
+
+### Added
+
+- Entitlement enforcement (`App\\Services\\EntitlementService`,
+  `App\\Exceptions\\EntitlementExceededException`): the org's
+  current plan is read from its subscription (trialing orgs are on
+  the Growth trial, canceled subscriptions fall back to Free).
+  Guarded actions are claim creation, member invitations, evidence
+  uploads, PDF package generation, and full reports. A refusal is
+  402 with `error: "plan_limit_exceeded"` and a `limit` block
+  naming the cheapest plan that raises the limit.
+- Limits per plan: claims per month Free 5, Starter 20, Growth 100,
+  Fleet 300, Agency 100 per carrier, Success Fee uncapped; members
+  Free 1, Starter 3, Growth 10, Fleet 25, Agency unlimited;
+  storage Free 100 MB, Starter 1 GB, Growth 10 GB, Fleet 50 GB,
+  Agency 10 GB per carrier; PDF packages not on Free, unlimited
+  on paid plans; reports dashboard-only on Free, full on Starter
+  and above. Shipments are not capped: the claim cap is the
+  binding limit.
+- Usage tracking (`GET /billing/usage`, `entitlements` block, also
+  in `GET /billing/subscription`): claims created in the current
+  period, active members plus pending invitations, storage used,
+  and per-resource upgrade prompts. The billing page shows a Plan
+  usage section; the claim creation page renders a 402 as an
+  upgrade alert linking to billing.
+- Caps never delete data: claims created before a cap stay, and a
+  downgrade keeps everything while blocking new claims above the
+  lower limit.
+- Downgrade carryover (`claims_carryover` on the subscription, new
+  migration): when a move to a lower plan takes effect at a
+  renewal (scheduled downgrade, cancellation, dunning downgrade,
+  trial lapse, immediate cancel), the claims created since the old
+  period began still count toward the new lower cap for one
+  period. The next renewal clears it, and a same-plan renewal
+  clears it too, so a normal renewal still resets the monthly
+  allowance.
+- OpenAPI: `EntitlementSummary` and `EntitlementLimitInfo`
+  schemas, a `PlanLimitExceeded` 402 response referenced from the
+  seven guarded endpoints, and the `entitlements` block on
+  `BillingUsageSummary`.
+
+### Fixed
+
+- The frontend `ApiRequestError` dropped every error-body field
+  except `message` and `errors`, so a 402 `limit` block never
+  reached the page that renders the upgrade prompt. The full
+  parsed body is now carried on the error.
+- The downgrade block was a one-second race: the claim-cap count
+  used only the current billing period, so a renewal reset the
+  count and the downgrade handed out a fresh allowance at once,
+  blocking nothing except when the claims and the renewal landed
+  in the same second. The carryover above makes the block
+  deterministic, and the downgrade test no longer depends on
+  wall-clock timing.
+
+### Not in v1.2.1
+
+- No vendor dashboard surface for usage: the operations dashboard
+  is per-org queue monitoring with no org-listing view.
+- No per-claim cap on evidence files or generated documents:
+  v0.5.0 section 8 does not specify one, and storage is the
+  governor.
+
 ## [1.2.0] - 2026-11-25
 
 Phase 3, Subscription Billing — against a mock provider, by decision:

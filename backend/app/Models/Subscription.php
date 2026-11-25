@@ -56,6 +56,7 @@ class Subscription extends Model
         'payment_method_last4',
         'extra_carriers',
         'credit_balance_cents',
+        'claims_carryover',
     ];
 
     protected function casts(): array
@@ -71,6 +72,7 @@ class Subscription extends Model
             'extra_carriers' => 'integer',
             'pending_extra_carriers' => 'integer',
             'credit_balance_cents' => 'integer',
+            'claims_carryover' => 'integer',
         ];
     }
 

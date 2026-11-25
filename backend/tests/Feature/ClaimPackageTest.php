@@ -55,6 +55,7 @@ class ClaimPackageTest extends TestCase
     {
         Queue::fake();
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::OperationsManager);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
         $claim = $this->createClaim($organization, $shipment);
 
@@ -105,6 +106,7 @@ class ClaimPackageTest extends TestCase
     {
         Storage::fake('private');
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
         $claim = $this->createClaim($organization, $shipment);
 
@@ -142,6 +144,7 @@ class ClaimPackageTest extends TestCase
     {
         Queue::fake();
         [, $organization] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organization, 'starter');
         $shipment = $this->createShipment($organization);
         $claim = $this->createClaim($organization, $shipment);
 
@@ -159,6 +162,7 @@ class ClaimPackageTest extends TestCase
     {
         Storage::fake('private');
         [, $organizationA] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organizationA, 'starter');
         $shipment = $this->createShipment($organizationA);
         $claim = $this->createClaim($organizationA, $shipment);
 
@@ -170,6 +174,7 @@ class ClaimPackageTest extends TestCase
         $this->assertSame('ready', $document->status->value);
 
         [, $organizationB] = $this->actingAsMemberOf(OrganizationRole::Owner);
+        $this->subscribe($organizationB, 'starter');
 
         $this->withHeaders($this->orgHeaders($organizationB))
             ->get("/api/v1/documents/{$document->getKey()}/download")

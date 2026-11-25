@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
@@ -14,7 +15,12 @@ import { apiFetch, ApiRequestError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canCreateClaims } from "@/lib/permissions";
 import type { FieldErrors } from "@/lib/validation";
-import type { Claim, Organization, Shipment } from "@/lib/types";
+import type {
+  Claim,
+  EntitlementLimitInfo,
+  Organization,
+  Shipment,
+} from "@/lib/types";
 
 function NewClaimContent({ org }: { org: Organization }) {
   const router = useRouter();
@@ -22,6 +28,8 @@ function NewClaimContent({ org }: { org: Organization }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradePrompt, setUpgradePrompt] =
+    useState<EntitlementLimitInfo | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -52,6 +60,7 @@ function NewClaimContent({ org }: { org: Organization }) {
 
   async function handleSubmit(payload: ClaimPayload) {
     setError(null);
+    setUpgradePrompt(null);
     setFieldErrors({});
     setSubmitting(true);
     try {
@@ -62,7 +71,19 @@ function NewClaimContent({ org }: { org: Organization }) {
       });
       router.push(`/claims/${response.data.id}`);
     } catch (err) {
-      if (err instanceof ApiRequestError && Object.keys(err.fields).length > 0) {
+      if (
+        err instanceof ApiRequestError &&
+        err.status === 402 &&
+        err.body?.limit
+      ) {
+        // The plan's claim cap was hit: the backend refused the
+        // creation and named the upgrade that raises the limit.
+        setUpgradePrompt(err.body.limit);
+        setError(err.message);
+      } else if (
+        err instanceof ApiRequestError &&
+        Object.keys(err.fields).length > 0
+      ) {
         const mapped: FieldErrors = {};
         for (const [field, messages] of Object.entries(err.fields)) {
           mapped[field] = messages[0];
@@ -107,10 +128,26 @@ function NewClaimContent({ org }: { org: Organization }) {
             </Alert>
           </div>
         )}
-        {error && (
+        {upgradePrompt ? (
           <div className="mb-4">
-            <Alert tone="error">{error}</Alert>
+            <Alert tone="warning">
+              {error}{" "}
+              {upgradePrompt.upgrade_plan_name ? (
+                <Link href="/settings/billing">
+                  Upgrade to {upgradePrompt.upgrade_plan_name} on the billing
+                  page.
+                </Link>
+              ) : (
+                "No higher plan raises this limit."
+              )}
+            </Alert>
           </div>
+        ) : (
+          error && (
+            <div className="mb-4">
+              <Alert tone="error">{error}</Alert>
+            </div>
+          )
         )}
         {shipments.length === 0 && !loadError ? (
           <Alert tone="info">

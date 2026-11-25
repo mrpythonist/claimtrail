@@ -595,6 +595,7 @@ class BillingService
                 'pending_interval' => null,
                 'pending_extra_carriers' => null,
                 'extra_carriers' => 0,
+                'claims_carryover' => $this->claimsSincePeriodStart($subscription, now()),
             ]);
 
             $this->recordBillingEvent($organization, 'customer.subscription.deleted', [
@@ -1064,6 +1065,7 @@ class BillingService
                 'current_period_start' => $now,
                 'current_period_end' => $this->nextPeriodEnd($subscription->interval, $now),
                 'trial_ends_at' => null,
+                'claims_carryover' => 0,
             ]);
 
             $this->recordBillingEvent($organization, 'trial.converted', [
@@ -1106,6 +1108,7 @@ class BillingService
             $subscription->update([
                 'current_period_start' => $now,
                 'current_period_end' => $this->nextPeriodEnd($subscription->interval, $now),
+                'claims_carryover' => 0,
             ]);
 
             return $invoice !== null ? 'metered_invoiced' : 'renewed';
@@ -1186,6 +1189,7 @@ class BillingService
             'current_period_start' => $now,
             'current_period_end' => $this->nextPeriodEnd($subscription->interval, $now),
             'credit_balance_cents' => max(0, $subscription->credit_balance_cents - $creditApplied),
+            'claims_carryover' => 0,
         ]);
 
         $this->recordBillingEvent($organization, 'invoice.paid', [
@@ -1207,6 +1211,13 @@ class BillingService
         $newPlan = $subscription->pending_plan;
         $newInterval = $subscription->pending_interval ?? $subscription->interval;
         $newExtra = $subscription->pending_extra_carriers ?? 0;
+
+        // Claims created since the old period began carry into the
+        // new period: a downgrade must block new claims above the
+        // lower limit (v0.5.0 section 9.2), and the renewal starts
+        // a fresh period, so without the carryover the old claims
+        // would stop counting the moment the downgrade applies.
+        $carryover = $this->claimsSincePeriodStart($subscription, $now);
 
         $amount = PlanCatalog::periodCents($newPlan, $newInterval, $newExtra);
         $creditApplied = min($amount, $subscription->credit_balance_cents);
@@ -1276,6 +1287,7 @@ class BillingService
             'pending_interval' => null,
             'pending_extra_carriers' => null,
             'credit_balance_cents' => max(0, $subscription->credit_balance_cents - $creditApplied),
+            'claims_carryover' => $carryover,
         ]);
 
         $this->recordBillingEvent($organization, 'customer.subscription.updated', [
@@ -1741,6 +1753,13 @@ class BillingService
      */
     protected function applyFreePlan(Subscription $subscription, CarbonInterface $now): void
     {
+        // As with a scheduled downgrade, claims created since the
+        // old period began carry into the new Free period, so a
+        // move to Free blocks new creation above the Free limits
+        // (v0.5.0 section 9.3) instead of handing out a fresh
+        // allowance the moment the plan changes.
+        $carryover = $this->claimsSincePeriodStart($subscription, $now);
+
         $subscription->update([
             'plan' => PlanCatalog::FREE,
             'status' => Subscription::STATUS_ACTIVE,
@@ -1754,7 +1773,27 @@ class BillingService
             'pending_extra_carriers' => null,
             'extra_carriers' => 0,
             'success_fee_cap_until' => null,
+            'claims_carryover' => $carryover,
         ]);
+    }
+
+    /**
+     * Claims created since the current period began, for the
+     * downgrade carryover (see applyPendingDowngrade). The window
+     * runs to the renewal time, not to the old period end, so
+     * claims created after the period ended but before the renewal
+     * ran still count.
+     */
+    protected function claimsSincePeriodStart(Subscription $subscription, CarbonInterface $now): int
+    {
+        if ($subscription->current_period_start === null) {
+            return 0;
+        }
+
+        return (int) $subscription->organization->claims()
+            ->where('created_at', '>=', $subscription->current_period_start)
+            ->where('created_at', '<', $now)
+            ->count();
     }
 
     /**

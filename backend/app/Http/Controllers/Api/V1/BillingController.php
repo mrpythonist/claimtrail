@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Organization;
 use App\Permission;
 use App\Services\BillingService;
+use App\Services\EntitlementService;
 use App\Services\ProrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class BillingController extends Controller
     public function __construct(
         protected BillingService $billing,
         protected ProrationService $proration,
+        protected EntitlementService $entitlements,
     ) {}
 
     /**
@@ -381,6 +383,12 @@ class BillingController extends Controller
 
         Gate::authorize(Permission::ManageBilling->value, $organization);
 
-        return response()->json(['data' => $this->billing->usageSummary($organization)]);
+        // The success-fee usage records plus the plan
+        // entitlements: limits, current usage, and the upgrade
+        // that removes each limit (v1.2.1).
+        return response()->json(['data' => array_merge(
+            $this->billing->usageSummary($organization),
+            ['entitlements' => $this->entitlements->summary($organization)],
+        )]);
     }
 }

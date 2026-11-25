@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Permission;
+use App\Services\EntitlementService;
 use App\Support\StorageKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,7 +63,7 @@ class EvidenceFileController extends Controller
      * The file lands on the private disk under a generated key; the
      * original filename is metadata only and never becomes a path.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, EntitlementService $entitlements): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -85,6 +86,10 @@ class EvidenceFileController extends Controller
                 'mimes:'.implode(',', config('evidence.allowed_extensions')),
             ],
         ]);
+
+        // Plan limits (v1.2.1): the upload is refused before
+        // anything is written when it would pass the storage cap.
+        $entitlements->authorizeUpload($organization, $request->file('file')->getSize());
 
         $shipment = Shipment::forOrganization($organization->getKey())
             ->whereKey($validated['shipment_id'])

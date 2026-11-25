@@ -10,6 +10,7 @@ use App\Models\Claim;
 use App\Models\GeneratedDocument;
 use App\Models\Organization;
 use App\Services\ClaimPackageService;
+use App\Services\EntitlementService;
 use App\Support\StorageKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,7 +32,7 @@ class ClaimPackageController extends Controller
      * immediately: the previous ready document stays downloadable
      * until the new one is ready.
      */
-    public function store(Request $request, Claim $claim): JsonResponse
+    public function store(Request $request, Claim $claim, EntitlementService $entitlements): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -40,6 +41,10 @@ class ClaimPackageController extends Controller
         }
 
         Gate::authorize('generatePackage', $claim);
+
+        // Plan limits (v1.2.1): PDF package exports are not
+        // included in the Free plan.
+        $entitlements->authorizePackageGeneration($organization);
 
         $validated = $request->validate([
             'include_notes' => ['sometimes', 'boolean'],

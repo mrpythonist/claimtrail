@@ -220,6 +220,69 @@ export interface PaginatedMeta {
 export interface ApiError {
   message: string;
   errors?: Record<string, string[]>;
+  fields?: Record<string, string[]>;
+  /** Machine-readable error code, e.g. "plan_limit_exceeded" on a 402. */
+  error?: string;
+  /** Included on a 402 plan-limit refusal: what limit was hit and the upgrade that raises it. */
+  limit?: EntitlementLimitInfo;
+}
+
+/** The `limit` block of a 402 plan-limit refusal. */
+export interface EntitlementLimitInfo {
+  resource: string;
+  limit: number | null;
+  used: number;
+  plan: string;
+  upgrade_plan: string | null;
+  upgrade_plan_name: string | null;
+}
+
+/** Plan limits for an organization, from GET /billing/usage `entitlements`. */
+export interface EntitlementLimits {
+  plan: string;
+  plan_name: string;
+  claims_per_month: number | null;
+  members: number | null;
+  storage_bytes: number | null;
+  pdf_packages: boolean;
+  reports: boolean;
+}
+
+/** Current usage against the plan limits, from GET /billing/usage `entitlements`. */
+export interface EntitlementUsage {
+  claims_created: number;
+  claims_carryover: number;
+  members: number;
+  pending_invitations: number;
+  storage_bytes: number;
+}
+
+/** The cheapest listed plan that raises a limit, from GET /billing/usage `entitlements`. */
+export interface EntitlementUpgradeOption {
+  key: string;
+  name: string;
+}
+
+/** Per-resource upgrade options, from GET /billing/usage `entitlements`. */
+export interface EntitlementUpgrade {
+  claims: EntitlementUpgradeOption | null;
+  members: EntitlementUpgradeOption | null;
+  storage: EntitlementUpgradeOption | null;
+  pdf_packages: EntitlementUpgradeOption | null;
+  reports: EntitlementUpgradeOption | null;
+}
+
+/** Plan limits and usage for an organization, from GET /billing/usage. */
+export interface EntitlementSummary {
+  plan: string;
+  plan_name: string;
+  status: string;
+  period_start: string | null;
+  period_end: string | null;
+  carriers: number;
+  limits: EntitlementLimits;
+  usage: EntitlementUsage;
+  upgrade: EntitlementUpgrade;
 }
 
 export type ShipmentStatus =
@@ -882,6 +945,8 @@ export interface BillingUsageSummary {
   accrued_fee_cents: number;
   cap_cents: number | null;
   cap_remaining_cents: number | null;
+  /** Plan limits and usage for the period (v1.2.1). */
+  entitlements?: EntitlementSummary;
 }
 
 /** The current subscription from GET /billing/subscription. */

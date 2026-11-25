@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Permission;
+use App\Services\EntitlementService;
 use App\Services\ReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,11 +26,16 @@ class ReportController extends Controller
      * The summary: counts by status and event type, and the six
      * money figures per currency.
      */
-    public function summary(Request $request, ReportService $reports): JsonResponse
+    public function summary(Request $request, ReportService $reports, EntitlementService $entitlements): JsonResponse
     {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::ViewReports->value, $organization);
+
+        // Plan limits (v1.2.1): full reports are not included in
+        // the Free plan. The dashboard is a separate screen and
+        // stays available to every plan.
+        $entitlements->authorizeReports($organization);
 
         $validated = $this->validateRange($request);
 
@@ -45,11 +51,15 @@ class ReportController extends Controller
     /**
      * Recovered money per month per currency.
      */
-    public function recoveryHistory(Request $request, ReportService $reports): JsonResponse
+    public function recoveryHistory(Request $request, ReportService $reports, EntitlementService $entitlements): JsonResponse
     {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::ViewReports->value, $organization);
+
+        // Plan limits (v1.2.1): full reports are not included in
+        // the Free plan.
+        $entitlements->authorizeReports($organization);
 
         $validated = $this->validateRange($request);
 
@@ -70,11 +80,15 @@ class ReportController extends Controller
      * header. Claims stream with a cursor so a large export does
      * not load every claim into memory at once.
      */
-    public function export(Request $request, ReportService $reports): StreamedResponse
+    public function export(Request $request, ReportService $reports, EntitlementService $entitlements): StreamedResponse
     {
         $organization = $this->organization($request);
 
         Gate::authorize(Permission::ExportReports->value, $organization);
+
+        // Plan limits (v1.2.1): full reports are not included in
+        // the Free plan.
+        $entitlements->authorizeReports($organization);
 
         $validated = $this->validateRange($request);
         $dateFrom = $validated['date_from'] ?? null;

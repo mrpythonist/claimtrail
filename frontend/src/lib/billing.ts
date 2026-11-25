@@ -222,6 +222,20 @@ export function formatCents(cents: number): string {
   return `${sign}$${(Math.abs(cents) / 100).toFixed(2)}`;
 }
 
+/** Format a byte count the way the billing limits are shown (100 MB, 1 GB). */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const rounded = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${rounded} ${units[unit]}`;
+}
+
 /** Human label for a subscription status. */
 export function subscriptionStatusLabel(
   status: BillingSubscription["status"],

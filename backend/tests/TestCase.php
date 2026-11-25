@@ -127,6 +127,41 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Put the organization's subscription on a plan with a stored
+     * payment method, as if it had checked out. Shared by billing
+     * and entitlement tests.
+     */
+    protected function subscribe(Organization $organization, string $plan, string $interval = 'monthly', ?string $paymentMethod = 'pm_mock_visa', int $extraCarriers = 0): \App\Models\Subscription
+    {
+        $service = app(\App\Services\BillingService::class);
+
+        $sub = $service->subscriptionFor($organization);
+        $now = now();
+
+        $method = $paymentMethod !== null
+            ? \App\Billing\MockBillingProvider::resolvePaymentMethod($paymentMethod)
+            : null;
+
+        $sub->update([
+            'plan' => $plan,
+            'status' => \App\Models\Subscription::STATUS_ACTIVE,
+            'interval' => $interval,
+            'current_period_start' => $now->copy()->subDays(15),
+            'current_period_end' => $now->copy()->addDays(15),
+            'plan_started_at' => $now->copy()->subDays(15),
+            'success_fee_cap_until' => $plan === \App\Billing\PlanCatalog::SUCCESS_FEE
+                ? $now->copy()->addMonths(12)
+                : null,
+            'payment_method_token' => $method['token'] ?? null,
+            'payment_method_brand' => $method['brand'] ?? null,
+            'payment_method_last4' => $method['last4'] ?? null,
+            'extra_carriers' => $extraCarriers,
+        ]);
+
+        return $sub->fresh();
+    }
+
+    /**
      * Create a claim for a shipment.
      */
     protected function createClaim(Organization $organization, Shipment $shipment, array $attributes = []): Claim
