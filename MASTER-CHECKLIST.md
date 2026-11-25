@@ -437,20 +437,20 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.2.0 — Subscription Billing
 
-- [ ] Stripe integration.
-- [ ] Subscription plans.
-- [ ] Monthly billing.
-- [ ] Annual billing.
-- [ ] Checkout.
-- [ ] Free trials.
-- [ ] Subscription upgrades.
-- [ ] Subscription downgrades.
-- [ ] Renewals.
-- [ ] Cancellations.
-- [ ] Invoice history.
-- [ ] Failed payment handling.
-- [ ] Stripe webhooks.
-- [ ] Billing portal.
+- [x] Stripe integration. (Mock provider behind the `BillingProvider` interface, per Aqib's 2026-11-25 decision: skip real Stripe, build with dummy data. No real Stripe calls, no Stripe keys. Real Stripe is a later provider swap, documented in docs/BILLING.md.)
+- [x] Subscription plans.
+- [x] Monthly billing.
+- [x] Annual billing.
+- [x] Checkout.
+- [x] Free trials.
+- [x] Subscription upgrades.
+- [x] Subscription downgrades.
+- [x] Renewals.
+- [x] Cancellations.
+- [x] Invoice history.
+- [x] Failed payment handling.
+- [x] Stripe webhooks. (Simulated: HMAC-verified endpoint + simulate endpoint; exact redelivery recorded as a duplicate.)
+- [x] Billing portal. (Mocked: portal URL + token summary.)
 
 ### v1.2.1 — Plans and Entitlements
 

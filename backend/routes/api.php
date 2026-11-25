@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
+use App\Http\Controllers\Api\V1\BillingController;
+use App\Http\Controllers\Api\V1\BillingWebhookController;
 use App\Http\Controllers\Api\V1\CarrierController;
 use App\Http\Controllers\Api\V1\ClaimController;
 use App\Http\Controllers\Api\V1\ClaimDeadlineController;
@@ -251,6 +253,34 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             // denials). Both require manage-security.
             Route::get('/security/check', [SecurityController::class, 'check']);
             Route::get('/security/events', [SecurityController::class, 'events']);
+
+            // Billing (v1.2.0): plans, checkout, trials, plan
+            // changes, cancellations, invoices, payment methods,
+            // and the mocked billing portal. All require
+            // manage-billing (owner, admin, billing staff), except
+            // the plan catalog, which any member may read.
+            Route::get('/billing/plans', [BillingController::class, 'plans']);
+            Route::get('/billing/subscription', [BillingController::class, 'subscription']);
+            Route::post('/billing/checkout', [BillingController::class, 'startCheckout']);
+            Route::post('/billing/checkout/{session}/complete', [BillingController::class, 'completeCheckout']);
+            Route::post('/billing/trials', [BillingController::class, 'startTrial']);
+            Route::post('/billing/subscription/change-plan', [BillingController::class, 'changePlan']);
+            Route::post('/billing/subscription/cancel', [BillingController::class, 'cancel']);
+            Route::post('/billing/subscription/resume', [BillingController::class, 'resume']);
+            Route::get('/billing/invoices', [BillingController::class, 'invoices']);
+            Route::get('/billing/invoices/{invoice}', [BillingController::class, 'invoice']);
+            Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'payInvoice']);
+            Route::post('/billing/payment-method', [BillingController::class, 'updatePaymentMethod']);
+            Route::post('/billing/portal', [BillingController::class, 'createPortalSession']);
+            Route::get('/billing/usage', [BillingController::class, 'usage']);
+            Route::post('/billing/webhooks/simulate', [BillingWebhookController::class, 'simulate']);
         });
     });
+
+    // Billing provider webhooks (v1.2.0): public, authenticated by
+    // the HMAC signature over the raw body. The portal session
+    // endpoint is public too: the token in the URL is the
+    // credential, and it expires after 30 minutes.
+    Route::post('/billing/webhooks', [BillingWebhookController::class, 'handle']);
+    Route::get('/billing/portal/{token}', [BillingWebhookController::class, 'portal']);
 });

@@ -530,6 +530,44 @@ login has no organization and is only visible through the
 all-organizations retention purge, not through this endpoint. See
 docs/SECURITY.md and docs/INCIDENT-RESPONSE.md.
 
+### Billing (tenant-scoped, v1.2.0)
+
+Subscription billing against a mock provider (see docs/BILLING.md).
+All routes require `manage-billing` (owner, admin, billing staff),
+except the plan catalog, which any member may read, and the two
+public routes at the bottom. The provider is the mock: checkout is
+completed in-app, cards are the Stripe test numbers, and no real
+money moves. Plan limits are shown but not enforced until v1.2.1.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/billing/plans` | Yes + org header | The plan catalog: Free, Starter $19, Growth $49, Fleet $99, Agency $149 base + $12 per extra carrier, and the unlisted Success Fee plan. |
+| GET | `/billing/subscription` | Yes + org header | The current subscription, with the current period's metered usage. A Free subscription is created lazily on first read. |
+| POST | `/billing/checkout` | Yes + org header | Open a mock checkout session. Body: `plan` (required), `interval` (`monthly`/`annual`, default `monthly`), `extra_carriers` (0-90, Agency only) (201). Only from Free, Success Fee, or a trial; a past-due subscription must pay its invoice first. |
+| POST | `/billing/checkout/{session}/complete` | Yes + org header | Complete the checkout: the mock "customer pays" step. Body: `payment_method` (nullable; required for a paid plan). A declined card leaves the session open for a retry. On success the subscription activates and a paid invoice is issued. |
+| POST | `/billing/trials` | Yes + org header | Start the 30-day no-card Growth trial (201). Converts to paid Growth when a card is on file; otherwise lapses to Free. |
+| POST | `/billing/subscription/change-plan` | Yes + org header | Change plan. Body: `plan` (required), `interval`, `extra_carriers`, `preview` (boolean). With `preview=true` returns the proration preview without changing anything. Upgrades apply immediately with proration (credit for unused days, charge for remaining days); downgrades are scheduled for the next renewal. |
+| POST | `/billing/subscription/cancel` | Yes + org header | Cancel. Body: `immediate` (default false: cancel at period end). |
+| POST | `/billing/subscription/resume` | Yes + org header | Undo a cancel-at-period-end. |
+| GET | `/billing/invoices` | Yes + org header | Invoice history, newest first. Query: `page`, `per_page` (default 15). |
+| GET | `/billing/invoices/{invoice}` | Yes + org header | One invoice with its lines. Another organization's invoice returns 404. |
+| POST | `/billing/invoices/{invoice}/pay` | Yes + org header | Pay an open or past-due invoice with the stored method, or one supplied now. A paid past-due invoice returns the subscription to active. |
+| POST | `/billing/payment-method` | Yes + org header | Store a dummy payment method. Body: `payment_method` (required; `pm_mock_visa` succeeds, `pm_mock_declined` declines). |
+| POST | `/billing/portal` | Yes + org header | Open a mock billing portal session (201). Returns the portal URL (the frontend billing page) and a token that opens the summary at `GET /billing/portal/{token}`. |
+| GET | `/billing/usage` | Yes + org header | The current period's metered usage: uninvoiced Success Fee records, amounts recovered, the accrued 15% fee, and the first-year $49/mo cap with what remains of it. |
+| POST | `/billing/webhooks/simulate` | Yes + org header | Fire a mock webhook event through the normal pipeline: sign, verify, handle (201). Body: `type` (required), `data`. |
+| POST | `/billing/webhooks` | Public, HMAC | Provider webhook endpoint. No Sanctum token: authenticity is verified by HMAC-SHA256 (`X-Mock-Signature: sha256=<hex>`) over the raw body. Unknown types are recorded as unprocessed; an exact redelivery is recorded as a duplicate and never applied twice. |
+| GET | `/billing/portal/{token}` | Public | Billing summary for a portal token. The token in the URL is the bearer secret; unknown or expired tokens return 404. |
+
+Invoice numbers are per-organization, per-year (`INV-2026-0001` for
+each organization's first invoice of the year). The Success Fee plan
+is metered: recording a payment on an accepted claim creates a usage
+record (15% of the amount), and the renewal invoices all uninvoiced
+records in arrears with the $49/mo first-year cap applied in the
+billing code. Failed renewals go past due; `billing:dunning` retries
+(+3 days, then +7 days) and downgrades to Free after 14 days past
+due, never deleting data. See docs/BILLING.md.
+
 ## Example: register, create an organization, invite someone
 
 ```sh

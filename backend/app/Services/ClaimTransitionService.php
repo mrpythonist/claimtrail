@@ -35,6 +35,7 @@ class ClaimTransitionService
         protected ReadinessService $readiness,
         protected AuditService $audit,
         protected NotificationService $notifications,
+        protected BillingService $billing,
     ) {}
 
     /**
@@ -191,6 +192,13 @@ class ClaimTransitionService
                     'payment_reference' => $data['payment_reference'] ?? null,
                 ],
             );
+
+            // Metered billing (v1.2.0): when the organization is
+            // on the success-fee plan, this payment is the fee
+            // base. The usage record is written in the same
+            // transaction as the payment, so a paid claim is never
+            // metered twice and never missed.
+            $this->billing->recordUsageForPayment($claim->fresh());
 
             return $claim->fresh();
         }));

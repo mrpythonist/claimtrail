@@ -6,33 +6,28 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v0.6.0 (Phase 0, Pilot Preparation).
-  App version stays 1.1.3 — Phase 0 work is research/docs, not code.
-  **Phase 0 is now complete** (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0
-  done; v0.2.0 interviews deferred, still open).
+- **Last completed version:** v1.2.0 (Phase 3, Subscription Billing,
+  mock provider). App version is now **1.2.0**. Phase 0 is complete
+  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
+  deferred, still open).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `5576b2e1` (v0.5.0, pushed 2026-11-24 after Aqib's yes + approval).
-  **v0.6.0 is complete and verified but NOT yet pushed** — see push status
-  in the 2026-11-25 log entry below.
-- **Tests at v0.6.0:** 382 backend (1902 assertions) + 241 frontend, all
-  passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
-  Live smoke test: sample CSV imports 12/12.
+  head `3b6300d7` (v0.6.0, pushed 2026-11-25). **v1.2.0 is built and
+  verified but NOT PUSHED** — it waits for Aqib's yes in the main chat.
+- **Tests at v1.2.0:** 421 backend (2169 assertions) + 268 frontend, all
+  passing. `npm run build` succeeds (38/38 pages, including the new
+  `/settings/billing`). Live HTTP smoke test: 59/59 steps on a fresh
+  SQLite DB (see the 2026-11-25 v1.2.0 log entry).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**Phase 3 — Commercial Launch, v1.2.0 Subscription Billing, BLOCKED:**
-needs Stripe keys from Aqib (standing blocker) plus the
-metered-billing decision for the success-fee plan (v0.5.0 section 9.1).
-Phase 0 is complete, so there is no next Phase 0 version. The next run
-must NOT start v1.2.0, and must NOT jump to another version (v1.2.1
-depends on v1.2.0; v1.2.2/v1.2.3 assume billing exists), without Aqib's
-explicit direction in the main chat: either he supplies the Stripe keys
-and the metered-billing decision, or he picks the next unblocked
-version. Report the blocker and the choice in the main chat with the
-v0.6.0 ready-to-push notice.
+**v1.2.1 — Plans and Entitlements** (MASTER-CHECKLIST.md): shipment
+limits, claim limits, organization member limits, storage limits,
+document limits, reporting restrictions, backend entitlement
+enforcement, usage tracking, upgrade prompts. The v1.2.0 plan limits
+are shown on the billing page but not enforced; v1.2.1 enforces them.
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
@@ -96,6 +91,134 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-25 — v1.2.0 Subscription Billing built and verified (mock provider)
+
+- Gate check passed first: remote head on GitHub is `3b6300d7`,
+  matching the recorded v0.6.0 head, so no version was waiting to be
+  pushed. Build started 2026-11-25 13:17 PKT on Aqib's "Start now" in
+  the main chat, the same afternoon v0.6.0 was pushed — not the
+  scheduled 2026-11-26 10:10 PKT run.
+- Decision (Aqib, 2026-11-25 13:15 PKT): **skip real Stripe; build
+  billing against a mock billing provider with dummy data and make it
+  fully working end to end.** No real Stripe calls, no Stripe keys.
+  The mock sits behind the `BillingProvider` interface and implements
+  the v0.5.0 section 9.1 shape, so real Stripe is a later provider
+  swap, not a redesign. The metered-billing decision (Stripe metered
+  vs manual invoicing) is deferred with real Stripe; the mock follows
+  the metered-arrears model.
+- Backend (new): `config/billing.php` (provider driver, webhook
+  secret, 30-day trial, dunning delays [3, 7], 14-day past-due
+  downgrade, success-fee rate 15%, cap 4900 cents, 12-month cap and
+  attribution windows, all 6 plans with prices/limits);
+  `app/Billing/BillingProvider.php` (interface) and
+  `MockBillingProvider.php` (fake ids, test cards 4242 succeeds /
+  4000...0002 declines, process-local idempotency cache, HMAC-SHA256
+  webhook signing); `PlanCatalog.php`; migration
+  `2026_11_25_100000_create_billing_tables.php` (subscriptions,
+  invoice_sequences, invoices, invoice_lines, billing_usage_records,
+  billing_events, checkout_sessions, portal_sessions) + 7 models;
+  `ProrationService.php` (daily-rate credit/charge);
+  `BillingService.php` (~1,100 lines: provider resolution, lazy Free
+  subscription, checkout + complete, trials, changePlan with proration
+  + scheduled downgrades, cancel/resume, payment method, portal
+  sessions, invoice history/detail/pay, metered usage recording +
+  arrears invoicing with the $49 cap, renewDue, processDunning,
+  webhook handling with idempotency, invoice numbering
+  INV-YYYY-NNNN); `manage-billing` permission (Owner, Admin, Billing
+  Staff); `BillingController.php` + `BillingWebhookController.php`
+  (17 billing routes); `billing:renew` (daily 03:30) and
+  `billing:dunning` (daily 04:00) commands; `ClaimTransitionService`
+  records metered usage inside the record-payment transaction.
+  Version bumped 1.1.3 → 1.2.0 in `config/app.php`.
+- Frontend (new): billing hub at `/settings/billing` (current
+  subscription, plans with monthly/annual toggle and test-card
+  selector, trial, plan change with proration preview, Success Fee
+  usage, payment method, invoices with pay, billing portal entry),
+  `src/lib/billing.ts` typed client + formatters,
+  `canManageBilling` helper, Billing nav item (Owner/Admin/Billing
+  Staff), AppShell version strings bumped to v1.2.0.
+- Docs: new `docs/BILLING.md` runbook (mock provider, plan movement,
+  metered billing, webhooks, invoices, scheduled commands, the Stripe
+  swap-out path); `docs/openapi.yaml` 99 → 116 paths (17 billing
+  paths, 9 billing schemas, verified against the live route list —
+  no missing, no extra); `docs/API.md` billing section; `CHANGELOG.md`
+  [1.2.0] entry. MASTER-CHECKLIST.md: all 14 v1.2.0 items checked
+  (Stripe integration / webhooks / portal annotated as mock,
+  simulated, mocked).
+- Two real defects found by verification and fixed in this version:
+  (1) The billing migration had a **global unique on
+  `invoices.number`** while numbering is per-organization, per-year,
+  so the second organization's first invoice failed with a
+  unique-constraint violation (its checkout returned 500 and its
+  renewal threw). Found by the live smoke test. The constraint is
+  now `(organization_id, number)`, with a regression test proving
+  two organizations can each hold `INV-2026-0001` (the test was
+  verified to fail with the global unique restored, then the fix
+  was re-applied). (2) The frontend billing client and the smoke
+  script used the wrong URIs for four endpoints
+  (`/billing/plan-changes`, `/billing/cancel`, `/billing/resume`,
+  `/billing/portal-sessions`); the real routes are
+  `/billing/subscription/change-plan`,
+  `/billing/subscription/cancel`, `/billing/subscription/resume`,
+  `/billing/portal`. Found by the live smoke test (404 on the
+  plan-change preview). The mocked frontend tests could not catch
+  it; the smoke test did.
+- Three smaller fixes during verification: the metered-invoice
+  period filter was too strict (uninvoiced records are now all
+  collected at renewal, since the period only advances at renewal);
+  `ProrationService` casts Carbon 3's float `diffInDays` results to
+  int (the docblock promises ints); the frontend lib's
+  `subscriptionStatusTone`/`invoiceStatusTone` return types now
+  include `info`.
+- Verification: backend **421 passed (2169 assertions)** — 382 at
+  v1.1.3 + 33 billing tests (32 feature + 1 invoice-number
+  regression) + 6 proration unit tests. Frontend **268 passed**
+  across 26 files (241 + 27 billing), `tsc --noEmit` clean, lint
+  clean, `npm run build` succeeds (38/38 pages, including
+  `/settings/billing`). `migrate:fresh` passes with the new
+  migration. Live HTTP smoke test over the built-in server on a
+  fresh SQLite DB passed **59/59 steps**: plans (6, Success Fee
+  unlisted), Free start, Growth trial, checkout to Fleet with the
+  visa test card, one paid $99 invoice, Agency proration preview
+  (net $48.33, 29 days left) and immediate upgrade with
+  credit/charge lines, cancel/resume, declined card stored, failed
+  renewal → past due (attempts 1), dunning skips a not-yet-due retry
+  then retries (attempts 2), 14 days past due → downgrade to Free,
+  webhook bad signature 401 / good signature applied (attempts 3) /
+  exact redelivery duplicate (attempts still 3), simulate of an
+  unknown type recorded as unprocessed, portal token opens the
+  billing summary, Success Fee checkout with no card, claim
+  lifecycle potential → under_review → ready_to_submit → submitted
+  → accepted → payment recorded ($1,000), metered usage $1,000
+  recovered / $150 fee / $49 cap / $0 remaining, renewal arrears
+  invoice $150.00 success-fee line − $101.00 cap adjustment =
+  $49.00 total, paid with the visa card, usage empty after.
+  Scratch evidence in `~/workspace/claimtrail-scratch-v120/smoke/`
+  (smoke script, runner, server log, smoke DB).
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. v1.2.0-specific: live
+  Stripe checkout is intentionally not built (mock by decision);
+  the mock portal URL points at the frontend billing page, not a
+  Stripe-hosted page; the mock's process-local idempotency cache
+  does not survive a restart. Plan limit enforcement is v1.2.1,
+  not this version.
+- Environment note: system `php` is present on this VM (8.3.6,
+  verified 2026-11-25) and was used for the backend suite,
+  migrations, seed and smoke-test server. `artisan serve` still
+  fails on this VM; the built-in server was used for the smoke test.
+  The temporary `backend/.env` created for the smoke test was
+  removed afterwards.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.** v1.2.0 waits
+  for Aqib's yes in the main chat + approval card. Remote head is
+  still `3b6300d7` (v0.6.0).
+- Next task: **v1.2.1 — Plans and Entitlements.** v0.2.0 Customer
+  Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
+  interviews.
 
 ### 2026-11-25 — v0.6.0 Pilot Preparation built and verified (Phase 0 complete)
 
@@ -176,19 +299,18 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **v0.6.0 COMPLETE AND VERIFIED, NOT PUSHED.** Ready to
-  push pending Aqib's yes in the main chat + approval card. Files for
-  the push: `docs/validation/0.6.0-pilot-preparation.md` (new),
-  `docs/validation/pilot/sample-shipments.csv` (new),
-  `docs/validation/pilot/pilot-scenarios.md` (new),
+- Push status: **v0.6.0 PUSHED 2026-11-25** after Aqib's yes in the main
+  chat + approval card. New remote head `3b6300d7`, 6 files in one
+  commit (new `docs/validation/0.6.0-pilot-preparation.md`,
+  `docs/validation/pilot/sample-shipments.csv`,
+  `docs/validation/pilot/pilot-scenarios.md`,
   `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
-  `DEVELOPMENT_PROGRESS.md` (updated).
-- Next task: **Phase 0 is complete. v1.2.0 Subscription Billing is
-  BLOCKED on Stripe keys from Aqib plus the metered-billing decision
-  for the success-fee plan.** The next run must not start v1.2.0 or
-  jump to another version without Aqib's explicit direction: he either
-  supplies the Stripe keys and the metered-billing decision, or picks
-  the next unblocked version. v0.2.0 Customer Interviews stays
+  `DEVELOPMENT_PROGRESS.md` updated). Read-back verified.
+- Next task: **v1.2.0 — Subscription Billing.** Aqib unblocked it
+  the same day (2026-11-25 13:15 PKT): skip real Stripe, build
+  billing against a mock provider with dummy data. Built and
+  verified the same afternoon (see the 2026-11-25 v1.2.0 entry
+  above); push waits for his yes. v0.2.0 Customer Interviews stays
   DEFERRED per Aqib 2026-11-21 — do not fabricate interviews.
 
 ### 2026-11-24 — v0.5.0 Pricing Validation built and verified

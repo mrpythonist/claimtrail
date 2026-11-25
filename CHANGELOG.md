@@ -3,6 +3,106 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.2.0] - 2026-11-25
+
+Phase 3, Subscription Billing — against a mock provider, by decision:
+no real Stripe calls, no Stripe keys. The provider sits behind the
+`BillingProvider` interface so real Stripe is a later provider swap,
+not a redesign (see docs/BILLING.md). App version bumped to 1.2.0;
+OpenAPI at 116 paths (99 + 17 billing paths).
+
+### Added
+
+- Mock billing provider (`App\Billing\BillingProvider` interface +
+  `MockBillingProvider`): fake customer/session/charge ids, Stripe
+  test cards `pm_mock_visa` (4242, succeeds) and `pm_mock_declined`
+  (4000...0002, declines), process-local idempotency cache,
+  HMAC-SHA256 webhook signing with `BILLING_WEBHOOK_SECRET`.
+- Plans from v0.5.0 section 8 (`config/billing.php`): Free $0,
+  Starter $19, Growth $49, Fleet $99, Agency $149 base + $12 per
+  extra carrier, plus the unlisted Success Fee plan ($0 + 15% of
+  amounts recorded as paid, capped at $49/mo first year). Monthly
+  and annual billing (annual 10x monthly). Plan limits are shown
+  but not enforced; enforcement is v1.2.1.
+- Checkout flow (`POST /billing/checkout`, then
+  `POST /billing/checkout/{session}/complete`): a paid plan needs a
+  payment method; a declined card leaves the session open for a
+  retry. On success the subscription activates and a paid invoice
+  is issued.
+- 30-day no-card Growth trial (`POST /billing/trials`): converts to
+  paid Growth when a card is on file, otherwise lapses to Free.
+- Plan changes (`POST /billing/subscription/change-plan`): upgrades
+  apply immediately with proration (credit for unused days, charge
+  for remaining days, both at daily rates); downgrades are scheduled
+  for the next renewal. `preview=true` returns the proration
+  without changing anything.
+- Renewals (`billing:renew`, daily 03:30) and cancellations
+  (at period end, immediately, or resumed before the period ends).
+- Invoice history (`GET /billing/invoices`, `GET
+  /billing/invoices/{invoice}`) and paying an open or past-due
+  invoice (`POST /billing/invoices/{invoice}/pay`). Invoice numbers
+  are per-organization, per-year (`INV-2026-0001` for each
+  organization's first invoice).
+- Failed-payment handling: a failed renewal leaves the invoice past
+  due; `billing:dunning` (daily 04:00) retries (+3 days, then +7
+  days) and downgrades to Free after 14 days past due, never
+  deleting data.
+- Simulated webhooks (`POST /billing/webhooks`, HMAC-verified, and
+  `POST /billing/webhooks/simulate`): exact redelivery is recorded
+  as a duplicate and never applied twice; unknown types are
+  recorded as unprocessed.
+- Mocked billing portal (`POST /billing/portal`): returns a portal
+  URL (the frontend billing page) and a token that opens the
+  billing summary at `GET /billing/portal/{token}`, expiring after
+  30 minutes.
+- Metered Success Fee billing: recording a payment on an accepted
+  claim creates a usage record (15% of the amount, inside the
+  record-payment transaction, so a paid claim is never metered
+  twice or missed). Renewal invoices all uninvoiced records in
+  arrears with the $49/mo first-year cap applied in the billing
+  code.
+- Billing hub (`/settings/billing`, Owner/Admin/Billing Staff):
+  current subscription, plans with monthly/annual toggle and test
+  card selector, trial, plan change with proration preview,
+  Success Fee usage, payment method, invoices with pay, billing
+  portal entry. New `canManageBilling` permission helper and typed
+  client `src/lib/billing.ts`.
+- `manage-billing` permission (Owner, Admin, Billing Staff).
+- Billing runbook `docs/BILLING.md` (mock provider, plan movement,
+  metered billing, webhooks, invoices, scheduled commands, the
+  Stripe swap-out path), OpenAPI billing paths and schemas
+  (116 paths total, verified against the live route list), API.md
+  billing section.
+
+### Fixed
+
+- Invoice numbers are unique per organization, not globally: the
+  billing migration had a global unique on `invoices.number` while
+  numbering is per-organization, per-year, so the second
+  organization's first invoice failed with a unique-constraint
+  violation (its checkout returned 500 and its renewal threw).
+  Found by the v1.2.0 live smoke test; the constraint is now
+  `(organization_id, number)`, with a regression test proving two
+  organizations can each hold `INV-2026-0001`.
+
+### Verification
+
+- Backend 421 tests, 2169 assertions, all passing (382 before this
+  version + 33 billing tests + 6 proration unit tests).
+- Frontend 268 tests, all passing (241 before + 27 billing tests);
+  `npm run build` succeeds, 38/38 pages including `/settings/billing`.
+- Live HTTP smoke test on a fresh SQLite DB, 59/59 steps: plans,
+  trial, checkout to Fleet, proration preview and upgrade to Agency,
+  cancel/resume, declined-card renewal failure, dunning retry and
+  14-day downgrade to Free, webhook bad signature 401 / good
+  signature applied / duplicate redelivery, portal token summary,
+  Success Fee checkout with no card, claim lifecycle to accepted,
+  payment recorded, metered usage $1,000 recovered / $150 fee,
+  arrears invoice $150.00 - $101.00 = $49.00 (the cap), paid, usage
+  empty after.
+- Still unverified (standing blockers): browser E2E, live Postgres,
+  live Redis, Docker, real mailer.
+
 ## [0.1.0] - 2026-11-21
 
 Phase 0, Business Validation — Market Research. Research and

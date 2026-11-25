@@ -27,3 +27,14 @@ Schedule::command('backup:create')->dailyAt('02:00');
 // weekly on Sunday at 03:00. The command is tenant-scoped per
 // organization and writes one audit row per organization.
 Schedule::command('retention:purge')->weeklyOn(0, '03:00');
+
+// Subscriptions whose period has ended are renewed daily:
+// trials convert (or lapse to Free without a payment method),
+// cancellations at period end become Free, pending downgrades
+// apply, paid plans are charged, and success-fee plans get
+// their monthly arrears invoice.
+Schedule::command('billing:renew')->dailyAt('03:30');
+
+// Past-due invoices are retried at the configured delays, and
+// organizations 14+ days past due are downgraded to Free.
+Schedule::command('billing:dunning')->dailyAt('04:00');

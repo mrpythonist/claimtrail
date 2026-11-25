@@ -78,6 +78,11 @@ enum Permission: string
     // event log. Owner and admin only.
     case ManageSecurity = 'manage-security';
 
+    // Billing (enforced from v1.2.0): plans, checkout, trials,
+    // plan changes, cancellations, invoices, payment methods,
+    // and the billing portal. Owner, admin, and billing staff.
+    case ManageBilling = 'manage-billing';
+
     /**
      * Every permission value, for validation and documentation.
      *

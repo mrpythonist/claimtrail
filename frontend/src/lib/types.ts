@@ -793,3 +793,148 @@ export interface SecurityEvent {
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
+
+/** One plan from GET /billing/plans. Prices are USD cents. */
+export interface BillingPlan {
+  key: string;
+  name: string;
+  monthly_cents: number;
+  annual_cents: number;
+  per_extra_carrier_cents: number;
+  included_carriers: number;
+  trucks: string | null;
+  limits: Record<string, number | string | boolean | null>;
+  description: string | null;
+  listed: boolean;
+}
+
+/** Subscription statuses from the billing API. */
+export type BillingSubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled";
+
+/** Invoice statuses from the billing API. */
+export type BillingInvoiceStatus =
+  | "draft"
+  | "open"
+  | "paid"
+  | "past_due"
+  | "void"
+  | "uncollectible";
+
+/** Invoice line kinds from the billing API. */
+export type BillingInvoiceLineKind =
+  | "subscription"
+  | "proration_credit"
+  | "proration_charge"
+  | "success_fee"
+  | "cap_adjustment"
+  | "credit_applied";
+
+/** One line of an invoice from GET /billing/invoices. */
+export interface BillingInvoiceLine {
+  id: string;
+  kind: BillingInvoiceLineKind;
+  description: string;
+  amount_cents: number;
+}
+
+/** One invoice from GET /billing/invoices. */
+export interface BillingInvoice {
+  id: string;
+  number: string;
+  status: BillingInvoiceStatus;
+  currency: string;
+  subtotal_cents: number;
+  total_cents: number;
+  amount_paid_cents: number;
+  period_start: string | null;
+  period_end: string | null;
+  due_date: string | null;
+  paid_at: string | null;
+  payment_attempts: number;
+  next_retry_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  memo: string | null;
+  lines: BillingInvoiceLine[];
+  created_at: string;
+}
+
+/** One metered success-fee usage record from GET /billing/usage. */
+export interface BillingUsageRecord {
+  id: string;
+  claim_id: string | null;
+  amount_cents: number;
+  fee_cents: number;
+  recorded_at: string;
+}
+
+/** The current period's metered usage from GET /billing/usage. */
+export interface BillingUsageSummary {
+  plan: string;
+  period_start: string | null;
+  period_end: string | null;
+  records: BillingUsageRecord[];
+  recovered_cents: number;
+  accrued_fee_cents: number;
+  cap_cents: number | null;
+  cap_remaining_cents: number | null;
+}
+
+/** The current subscription from GET /billing/subscription. */
+export interface BillingSubscription {
+  id: string;
+  plan: string;
+  plan_name: string;
+  status: BillingSubscriptionStatus;
+  interval: "monthly" | "annual";
+  current_period_start: string | null;
+  current_period_end: string | null;
+  trial_ends_at: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  pending_plan: string | null;
+  pending_interval: string | null;
+  pending_extra_carriers: number | null;
+  provider: string;
+  payment_method_brand: string | null;
+  payment_method_last4: string | null;
+  extra_carriers: number;
+  credit_balance_cents: number;
+  monthly_cents: number;
+  period_cents: number;
+  success_fee_capped: boolean;
+  /** Included by GET /billing/subscription alongside the subscription. */
+  usage?: BillingUsageSummary;
+}
+
+/** A mock checkout session from POST /billing/checkout. */
+export interface BillingCheckoutSession {
+  id: string;
+  provider_session_id: string;
+  plan: string;
+  interval: "monthly" | "annual";
+  extra_carriers: number;
+  status: string;
+  expires_at: string | null;
+}
+
+/** Proration for an immediate plan change, from POST /billing/plan-changes. */
+export interface BillingProration {
+  credit_cents: number;
+  charge_cents: number;
+  net_cents: number;
+  remaining_days: number;
+  period_days: number;
+  is_upgrade: boolean;
+}
+
+/** A mock billing portal session from POST /billing/portal-sessions. */
+export interface BillingPortalSession {
+  url: string;
+  token: string;
+  expires_at: string;
+}

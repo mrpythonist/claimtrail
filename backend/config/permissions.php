@@ -65,6 +65,7 @@ return [
         Permission::ViewOperations->value,
         Permission::ManageCustomization->value,
         Permission::ManageSecurity->value,
+        Permission::ManageBilling->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -135,6 +136,7 @@ return [
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
         Permission::ExportReports->value,
+        Permission::ManageBilling->value,
     ],
 
     OrganizationRole::Viewer->value => [

@@ -111,6 +111,16 @@ const OPERATIONS_VIEWERS: OrganizationRole[] = ["owner", "admin"];
 
 const SECURITY_VIEWERS: OrganizationRole[] = ["owner", "admin"];
 
+// ManageBilling in the backend map (config/permissions.php):
+// Owner, Admin, and Billing Staff. Viewers, dispatchers, and
+// operations managers can see the plan catalog but not the
+// subscription, invoices, or billing actions.
+const BILLING_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "billing_staff",
+];
+
 export function canManageOrganization(role: OrganizationRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
@@ -225,6 +235,10 @@ export function canViewOperations(role: OrganizationRole | null | undefined): bo
 
 export function canViewSecurity(role: OrganizationRole | null | undefined): boolean {
   return isOneOf(role, SECURITY_VIEWERS);
+}
+
+export function canManageBilling(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, BILLING_MANAGERS);
 }
 
 /**

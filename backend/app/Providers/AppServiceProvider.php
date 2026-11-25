@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Billing\BillingProvider;
+use App\Billing\MockBillingProvider;
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
 use App\Models\CustomField;
@@ -35,6 +37,18 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(CurrentOrganization::class);
         $this->app->singleton(Correlation::class);
+
+        // The billing provider behind its interface. Only the mock
+        // is implemented in v1.2.0; "stripe" is the swap-out target
+        // and is rejected until an implementation lands, so a
+        // misconfigured driver fails loudly instead of silently
+        // billing against nothing.
+        $this->app->bind(BillingProvider::class, function () {
+            return match (config('billing.provider')) {
+                'mock' => new MockBillingProvider(),
+                default => throw new \RuntimeException('Unknown billing provider: '.config('billing.provider')),
+            };
+        });
     }
 
     /**

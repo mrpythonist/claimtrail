@@ -130,6 +130,12 @@ class RbacAuditTest extends TestCase
             ['POST', 'api/v1/auth/forgot-password'],
             ['POST', 'api/v1/auth/reset-password'],
             ['GET', 'api/v1/email/verify/{id}/{hash}'],
+            // Billing webhook: the provider cannot hold a Sanctum
+            // token; authenticity is verified by HMAC signature.
+            ['POST', 'api/v1/billing/webhooks'],
+            // Mocked billing portal: the token in the URL is the
+            // bearer secret, like the email-verify link above.
+            ['GET', 'api/v1/billing/portal/{token}'],
         ];
 
         foreach (Route::getRoutes()->getRoutes() as $route) {

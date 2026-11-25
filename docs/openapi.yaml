@@ -3863,6 +3863,555 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /billing/plans:
+    get:
+      tags: [Billing]
+      summary: List subscription plans
+      description: >
+        The plan catalog from config/billing.php: Free, Starter $19,
+        Growth $49, Fleet $99, Agency $149 base + $12 per extra carrier,
+        and the unlisted Success Fee plan ($0 + 15% of amounts recorded
+        as paid). Any member may read it; plan limits are shown but not
+        enforced until v1.2.1.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Plan catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BillingPlan"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/subscription:
+    get:
+      tags: [Billing]
+      summary: Current subscription (requires manage-billing)
+      description: >
+        The organization's subscription, with the current period's
+        metered usage for the Success Fee plan. A Free subscription is
+        created lazily on first read.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Subscription with usage summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/BillingSubscription"
+                      - type: object
+                        properties:
+                          usage:
+                            $ref: "#/components/schemas/BillingUsageSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Open a mock checkout session (requires manage-billing)
+      description: >
+        Checkout moves off Free (or off the Success Fee plan, whose base
+        is $0). Paid plans move with change-plan instead. A trialing
+        organization checks out to convert the trial early. A past-due
+        subscription must pay its invoice first.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, example: growth }
+                interval: { type: string, enum: [monthly, annual], default: monthly }
+                extra_carriers: { type: integer, minimum: 0, maximum: 90, default: 0 }
+      responses:
+        "201":
+          description: Checkout session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingCheckoutSession"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/checkout/{session}/complete:
+    post:
+      tags: [Billing]
+      summary: Complete a mock checkout (requires manage-billing)
+      description: >
+        The mock "customer pays" step. A paid plan needs a payment
+        method; Free and Success Fee do not. A declined card leaves the
+        session open for a retry. On success the subscription activates,
+        a paid invoice is issued, and a checkout.session.completed event
+        is recorded through the webhook pipeline.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: session
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_method: { type: string, nullable: true, description: Mock test card token, e.g. pm_mock_visa or pm_mock_declined }
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingSubscription"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/trials:
+    post:
+      tags: [Billing]
+      summary: Start the 30-day Growth trial (requires manage-billing)
+      description: >
+        No card required. The trial converts to paid Growth at the end
+        of 30 days when a card is on file; otherwise it lapses to Free.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_method: { type: string, nullable: true }
+      responses:
+        "201":
+          description: Trialing subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingSubscription"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/subscription/change-plan:
+    post:
+      tags: [Billing]
+      summary: Change plan, with optional proration preview (requires manage-billing)
+      description: >
+        With preview=true, returns the proration preview without
+        changing anything. An upgrade (higher monthly-equivalent price)
+        applies immediately, credited for unused days of the old plan
+        and charged for the remaining days of the new plan; a downgrade
+        is scheduled for the next renewal. A canceled or past-due
+        subscription cannot change plans; a trialing one converts
+        through checkout.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, example: fleet }
+                interval: { type: string, enum: [monthly, annual] }
+                extra_carriers: { type: integer, minimum: 0, maximum: 90 }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Preview, or the changed subscription with its invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      proration:
+                        $ref: "#/components/schemas/BillingProration"
+                      effective: { type: string, enum: [immediately, at_period_end] }
+                      subscription:
+                        $ref: "#/components/schemas/BillingSubscription"
+                      invoice:
+                        $ref: "#/components/schemas/BillingInvoice"
+                        nullable: true
+                      current_plan: { type: string }
+                      current_period_end: { type: string, format: date-time, nullable: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/subscription/cancel:
+    post:
+      tags: [Billing]
+      summary: Cancel the subscription (requires manage-billing)
+      description: >
+        immediate=false cancels at the end of the current period;
+        immediate=true cancels now and moves the organization to Free.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                immediate: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingSubscription"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/subscription/resume:
+    post:
+      tags: [Billing]
+      summary: Undo a cancel-at-period-end (requires manage-billing)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingSubscription"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      summary: Invoice history (requires manage-billing)
+      description: Invoices for this organization, newest first.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 15 }
+      responses:
+        "200":
+          description: Paginated invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BillingInvoice"
+                  meta:
+                    $ref: "#/components/schemas/PaginatedMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/invoices/{invoice}:
+    get:
+      tags: [Billing]
+      summary: One invoice with its lines (requires manage-billing)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: invoice
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingInvoice"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/invoices/{invoice}/pay:
+    post:
+      tags: [Billing]
+      summary: Pay an open or past-due invoice (requires manage-billing)
+      description: >
+        Pays with the stored payment method, or one supplied now. A
+        paid past-due invoice returns the subscription to active.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: invoice
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_method: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingInvoice"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/payment-method:
+    post:
+      tags: [Billing]
+      summary: Store a payment method (requires manage-billing)
+      description: >
+        Stores a dummy payment method (a mock test card token). The
+        mock accepts pm_mock_visa (4242, succeeds) and pm_mock_declined
+        (4000...0002, declines).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_method]
+              properties:
+                payment_method: { type: string, maxLength: 32 }
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingSubscription"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/portal:
+    post:
+      tags: [Billing]
+      summary: Open a mock billing portal session (requires manage-billing)
+      description: >
+        Returns a portal URL (the frontend billing page with a session
+        token) and the token itself. The token opens the billing
+        summary at GET /billing/portal/{token} and expires after 30
+        minutes. Real Stripe replaces this with a Stripe-hosted page.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "201":
+          description: Portal session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingPortalSession"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/usage:
+    get:
+      tags: [Billing]
+      summary: Current period metered usage (requires manage-billing)
+      description: >
+        Uninvoiced success-fee usage records for the current period:
+        amounts recorded as paid, the accrued 15% fee, and the
+        first-year $49/mo cap with what remains of it.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingUsageSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /billing/webhooks/simulate:
+    post:
+      tags: [Billing]
+      summary: Fire a mock webhook event through the pipeline (requires manage-billing)
+      description: >
+        Signs the event with the mock webhook secret, verifies the
+        signature, then handles it exactly like a delivered webhook.
+        The event is recorded; a redelivery of the same event id is
+        recorded as a duplicate and applied once.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, example: invoice.payment_failed }
+                data: { type: object }
+      responses:
+        "201":
+          description: Billing event record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      type: { type: string }
+                      status: { type: string, enum: [processed, unprocessed, failed, duplicate] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/webhooks:
+    post:
+      tags: [Billing]
+      summary: Provider webhook endpoint (public, HMAC-verified)
+      description: >
+        No Sanctum token: authenticity is verified by HMAC-SHA256
+        signature (X-Mock-Signature: sha256=<hex>) over the raw body,
+        using the configured webhook secret. Unknown event types are
+        recorded as unprocessed. An exact redelivery is recorded as a
+        duplicate and never applied twice.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type]
+              properties:
+                id: { type: string, example: evt_mock_01a211df0000000000000000 }
+                type: { type: string, example: invoice.payment_failed }
+                data: { type: object }
+      responses:
+        "200":
+          description: Billing event record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      type: { type: string }
+                      status: { type: string, enum: [processed, unprocessed, failed, duplicate] }
+        "401":
+          description: Missing or invalid webhook signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+  /billing/portal/{token}:
+    get:
+      tags: [Billing]
+      summary: Billing summary for a portal token (public)
+      description: >
+        The token in the URL is the bearer secret, like an
+        email-verify link. Unknown or expired tokens return 404.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Portal summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      organization:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          name: { type: string }
+                      subscription:
+                        $ref: "#/components/schemas/BillingSubscription"
+                      invoices:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/BillingInvoice"
+                      portal_session_expires_at: { type: string, format: date-time }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -5050,3 +5599,121 @@ components:
         route: { type: string, nullable: true }
         method: { type: string, nullable: true }
         correlation_id: { type: string, nullable: true }
+    BillingPlan:
+      type: object
+      properties:
+        key: { type: string, example: growth }
+        name: { type: string, example: Growth }
+        monthly_cents: { type: integer, description: USD cents per month }
+        annual_cents: { type: integer, description: 10x monthly (two months free) }
+        per_extra_carrier_cents: { type: integer, description: Agency only, $12 per carrier past 10 }
+        included_carriers: { type: integer, description: Agency only, 10 }
+        trucks: { type: string, nullable: true, example: 3-10 trucks }
+        limits:
+          type: object
+          description: Buyer units (trucks, claims, members, storage); shown, not enforced until v1.2.1
+          additionalProperties: true
+        description: { type: string, nullable: true }
+        listed: { type: boolean, description: The Success Fee plan is unlisted }
+    BillingSubscription:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        plan: { type: string, example: growth }
+        plan_name: { type: string, example: Growth }
+        status: { type: string, enum: [trialing, active, past_due, canceled] }
+        interval: { type: string, enum: [monthly, annual] }
+        current_period_start: { type: string, format: date-time, nullable: true }
+        current_period_end: { type: string, format: date-time, nullable: true }
+        trial_ends_at: { type: string, format: date-time, nullable: true }
+        cancel_at_period_end: { type: boolean }
+        canceled_at: { type: string, format: date-time, nullable: true }
+        pending_plan: { type: string, nullable: true }
+        pending_interval: { type: string, nullable: true }
+        pending_extra_carriers: { type: integer, nullable: true }
+        provider: { type: string, example: mock }
+        payment_method_brand: { type: string, nullable: true, example: visa }
+        payment_method_last4: { type: string, nullable: true, example: "4242" }
+        extra_carriers: { type: integer }
+        credit_balance_cents: { type: integer }
+        monthly_cents: { type: integer }
+        period_cents: { type: integer }
+        success_fee_capped: { type: boolean, description: True while the first-year $49/mo cap applies }
+    BillingCheckoutSession:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider_session_id: { type: string, example: cs_mock_01a211df0000000000000000 }
+        plan: { type: string }
+        interval: { type: string, enum: [monthly, annual] }
+        extra_carriers: { type: integer }
+        status: { type: string, example: open }
+        expires_at: { type: string, format: date-time, nullable: true }
+    BillingProration:
+      type: object
+      properties:
+        credit_cents: { type: integer, description: Unused days of the old plan }
+        charge_cents: { type: integer, description: Remaining days of the new plan }
+        net_cents: { type: integer, description: Due now; negative means credit }
+        remaining_days: { type: integer }
+        period_days: { type: integer }
+        is_upgrade: { type: boolean }
+    BillingInvoiceLine:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [subscription, proration_credit, proration_charge, success_fee, cap_adjustment, credit_applied] }
+        description: { type: string }
+        amount_cents: { type: integer, description: Negative for credits and cap adjustments }
+    BillingInvoice:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, example: INV-2026-0001, description: Per-organization, per-year sequence }
+        status: { type: string, enum: [draft, open, paid, past_due, void, uncollectible] }
+        currency: { type: string, example: USD }
+        subtotal_cents: { type: integer }
+        total_cents: { type: integer }
+        amount_paid_cents: { type: integer }
+        period_start: { type: string, format: date-time, nullable: true }
+        period_end: { type: string, format: date-time, nullable: true }
+        due_date: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        payment_attempts: { type: integer }
+        next_retry_at: { type: string, format: date-time, nullable: true }
+        failure_code: { type: string, nullable: true }
+        failure_message: { type: string, nullable: true }
+        memo: { type: string, nullable: true }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingInvoiceLine"
+        created_at: { type: string, format: date-time }
+    BillingUsageRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid, nullable: true }
+        amount_cents: { type: integer, description: Amount recorded as paid }
+        fee_cents: { type: integer, description: 15% of the amount }
+        recorded_at: { type: string, format: date-time }
+    BillingUsageSummary:
+      type: object
+      properties:
+        plan: { type: string }
+        period_start: { type: string, format: date-time, nullable: true }
+        period_end: { type: string, format: date-time, nullable: true }
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingUsageRecord"
+        recovered_cents: { type: integer }
+        accrued_fee_cents: { type: integer }
+        cap_cents: { type: integer, nullable: true, description: 4900 while the first-year cap applies }
+        cap_remaining_cents: { type: integer, nullable: true }
+    BillingPortalSession:
+      type: object
+      properties:
+        url: { type: string, description: Frontend billing page with the session token }
+        token: { type: string, description: "Opens the summary at GET /billing/portal/{token}" }
+        expires_at: { type: string, format: date-time }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canExportClaims,
   canExportReports,
+  canManageBilling,
   canManageCustomization,
   canViewAuditLogs,
   canViewOperations,
@@ -141,5 +142,23 @@ describe("canViewSecurity", () => {
     expect(canViewSecurity("viewer")).toBe(false);
     expect(canViewSecurity(null)).toBe(false);
     expect(canViewSecurity(undefined)).toBe(false);
+  });
+});
+
+describe("canManageBilling", () => {
+  it("allows owner, admin, and billing staff", () => {
+    expect(ROLES.filter((role) => canManageBilling(role))).toEqual([
+      "owner",
+      "admin",
+      "billing_staff",
+    ]);
+  });
+
+  it("denies operations managers, dispatchers, viewers, and missing roles", () => {
+    expect(canManageBilling("operations_manager")).toBe(false);
+    expect(canManageBilling("dispatcher")).toBe(false);
+    expect(canManageBilling("viewer")).toBe(false);
+    expect(canManageBilling(null)).toBe(false);
+    expect(canManageBilling(undefined)).toBe(false);
   });
 });
