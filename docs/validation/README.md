@@ -12,7 +12,7 @@ interviews need real people — nothing here is fabricated.
 | v0.3.0 Workflow Validation | [0.3.0-workflow-validation.md](0.3.0-workflow-validation.md) | Done 2026-11-22 |
 | v0.4.0 Competitor Analysis | [0.4.0-competitor-analysis.md](0.4.0-competitor-analysis.md) | Done 2026-11-23 |
 | v0.5.0 Pricing Validation | [0.5.0-pricing-validation.md](0.5.0-pricing-validation.md) | Done 2026-11-24 |
-| v0.6.0 Pilot Preparation | — | Queued |
+| v0.6.0 Pilot Preparation | [0.6.0-pilot-preparation.md](0.6.0-pilot-preparation.md) | Done 2026-11-25 |
 
 Conventions: figures are labelled **[sourced]** (from the cited source)
 or **[estimate]** (ClaimTrail's own arithmetic on sourced inputs, a

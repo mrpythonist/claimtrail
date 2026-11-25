@@ -164,10 +164,46 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v0.6.0 — Pilot Preparation
 
-- [ ] Identify at least 3 potential pilot customers.
-- [ ] Prepare onboarding process.
-- [ ] Prepare sample datasets.
-- [ ] Define pilot success metrics.
+> Verified 2026-11-25 (daily build run): research document
+> `docs/validation/0.6.0-pilot-preparation.md` (8,997 words) plus
+> `docs/validation/pilot/sample-shipments.csv` (12 synthetic
+> shipments, 3 fictional carriers) and
+> `docs/validation/pilot/pilot-scenarios.md` (2,436 words, per-shipment
+> walkthrough, $2,440 requested across 11 claims [estimate]).
+> Three pilot profiles from the v0.1.0 beachhead (dispatch agency,
+> 5-10 truck reefer fleet on spot freight, 2-3 truck fleet billing
+> detention regularly) with fit criteria, sourcing channels and
+> disqualifiers, plus a 5-factor scorecard (12/20 to qualify, hard
+> gates) and a 6-step outreach shortlist process — profiles, not
+> names: no pilot customer has been recruited, and recruitment needs
+> Aqib's outreach (v0.2.0-dependent, interviews still deferred since
+> 2026-11-21). Onboarding runbook grounded in the app's actual seven
+> steps (`OnboardingService.php`), the 30-day no-card Growth trial,
+> week-by-week plan, support cadence, CSV data migration, and the
+> day-30 decision point. Success metrics carry the v0.5.0 targets
+> (trial-to-paid 15% good / 8% floor; free-to-paid 3-5% good) plus
+> activation and outcome metrics with targets, floors, measurement
+> methods naming the real reports endpoints, and go / no-go / iterate
+> rules, plus the v0.5.0 kill criteria and 4 pilot-specific ones.
+> Triporto and DetentionHero re-checked 2026-11-25, both still early
+> access with no price; one new find, DetentionDesk ($25 per claim
+> packet or $149/mo, detention-only, no GPS/ELD verification,
+> verified against its pricing page). One real defect caught by the
+> parent run's verification and fixed: the sample CSV's last row had
+> an unquoted comma in its notes field, which would have truncated
+> the note on import. No code changed in this version (docs + sample
+> data only); backend 382 + frontend 241 tests re-run and passing,
+> `npm run build` succeeds (37/37 pages). Live HTTP smoke test over
+> the built-in server on a fresh SQLite DB: the sample CSV previews
+> 12 valid / 0 invalid / 0 duplicate and imports 12/12, all 12
+> references listed. Phase 0 ends here as preparation: the next
+> validation work is contact with real people. v1.2.0 stays blocked
+> on Stripe keys + the metered-billing decision.
+
+- [x] Identify at least 3 potential pilot customers.
+- [x] Prepare onboarding process.
+- [x] Prepare sample datasets.
+- [x] Define pilot success metrics.
 
 ---
 

@@ -6,37 +6,41 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v0.5.0 (Phase 0, Pricing Validation).
+- **Last completed version:** v0.6.0 (Phase 0, Pilot Preparation).
   App version stays 1.1.3 — Phase 0 work is research/docs, not code.
+  **Phase 0 is now complete** (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0
+  done; v0.2.0 interviews deferred, still open).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `e473ddc7` (v0.4.0, pushed 2026-11-23 after Aqib's yes + approval).
-  **v0.5.0 is complete and verified but NOT pushed** — ready to push
-  pending Aqib's yes in the main chat. The next run must gate-check
-  first: if the remote head is still `e473ddc7`, v0.5.0 is waiting to
-  be pushed and no new version work starts.
-- **Tests at v0.5.0:** 382 backend (1902 assertions) + 241 frontend, all
+  head `5576b2e1` (v0.5.0, pushed 2026-11-24 after Aqib's yes + approval).
+  **v0.6.0 is complete and verified but NOT yet pushed** — see push status
+  in the 2026-11-25 log entry below.
+- **Tests at v0.6.0:** 382 backend (1902 assertions) + 241 frontend, all
   passing — same counts as v1.1.3. `npm run build` succeeds (37/37 pages).
+  Live smoke test: sample CSV imports 12/12.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**Phase 0 — Business Validation, v0.6.0 Pilot Preparation**
-(identify at least 3 potential pilot customers, prepare onboarding
-process, prepare sample datasets, define pilot success metrics; uses
-the v0.5.0 trial targets: 15% no-card trial-to-paid as good, 8% as
-the floor, 3-5% free-to-paid as good).
+**Phase 3 — Commercial Launch, v1.2.0 Subscription Billing, BLOCKED:**
+needs Stripe keys from Aqib (standing blocker) plus the
+metered-billing decision for the success-fee plan (v0.5.0 section 9.1).
+Phase 0 is complete, so there is no next Phase 0 version. The next run
+must NOT start v1.2.0, and must NOT jump to another version (v1.2.1
+depends on v1.2.0; v1.2.2/v1.2.3 assume billing exists), without Aqib's
+explicit direction in the main chat: either he supplies the Stripe keys
+and the metered-billing decision, or he picks the next unblocked
+version. Report the blocker and the choice in the main chat with the
+v0.6.0 ready-to-push notice.
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
-queue when he is ready to do outreach. v0.5.0's 10 interview
-questions and kill criteria (section 10 of the v0.5.0 document) are
-ready for it.
-**v1.2.0 — Subscription Billing** (Phase 3) stays queued after Phase 0:
-still blocked on Stripe keys from Aqib, and the checklist requires the
-Phase 0 outcome before billing work. v0.5.0 adds a second billing
-input: the metered-billing decision for the success-fee plan.
+queue when he is ready to do outreach. v0.6.0's pilot profiles,
+scorecard, outreach process and qualification-call questions are ready
+for it, and the pilot qualification calls can answer some of the
+v0.3.0/v0.5.0 interview questions for the three pilots — but three
+pilots are not 15 interviews.
 
 ## Blockers (recorded, not skipped)
 
@@ -92,6 +96,100 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-25 — v0.6.0 Pilot Preparation built and verified (Phase 0 complete)
+
+- Gate check passed first: remote head on GitHub is `5576b2e1`,
+  matching the recorded v0.5.0 head, so no version was waiting to be
+  pushed. (Checked via the connected GitHub MCP `list_commits`.)
+- Built all 4 v0.6.0 items as `docs/validation/0.6.0-pilot-preparation.md`
+  (8,997 words, plus a `docs/validation/README.md` index update marking
+  v0.6.0 Done) with two sample-data files in `docs/validation/pilot/`:
+  `sample-shipments.csv` (12 synthetic shipments, 3 fictional carriers)
+  and `pilot-scenarios.md` (2,436 words, per-shipment walkthrough,
+  $2,440 requested across 11 claims [estimate], one control row
+  dismissed). Three pilot profiles from the v0.1.0 beachhead (dispatch
+  agency 5-20 carriers; 5-10 truck reefer fleet on spot freight; 2-3
+  truck fleet billing detention regularly) with fit criteria, sourcing
+  channels and disqualifiers, plus a 5-factor scorecard (12/20 to
+  qualify, hard gates) and a 6-step outreach shortlist process.
+  Onboarding runbook grounded in the app's actual 7 steps
+  (`OnboardingService.php`), the 30-day no-card Growth trial, a
+  week-by-week plan, support cadence, CSV data migration, and the
+  day-30 decision point (subscribe / success-fee / free tier / churn
+  with reason). Success metrics carry the v0.5.0 targets (trial-to-paid
+  15% good, 8% floor; free-to-paid 3-5% good) plus activation and
+  outcome metrics with targets, floors, measurement methods naming the
+  real reports endpoints, and go / no-go / iterate rules, plus the
+  v0.5.0 kill criteria and 4 pilot-specific ones.
+- No pilot customer has been recruited and no names, quotes,
+  commitments or contact details were invented: the document states
+  plainly that recruitment needs Aqib's outreach (v0.2.0-dependent,
+  interviews still deferred since 2026-11-21). Phase 0 ends here as
+  preparation; the next validation work is contact with real people.
+- Triporto and DetentionHero re-checked 2026-11-25 (home pages opened
+  in full), both still early access with no price. New find:
+  DetentionDesk (detentiondesk.com/pricing, opened in full and
+  re-verified by the parent run): $25 one-time per claim packet or
+  $149/mo, detention-only, user-confirmed times with no GPS/ELD
+  verification, Stripe Checkout, one account, no team seats. Per-claim
+  pricing is a third price anchor ($50 for 2 claims/mo vs $49 Growth);
+  it does not change any v0.6.0 conclusion.
+- One real defect caught by the parent run's verification and fixed
+  before reporting: the sample CSV's last row (CSC-3004) had an
+  unquoted comma in its notes field, parsing as 15 fields instead of
+  14 and truncating the note on import. The notes field is now quoted;
+  all 13 rows parse to exactly 14 fields. All other figures were
+  spot-checked: scenario totals $960 + $600 + $500 + $380 = $2,440
+  across 11 claims; detention durations and amounts recomputed from
+  the CSV times (e.g. PLT-1001 335 min, 3.58h at $60 = $215); the
+  67,000 6-20 truck fleets, 56.2% reefer / 42.5% spot detention rates
+  and $30,000/yr 5-truck figures all trace to v0.1.0; the reports
+  endpoints named in section 6 (`reports/summary`,
+  `reports/recovery-history`, `reports/export`) exist in
+  `ReportController.php` and `routes/api.php`. No em dashes in any new
+  file (grep-verified, 0 found).
+- Verification: no code changed in this version (docs + sample data
+  only), but the suites were re-run to confirm the repo is still
+  green: backend **382 passed (1902 assertions)**, frontend **241
+  passed** across 24 files, `npm run build` succeeds (37/37 pages) —
+  identical counts to v1.1.3. Live HTTP smoke test over the built-in
+  server on a fresh SQLite DB passed: 3 carriers created (201), the
+  sample CSV previews 12 valid / 0 invalid / 0 duplicate, confirm
+  imports 12/12, and the shipment list shows all 12 references
+  (PLT-1001..1004, BBF-2001..2004, CSC-3001..3004). Scratch evidence
+  in `~/workspace/claimtrail-scratch-v060/` (seed, server log, preview/
+  confirm responses, build log).
+- Still unverified (standing blockers, unchanged): browser E2E, live
+  Postgres, live Redis, Docker, real mailer. Phase 0: no interviews,
+  no pilot customers, no validated willingness to pay yet — v0.2.0's
+  job, and it needs real people; Aqib's help reaching carriers or
+  dispatchers will be needed.
+- Environment note: system `php` is missing on this VM — the
+  standalone PHP 8.3.6 at `~/workspace/php-standalone/` was used for
+  the backend suite, migrations, seed and smoke-test server (with
+  `PHP_INI_SCAN_DIR=~/workspace/php-standalone/scan`). The temporary
+  `backend/.env` created for the smoke test was removed afterwards,
+  along with the phpunit result cache and test artifacts; no app code
+  changed.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **v0.6.0 COMPLETE AND VERIFIED, NOT PUSHED.** Ready to
+  push pending Aqib's yes in the main chat + approval card. Files for
+  the push: `docs/validation/0.6.0-pilot-preparation.md` (new),
+  `docs/validation/pilot/sample-shipments.csv` (new),
+  `docs/validation/pilot/pilot-scenarios.md` (new),
+  `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
+  `DEVELOPMENT_PROGRESS.md` (updated).
+- Next task: **Phase 0 is complete. v1.2.0 Subscription Billing is
+  BLOCKED on Stripe keys from Aqib plus the metered-billing decision
+  for the success-fee plan.** The next run must not start v1.2.0 or
+  jump to another version without Aqib's explicit direction: he either
+  supplies the Stripe keys and the metered-billing decision, or picks
+  the next unblocked version. v0.2.0 Customer Interviews stays
+  DEFERRED per Aqib 2026-11-21 — do not fabricate interviews.
 
 ### 2026-11-24 — v0.5.0 Pricing Validation built and verified
 
@@ -159,12 +257,12 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
 - Environment note: system `php` is present on this VM (PHP 8.3.6) —
   the standalone PHP at `~/workspace/php-standalone/` was not needed
   this run.
-- Push status: **v0.5.0 COMPLETE and verified, NOT pushed** — ready to
-  push pending Aqib's yes in the main chat. Files: new
-  `docs/validation/0.5.0-pricing-validation.md`,
+- Push status: **v0.5.0 PUSHED 2026-11-24** after Aqib's yes in the main
+  chat + approval card. New remote head `5576b2e1`, 4 files in one
+  commit (new `docs/validation/0.5.0-pricing-validation.md`,
   `docs/validation/README.md`, `MASTER-CHECKLIST.md`,
-  `DEVELOPMENT_PROGRESS.md` updated. Next run must gate-check first
-  (remote head still `e473ddc7` means v0.5.0 is waiting).
+  `DEVELOPMENT_PROGRESS.md` updated). Read-back verified. Next run may
+  start v0.6.0.
 - Next task: **v0.6.0 — Pilot Preparation** (last Phase 0 version).
   v0.2.0 Customer Interviews stays DEFERRED per Aqib 2026-11-21 — do
   not fabricate interviews. v1.2.0 billing stays blocked on Stripe
