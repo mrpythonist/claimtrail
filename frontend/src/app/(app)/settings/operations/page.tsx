@@ -16,16 +16,19 @@ import {
   flushFailedJobs,
   forgetFailedJob,
   getFailedJobs,
+  getMonitoring,
   getOpsHealth,
   getQueueStats,
   getRecentErrors,
   retryAllFailedJobs,
   retryFailedJob,
+  runMonitoringCheck,
 } from "@/lib/ops";
 import { canViewOperations } from "@/lib/permissions";
 import type {
   FailedJob,
   HealthStatus,
+  MonitoringCheck,
   OpsHealth,
   Organization,
   PaginatedMeta,
@@ -111,6 +114,10 @@ function OperationsContent({ org }: { org: Organization }) {
   const [failedJobs, setFailedJobs] = useState<FailedJob[]>([]);
   const [jobsMeta, setJobsMeta] = useState<PaginatedMeta | null>(null);
   const [errors, setErrors] = useState<RecentErrors | null>(null);
+  const [monitoring, setMonitoring] = useState<{
+    latest: MonitoringCheck | null;
+    history: MonitoringCheck[];
+  } | null>(null);
   // No loading state for roles that cannot see the page: the
   // access-denied alert renders immediately instead of a spinner.
   const [loading, setLoading] = useState(canView);
@@ -139,6 +146,7 @@ function OperationsContent({ org }: { org: Organization }) {
       getQueueStats(orgId),
       getFailedJobs(orgId, jobsPage),
       getRecentErrors(orgId),
+      getMonitoring(orgId),
     ]);
     if (requestId !== requestIdRef.current) return;
 
@@ -163,6 +171,11 @@ function OperationsContent({ org }: { org: Organization }) {
       setErrors(results[3].value);
     } else {
       failures.push("recent errors");
+    }
+    if (results[4].status === "fulfilled") {
+      setMonitoring(results[4].value);
+    } else {
+      failures.push("monitoring");
     }
     setError(
       failures.length > 0
@@ -236,6 +249,14 @@ function OperationsContent({ org }: { org: Organization }) {
     void runAction("flush", async () => {
       const result = await flushFailedJobs(org.id, hours);
       return `Deleted ${result.deleted} failed jobs older than ${hours} hours.`;
+    });
+  }
+
+  /** Runs the monitoring check now, then refreshes the card. */
+  function handleRunMonitoringCheck() {
+    void runAction("monitoring-check", async () => {
+      const check = await runMonitoringCheck(org.id);
+      return `Monitoring check ${check.status} at ${formatDate(check.checked_at)}.`;
     });
   }
 
@@ -381,6 +402,119 @@ function OperationsContent({ org }: { org: Organization }) {
                 title="Health data unavailable"
                 description="The health check did not return data. Try refreshing."
               />
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Production monitoring"
+              description={
+                monitoring?.latest
+                  ? `Latest check ${formatDate(monitoring.latest.checked_at)} · runs hourly, or on demand below.`
+                  : "No monitoring check has run yet."
+              }
+              action={
+                monitoring?.latest ? (
+                  <Badge tone={healthTone(monitoring.latest.status)}>
+                    {healthLabel(monitoring.latest.status)}
+                  </Badge>
+                ) : undefined
+              }
+            />
+            {!monitoring ? (
+              <EmptyState
+                title="Monitoring data unavailable"
+                description="The monitoring check did not return data. Try refreshing."
+              />
+            ) : monitoring.latest === null ? (
+              <CardBody>
+                <p className="text-sm text-slate-600">
+                  No check has run yet. Run one now, or wait for the
+                  hourly schedule.
+                </p>
+                <div className="mt-4">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={busyAction === "monitoring-check"}
+                    onClick={handleRunMonitoringCheck}
+                  >
+                    Run check now
+                  </Button>
+                </div>
+              </CardBody>
+            ) : (
+              <CardBody className="space-y-4">
+                <dl className="divide-y divide-slate-100">
+                  {Object.entries(monitoring.latest.checks).map(([name, check]) => (
+                    <div
+                      key={name}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+                    >
+                      <dt className="text-sm font-medium capitalize text-slate-700">
+                        {name}
+                      </dt>
+                      <dd className="flex items-center gap-3 text-sm text-slate-500">
+                        {check.detail && (
+                          <span className="max-w-xs truncate" title={check.detail}>
+                            {check.detail}
+                          </span>
+                        )}
+                        <Badge tone={healthTone(check.status)}>
+                          {healthLabel(check.status)}
+                        </Badge>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 text-sm">
+                  <p className="text-slate-500">
+                    Failed jobs{" "}
+                    <span className="font-medium text-slate-900">
+                      {monitoring.latest.failed_jobs}
+                    </span>
+                  </p>
+                  <p className="text-slate-500">
+                    Queue depth{" "}
+                    <span className="font-medium text-slate-900">
+                      {monitoring.latest.queue_depth}
+                    </span>
+                  </p>
+                </div>
+                {monitoring.history.length > 1 ? (
+                  <div className="border-t border-slate-100 pt-4">
+                    <p className="text-sm font-medium text-slate-700">
+                      Recent runs
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm text-slate-500">
+                      {monitoring.history.slice(0, 6).map((check) => (
+                        <li key={check.id} className="flex items-center gap-2">
+                          <Badge tone={healthTone(check.status)}>
+                            {healthLabel(check.status)}
+                          </Badge>
+                          <span>{formatDate(check.checked_at)}</span>
+                          <span>
+                            {check.failed_jobs} failed · depth {check.queue_depth}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <p className="text-sm text-slate-500">
+                  A failing check writes a warning to the log. There is
+                  no alerting channel yet, so this card is where a
+                  failure is seen.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={busyAction === "monitoring-check"}
+                  onClick={handleRunMonitoringCheck}
+                >
+                  Run check now
+                </Button>
+              </CardBody>
             )}
           </Card>
 

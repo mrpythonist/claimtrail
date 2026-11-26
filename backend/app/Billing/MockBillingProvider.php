@@ -113,6 +113,54 @@ class MockBillingProvider implements BillingProvider
         ];
     }
 
+    /**
+     * Idempotency cache for refunds, keyed by idempotency key.
+     * Process-local only; the refunds table is the durable
+     * record, and the service also guards on it.
+     *
+     * @var array<string, array{success: bool, refund_id: string|null, failure_code: string|null, failure_message: string|null}>
+     */
+    protected static array $refunds = [];
+
+    /**
+     * Refund part or all of a mock charge. A repeated refund with
+     * the same idempotency key returns the first result instead
+     * of refunding twice. A charge that never happened (null id,
+     * a zero-amount invoice) cannot be refunded.
+     */
+    public function refund(
+        Organization $organization,
+        string $customerId,
+        ?string $chargeId,
+        int $amountCents,
+        string $reason,
+        string $idempotencyKey,
+    ): array {
+        if (isset(self::$refunds[$idempotencyKey])) {
+            return self::$refunds[$idempotencyKey];
+        }
+
+        if ($chargeId === null || $amountCents <= 0) {
+            $result = [
+                'success' => false,
+                'refund_id' => null,
+                'failure_code' => 'nothing_to_refund',
+                'failure_message' => 'This invoice has no charge to refund.',
+            ];
+        } else {
+            $result = [
+                'success' => true,
+                'refund_id' => 're_mock_'.Str::random(16),
+                'failure_code' => null,
+                'failure_message' => null,
+            ];
+        }
+
+        self::$refunds[$idempotencyKey] = $result;
+
+        return $result;
+    }
+
     public function createPortalSession(Organization $organization, string $customerId): array
     {
         $sessionId = 'bps_mock_'.Str::random(16);

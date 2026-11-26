@@ -146,6 +146,7 @@ const OPEN_INVOICE: BillingInvoice = {
   subtotal_cents: 4900,
   total_cents: 4900,
   amount_paid_cents: 0,
+  amount_refunded_cents: 0,
   period_start: "2026-11-10T00:00:00Z",
   period_end: "2026-12-10T00:00:00Z",
   due_date: "2026-11-10T00:00:00Z",
@@ -190,6 +191,12 @@ beforeEach(() => {
       return {
         data: [OPEN_INVOICE],
         meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+      };
+    }
+    if (path.startsWith("/billing/events?")) {
+      return {
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
       };
     }
     throw new Error(`Unexpected call: ${path}`);
@@ -272,7 +279,13 @@ describe("BillingPage", () => {
       if (path === "/billing/trials") {
         return { data: { ...FREE_SUBSCRIPTION, status: "trialing", plan: "growth" } };
       }
-      throw new Error(`Unexpected call: ${path}`);
+      if (path.startsWith("/billing/events?")) {
+      return {
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+      };
+    }
+    throw new Error(`Unexpected call: ${path}`);
     });
     render(<BillingPage />);
 
@@ -320,6 +333,12 @@ describe("BillingPage", () => {
       if (path === "/billing/checkout/cs-1/complete") {
         return { data: { ...FREE_SUBSCRIPTION, plan: "growth" } };
       }
+      if (path.startsWith("/billing/events?")) {
+        return {
+          data: [],
+          meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+        };
+      }
       throw new Error(`Unexpected call: ${path} ${JSON.stringify(options)}`);
     });
     render(<BillingPage />);
@@ -363,7 +382,13 @@ describe("BillingPage", () => {
       if (path === "/billing/invoices/inv-1/pay") {
         return { data: { ...OPEN_INVOICE, status: "paid" } };
       }
-      throw new Error(`Unexpected call: ${path}`);
+      if (path.startsWith("/billing/events?")) {
+      return {
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+      };
+    }
+    throw new Error(`Unexpected call: ${path}`);
     });
     render(<BillingPage />);
 
@@ -405,7 +430,13 @@ describe("BillingPage", () => {
           },
         };
       }
-      throw new Error(`Unexpected call: ${path}`);
+      if (path.startsWith("/billing/events?")) {
+      return {
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+      };
+    }
+    throw new Error(`Unexpected call: ${path}`);
     });
     render(<BillingPage />);
 
@@ -422,6 +453,110 @@ describe("BillingPage", () => {
     });
     expect(
       await screen.findByText("https://mock-billing.example/portal/ps_mock_1"),
+    ).toBeInTheDocument();
+  });
+  it("shows billing events with their type and status", async () => {
+    mockedApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/billing/plans") return { data: PLANS };
+      if (path === "/billing/subscription") return { data: FREE_SUBSCRIPTION };
+      if (path.startsWith("/billing/invoices?")) {
+        return {
+          data: [OPEN_INVOICE],
+          meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+        };
+      }
+      if (path.startsWith("/billing/events?")) {
+        return {
+          data: [
+            {
+              id: "evt-1",
+              type: "invoice.refunded",
+              status: "succeeded",
+              payload: { invoice_id: "inv-1", amount_cents: 4900 },
+              error_message: null,
+              created_at: "2026-11-26T00:00:00Z",
+            },
+          ],
+          meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+        };
+      }
+      throw new Error(`Unexpected call: ${path}`);
+    });
+    render(<BillingPage />);
+
+    expect(await screen.findByText("Billing events")).toBeInTheDocument();
+    expect(screen.getByText("invoice.refunded")).toBeInTheDocument();
+  });
+
+  it("refunds a paid invoice in full and shows the result", async () => {
+    const user = userEvent.setup();
+    const paidInvoice = {
+      ...OPEN_INVOICE,
+      status: "paid",
+      amount_paid_cents: 4900,
+      paid_at: "2026-11-10T00:00:00Z",
+    };
+    mockedApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/billing/plans") return { data: PLANS };
+      if (path === "/billing/subscription") return { data: FREE_SUBSCRIPTION };
+      if (path.startsWith("/billing/invoices?")) {
+        return {
+          data: [paidInvoice],
+          meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+        };
+      }
+      if (path.startsWith("/billing/events?")) {
+        return {
+          data: [],
+          meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+        };
+      }
+      if (path === "/billing/invoices/inv-1/refund") {
+        return {
+          data: {
+            id: "ref-1",
+            invoice_id: "inv-1",
+            amount_cents: 4900,
+            reason: "Duplicate charge",
+            status: "succeeded",
+            provider_refund_id: "re_mock_1",
+            failure_message: null,
+            created_at: "2026-11-26T00:00:00Z",
+          },
+        };
+      }
+      throw new Error(`Unexpected call: ${path}`);
+    });
+    render(<BillingPage />);
+
+    await screen.findByText("Invoices");
+    await user.click(screen.getByRole("button", { name: "Refund" }));
+
+    expect(
+      await screen.findByText("Refund invoice INV-2026-0001"),
+    ).toBeInTheDocument();
+    // The dialog pre-fills the remaining amount; clearing it makes
+    // this a full refund (amount_cents null) instead of an explicit
+    // partial refund of the same amount.
+    await user.clear(screen.getByLabelText(/Amount in dollars/));
+    await user.type(
+      screen.getByLabelText(/Reason \(required/),
+      "Duplicate charge",
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm refund" }));
+
+    await waitFor(() => {
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        "/billing/invoices/inv-1/refund",
+        {
+          method: "POST",
+          orgId: "org-1",
+          body: { amount_cents: null, reason: "Duplicate charge" },
+        },
+      );
+    });
+    expect(
+      await screen.findByText("Refunded $49.00 on invoice INV-2026-0001."),
     ).toBeInTheDocument();
   });
 });

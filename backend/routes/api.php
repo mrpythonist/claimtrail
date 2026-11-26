@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\V1\SecurityController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
+use App\Http\Controllers\Api\V1\SupportTicketController;
 use Illuminate\Support\Facades\Route;
 
 // Every API request gets a correlation id, echoed back on the
@@ -248,6 +249,8 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/ops/failed-jobs/{uuid}/retry', [OpsController::class, 'retryFailedJob']);
             Route::post('/ops/failed-jobs/{uuid}/forget', [OpsController::class, 'forgetFailedJob']);
             Route::get('/ops/errors', [OpsController::class, 'errors']);
+            Route::get('/ops/monitoring', [OpsController::class, 'monitoring']);
+            Route::post('/ops/monitoring/check', [OpsController::class, 'runMonitoringCheck']);
 
             // Backups (v1.1.3): deployment-wide backups, attributed
             // to the requesting organization. All require
@@ -286,10 +289,21 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/billing/invoices', [BillingController::class, 'invoices']);
             Route::get('/billing/invoices/{invoice}', [BillingController::class, 'invoice']);
             Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'payInvoice']);
+            Route::post('/billing/invoices/{invoice}/refund', [BillingController::class, 'refundInvoice']);
+            Route::get('/billing/events', [BillingController::class, 'billingEvents']);
             Route::post('/billing/payment-method', [BillingController::class, 'updatePaymentMethod']);
             Route::post('/billing/portal', [BillingController::class, 'createPortalSession']);
             Route::get('/billing/usage', [BillingController::class, 'usage']);
             Route::post('/billing/webhooks/simulate', [BillingWebhookController::class, 'simulate']);
+
+            // Support tickets (v1.2.3): any member may open a ticket
+            // and reply on it; triage, status changes, and internal
+            // notes need manage-support (owner and admin).
+            Route::get('/support/tickets', [SupportTicketController::class, 'index']);
+            Route::post('/support/tickets', [SupportTicketController::class, 'store']);
+            Route::get('/support/tickets/{ticket}', [SupportTicketController::class, 'show']);
+            Route::post('/support/tickets/{ticket}/messages', [SupportTicketController::class, 'reply']);
+            Route::post('/support/tickets/{ticket}/status', [SupportTicketController::class, 'setStatus']);
         });
     });
 

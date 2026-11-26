@@ -1,6 +1,7 @@
 import { apiFetch } from "./api";
 import type {
   FailedJob,
+  MonitoringCheck,
   OpsHealth,
   PaginatedMeta,
   QueueStats,
@@ -94,6 +95,31 @@ export async function getRecentErrors(
   const response = await apiFetch<{ data: RecentErrors }>(
     `/ops/errors?${params.toString()}`,
     { orgId },
+  );
+  return response.data;
+}
+
+/**
+ * Production monitoring (v1.2.3): the latest hourly check run and
+ * the recent history. A failing check writes a warning to the log;
+ * there is no alerting channel yet, so this card is where a
+ * failure is seen.
+ */
+export async function getMonitoring(orgId: string): Promise<{
+  latest: MonitoringCheck | null;
+  history: MonitoringCheck[];
+}> {
+  const response = await apiFetch<{
+    data: { latest: MonitoringCheck | null; history: MonitoringCheck[] };
+  }>("/ops/monitoring", { orgId });
+  return response.data;
+}
+
+/** Run the monitoring check now and return the result. */
+export async function runMonitoringCheck(orgId: string): Promise<MonitoringCheck> {
+  const response = await apiFetch<{ data: MonitoringCheck }>(
+    "/ops/monitoring/check",
+    { method: "POST", orgId },
   );
   return response.data;
 }

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.1.3
+  version: 1.2.3
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -21,7 +21,15 @@ info:
     for a default currency, a date format, and a claim reference
     prefix. Version 1.1.3 adds security and operations: backups,
     retention settings, production-readiness checks, and the
-    security event log, all for owners and admins.
+    security event log, all for owners and admins. Version 1.2.0
+    adds subscription billing on a mock provider: plans, checkout,
+    trials, plan changes, cancellations, invoices, payment methods,
+    and metered success-fee billing. Version 1.2.1 adds plan limit
+    enforcement with 402 responses and downgrade carryover.
+    Version 1.2.2 adds the public marketing API: plan catalog,
+    lead capture, and analytics events. Version 1.2.3 adds
+    production launch: support tickets, invoice refunds, the
+    billing event log, and production monitoring.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -49,6 +57,8 @@ tags:
   - name: Operations
   - name: Customization
   - name: Security
+  - name: Billing
+  - name: Support
 paths:
   /auth/register:
     post:
@@ -3126,6 +3136,63 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /ops/monitoring:
+    get:
+      tags: [Operations]
+      summary: Latest monitoring check run and recent history (requires view-operations)
+      description: >
+        The latest hourly monitoring run (health checks, failed job
+        count, queue depth) and the last 24 runs. A failing check
+        writes a warning to the log; there is no alerting channel
+        yet.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Monitoring history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      latest:
+                        allOf:
+                          - $ref: "#/components/schemas/MonitoringCheck"
+                        nullable: true
+                      history:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MonitoringCheck"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /ops/monitoring/check:
+    post:
+      tags: [Operations]
+      summary: Run the monitoring check now (requires view-operations)
+      description: >
+        Runs the health checks, counts failed jobs and queue depth,
+        and stores the result. Always returns 200: a failing check
+        is a successful check run with a failing result, not an
+        HTTP error.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Monitoring check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MonitoringCheck"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /custom-fields:
     get:
       tags: [Customization]
@@ -4340,6 +4407,82 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/invoices/{invoice}/refund:
+    post:
+      tags: [Billing]
+      summary: Refund a paid invoice in full or in part (requires manage-billing)
+      description: >
+        No amount_cents means a full refund of the remaining paid
+        amount; a full refund sets the invoice status to refunded,
+        a partial refund to partially_refunded. The reason is
+        required. An amount above the remaining paid amount, a
+        refund on an unpaid invoice, or a negative amount is
+        rejected. Every refund is an audit row and a billing event
+        (invoice.refunded). The provider is asked first with an
+        idempotency key, so a retry never refunds twice.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: invoice
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                amount_cents: { type: integer, minimum: 1, nullable: true, description: Omit for a full refund }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: Refund record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BillingRefund"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /billing/events:
+    get:
+      tags: [Billing]
+      summary: Billing event log for the organization (requires manage-billing)
+      description: >
+        Subscription, invoice, payment, and refund events, newest
+        first. The operator's view of what billing did, and the
+        history behind a support ticket about a subscription.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 15 }
+      responses:
+        "200":
+          description: Billing events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BillingEvent"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /billing/payment-method:
     post:
       tags: [Billing]
@@ -4455,6 +4598,188 @@ paths:
                       id: { type: string, format: uuid }
                       type: { type: string }
                       status: { type: string, enum: [processed, unprocessed, failed, duplicate] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /support/tickets:
+    get:
+      tags: [Support]
+      summary: Support tickets for the organization, newest first
+      description: >
+        Any member may list tickets. Internal notes are included
+        only for owner and admin.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, in_progress, waiting_on_customer, resolved, closed] }
+        - name: category
+          in: query
+          schema: { type: string, enum: [billing, technical, feature_request, account, other] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Support tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SupportTicket"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Support]
+      summary: Open a support ticket with its first message
+      description: >
+        Any member may open a ticket. Ticket bodies and messages
+        are never written to the audit log.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, message]
+              properties:
+                subject: { type: string, maxLength: 255 }
+                category: { type: string, enum: [billing, technical, feature_request, account, other], default: other }
+                priority: { type: string, enum: [low, normal, high, urgent], default: normal }
+                message: { type: string, maxLength: 5000 }
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SupportTicket"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /support/tickets/{ticket}:
+    get:
+      tags: [Support]
+      summary: One support ticket with its messages
+      description: >
+        Internal notes are included only for owner and admin.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: ticket
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Support ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SupportTicket"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /support/tickets/{ticket}/messages:
+    post:
+      tags: [Support]
+      summary: Reply to a support ticket
+      description: >
+        Any member may reply. A staff reply moves an open or
+        resolved ticket to in progress; a customer reply on a
+        resolved ticket reopens it. An internal note needs
+        manage-support, never changes the status, and never
+        notifies the requester. A closed ticket takes no more
+        messages (422).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: ticket
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, maxLength: 5000 }
+                internal: { type: boolean, default: false }
+      responses:
+        "201":
+          description: Created message and updated ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      body: { type: string }
+                      internal: { type: boolean }
+                      created_at: { type: string, format: date-time }
+                      ticket:
+                        $ref: "#/components/schemas/SupportTicket"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /support/tickets/{ticket}/status:
+    post:
+      tags: [Support]
+      summary: Change a ticket's status (requires manage-support)
+      description: >
+        Resolving stamps resolved_at; closing stamps closed_at;
+        reopening clears both. The change is an audit row without
+        the message text.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: ticket
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [open, in_progress, waiting_on_customer, resolved, closed] }
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SupportTicket"
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -5827,11 +6152,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         number: { type: string, example: INV-2026-0001, description: Per-organization, per-year sequence }
-        status: { type: string, enum: [draft, open, paid, past_due, void, uncollectible] }
+        status: { type: string, enum: [draft, open, paid, past_due, void, uncollectible, refunded, partially_refunded] }
         currency: { type: string, example: USD }
         subtotal_cents: { type: integer }
         total_cents: { type: integer }
         amount_paid_cents: { type: integer }
+        amount_refunded_cents: { type: integer }
         period_start: { type: string, format: date-time, nullable: true }
         period_end: { type: string, format: date-time, nullable: true }
         due_date: { type: string, format: date-time, nullable: true }
@@ -5935,6 +6261,78 @@ components:
         plan: { type: string }
         upgrade_plan: { type: string, nullable: true }
         upgrade_plan_name: { type: string, nullable: true }
+    BillingRefund:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        invoice_id: { type: string, format: uuid }
+        amount_cents: { type: integer }
+        reason: { type: string, nullable: true }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        provider_refund_id: { type: string, nullable: true }
+        failure_message: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    BillingEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, description: "subscription.created, invoice.paid, invoice.refunded, and the other billing event types" }
+        status: { type: string, enum: [processed, unprocessed, failed, duplicate] }
+        payload: { type: object, description: Event data such as invoice_id, invoice_number, and amount_cents }
+        error_message: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    SupportTicketMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        body: { type: string }
+        internal: { type: boolean, description: Only owner and admin see internal notes }
+        created_at: { type: string, format: date-time }
+    SupportTicket:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: string }
+        category: { type: string, enum: [billing, technical, feature_request, account, other] }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        status: { type: string, enum: [open, in_progress, waiting_on_customer, resolved, closed] }
+        requester:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            email: { type: string }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportTicketMessage"
+    MonitoringCheck:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [ok, degraded, down] }
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status: { type: string, enum: [ok, degraded, down, skipped] }
+              latency_ms: { type: number, nullable: true }
+              detail: { type: string, nullable: true }
+        failed_jobs: { type: integer }
+        queue_depth: { type: integer }
+        checked_at: { type: string, format: date-time }
     BillingPortalSession:
       type: object
       properties:

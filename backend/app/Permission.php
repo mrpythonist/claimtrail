@@ -83,6 +83,12 @@ enum Permission: string
     // and the billing portal. Owner, admin, and billing staff.
     case ManageBilling = 'manage-billing';
 
+    // Support (enforced from v1.2.3): triage and replies on the
+    // organization's support tickets, including internal notes.
+    // Owner and admin only. Any member may open a ticket and
+    // reply on their own tickets.
+    case ManageSupport = 'manage-support';
+
     /**
      * Every permission value, for validation and documentation.
      *

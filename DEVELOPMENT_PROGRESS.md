@@ -6,29 +6,40 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.2.2 (Phase 3, Marketing and
-  Acquisition). App version is now **1.2.2**. Phase 0 is complete
-  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
-  deferred, still open).
+- **Last completed version:** v1.2.3 (Phase 3, Production Launch).
+  App version is now **1.2.3**. Phase 3 is complete with this version.
+  Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done;
+  v0.2.0 interviews deferred, still open). What remains before real
+  customers is Aqib's launch decision: open signups vs closed pilot
+  first (pilot prep is ready, no pilot customer recruited), plus the
+  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer
+  review, real Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `79d1ab7e` (v1.2.1, pushed 2026-11-25 after Aqib's yes + approval).
-  v1.2.2 is built and verified locally, NOT PUSHED.
-- **Tests at v1.2.2:** 451 backend (2340 assertions) + 293 frontend, all
-  passing. `npm run build` succeeds (55/55 pages). Live HTTP smoke test:
-  27/27 backend steps + 13/13 marketing pages on a fresh SQLite DB,
-  plus the v1.2.1 regression smoke 55/55 (see the 2026-11-26 v1.2.2 log
-  entry).
+  head `fbf378e1` (v1.2.2, pushed 2026-11-26 after Aqib's yes + approval).
+  **v1.2.3 is built and verified locally, NOT PUSHED** — it waits on
+  Aqib's yes in the main chat + approval card.
+- **Tests at v1.2.3:** 479 backend (2467 assertions) + 318 frontend, all
+  passing. `npm run build` succeeds (58/58 pages). Live HTTP smoke test:
+  56/56 backend steps + 6/6 CLI checks + 18/18 marketing pages on a
+  fresh SQLite DB (see the 2026-11-26 v1.2.3 log entry). OpenAPI 127
+  paths, verified to match the 127 live `api/v1` route URIs exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.2.3 — Production Launch** (MASTER-CHECKLIST.md): customer
-support workflows, help documentation, subscription administration,
-refund and cancellation processes, production monitoring, backup
-verification, privacy policy review, terms of service review, data
-processing documentation review, production launch checklist.
+**v1.3.0 — Email Intake** (MASTER-CHECKLIST.md, Phase 4): organization-specific
+email addresses, inbound email processing, attachment extraction, shipment
+reference extraction, automatic shipment matching, manual matching interface,
+email processing history. Phase 3 is complete with v1.2.3; the next build
+is Phase 4. Before real customers, Aqib still has the launch decision:
+open signups vs closed pilot first (pilot prep ready, no pilot customer
+recruited) and the person-only items in
+`docs/PRODUCTION-LAUNCH-CHECKLIST.md`.
+**Status 2026-11-26 ~10:00 PKT: v1.2.3 build complete and verified,
+NOT PUSHED. The 10:10 scheduled run should stand down until the push
+status is recorded here.**
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
@@ -92,6 +103,164 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-26 — v1.2.3 Production Launch built and verified (Phase 3 complete)
+
+- Gate check passed first: remote head on GitHub is `fbf378e1`,
+  matching the recorded v1.2.2 head, so no version was waiting to be
+  pushed. Build started 2026-11-26 ~09:00 PKT on Aqib's "start now"
+  in the main chat — not the scheduled 2026-11-26 10:10 PKT run. The
+  build ran as a subagent; an earlier attempt to start it was
+  interrupted before the spawn, and this session resumed from the
+  compaction summary.
+- Spec: MASTER-CHECKLIST.md v1.2.3 (10 items). All ten verified and
+  checked. Phase 3 is complete with this version.
+- Provenance, recorded honestly: when this session resumed, the
+  refund backend (Refund model + migration, `BillingService::
+  refundInvoice`, `BillingController::refundInvoice` and
+  `billingEvents`) and the support/monitoring scaffolding (both
+  migrations, both models, the `SupportTicketReply` notification
+  type, the `ManageSupport` permission) were already in the local
+  tree from the pre-compaction part of this same build — but
+  unwired (no routes), untested, and unverified. This session
+  wired the routes, built the services, controllers, commands,
+  UI, docs, and tests around them, and verified everything below.
+  Nothing from that scaffolding was taken on trust.
+- Backend (new): migrations `2026_11_26_100100_create_support_
+  tickets_tables.php` (`support_tickets` + `support_ticket_messages`),
+  `2026_11_26_100200_create_refunds_table.php` (`refunds` +
+  `invoices.amount_refunded_cents`), `2026_11_26_100300_create_
+  monitoring_checks_table.php` (`monitoring_checks`, deployment-wide,
+  not tenant-scoped); `SupportTicketService` (create, reply with the
+  staff/customer status machine, internal notes, setStatus with
+  resolved_at/closed_at stamping); `MonitoringService` (run, latest,
+  history, payload); `SupportTicketController` (5 endpoints),
+  refund + billing-events routes on `BillingController`;
+  `OpsController::monitoring` / `runMonitoringCheck`; commands
+  `monitoring:check` (hourly by schedule), `backup:verify`
+  (`--run`, `--latest`; weekly Sun 04:00), `billing:admin
+  <uuid or slug>` (`--invoices`, `--events`), `support:list`
+  (`--status`, `--organization`, `--limit`), `support:show
+  <ticket>`. Refunds run against the mock provider (v1.2.0
+  decision, unchanged): full refund sets the invoice to refunded,
+  partial to partially_refunded; reason required; amounts above the
+  remaining paid amount, refunds on unpaid invoices, and negative
+  amounts rejected; every refund is a `refunds` row, an audit row,
+  and a billing event. Refunds do not change metered success-fee
+  usage.
+- Frontend (new): `src/lib/support.ts` (labels + typed client),
+  refund + billing-events additions to `src/lib/billing.ts`,
+  monitoring additions to `src/lib/ops.ts`, `canManageSupport`
+  in `src/lib/permissions.ts`; pages `/support` + `/support/[id]`
+  (list, create, conversation, reply, status change, internal
+  notes), `/help` (public, linked from the marketing footer, in
+  the sitemap), rewritten `/privacy` and `/terms` as reviewed
+  drafts; refund form + billing-events table on the billing page;
+  monitoring card with "Run check now" on the operations page.
+  Build 58/58 pages (55 at v1.2.2 + 3 new: `/support`,
+  `/support/[id]`, `/help`).
+- Docs: `docs/legal-review-1.2.3.md` (internal review of the
+  privacy policy, terms, and data processing against the app's
+  actual data practices — NOT legal advice, NOT a lawyer's review;
+  the public pages carry the review date and the banner saying so),
+  `docs/DATA-PROCESSING.md`, `docs/HELP.md`, `docs/PRODUCTION-
+  LAUNCH-CHECKLIST.md` (15 items done in code, 10 still needing a
+  person); refund/cancellation/admin sections in `docs/BILLING.md`;
+  monitoring + backup-verify sections in `docs/OPERATIONS.md`;
+  OpenAPI 119 → **127 paths** (8 new) with `Billing`/`Support`
+  tags and info version 1.2.3; `CHANGELOG.md` [1.2.3] entry.
+- **Real defect 1 (reopened ticket kept its resolved timestamp,
+  found by the new backend test):** `SupportTicketService::reply`
+  updated only the status, so a customer reply on a resolved
+  ticket reopened it to open while `resolved_at` stayed set. Fix:
+  a reply that moves a ticket out of resolved clears
+  `resolved_at`. The test asserts the timestamp is null after the
+  reopen.
+- **Real defect 2 (frontend reply client returned the wrong
+  shape, found while writing the smoke script):**
+  `replyToTicket` was typed as returning `{message, ticket}`,
+  but the controller returns the message flat (`{id, body,
+  internal, created_at, ticket}`). The ticket page only read
+  `.ticket`, so it worked at runtime, but the type and the lib
+  test were wrong. Fix: the lib now returns the flat shape and
+  the tests assert it; the unused `SupportTicketMessage` import
+  was removed.
+- **Real defect 3 (form fields without the required `id` prop,
+  found by the frontend tests):** the support list/detail pages
+  and the billing refund dialog rendered `Input`/`Textarea`/
+  `Select` without `id` (and two selects without `label`), so
+  labels were unassociated and `getByLabelText` failed — and
+  `next build` type-checking would have failed too. Fix: every
+  field now carries its `id` (and a visible label where one was
+  missing).
+- **Real defect 4 (OpenAPI documented the wrong run-now path,
+  found by diffing live routes against the spec):** the spec
+  listed `POST /ops/monitoring`, but the live route is `POST
+  /ops/monitoring/check` — the spec had 126 paths against 127
+  live URIs. Fix: the spec now has the `/ops/monitoring/check`
+  path; the count is 127 = 127 with zero diffs, and the CHANGELOG
+  count was corrected from 126 to 127 (119 + 8 new).
+- **Doc correction (launch checklist):** it said a full refund
+  "voids the invoice"; a full refund marks the invoice
+  `refunded`. Fixed. Test-only mistakes (refund body always
+  carries `amount_cents`, `createTicket` sends `message` not
+  `body`, the real support categories, `listTickets` defaults
+  to `per_page=25`, `setTicketStatus` is `POST .../status`)
+  were fixed in the tests, not in product code.
+- Verification: backend **479 tests, 2467 assertions** (451 at
+  v1.2.1 + 28 new: 10 support, 8 refund, 4 monitoring, 6 backup
+  verify), all passing, including two count/version updates in
+  existing tests (ops health version 1.2.3; 11 notification
+  preference types with the new `support.ticket_reply` type).
+  Frontend **318 tests** (293 + 25 new: support/billing/ops
+  lib tests, support list + detail page tests, billing events
+  + refund page tests, monitoring page tests), all passing;
+  `npm run build` 58/58 pages. Live HTTP smoke test **56/56
+  backend steps + 6/6 CLI checks + 18/18 marketing pages** on a
+  fresh SQLite DB (script + runner in
+  `~/workspace/claimtrail-scratch-v123/smoke/`): plans, leads,
+  analytics, register + org + plans (6) + Growth trial + usage,
+  support create 201 / validation 422 / list / show / staff
+  reply to in_progress / internal note / resolve / owner reply
+  reopens work with `resolved_at` cleared / bad status 422 /
+  cross-tenant 404s, checkout to a paid invoice, partial refund
+  1000 then full refund of the remaining 3900 (invoice refunded,
+  `amount_refunded_cents` 4900), billing events with `payload`
+  and no `message` field, monitoring before/after a run,
+  backup create 201 + verify ok, ops health version 1.2.3;
+  CLI `monitoring:check`, `support:list`, `support:show`,
+  `billing:admin`, `backup:verify --latest`; every marketing
+  page 200 with its key content, including `/help`, `/privacy`,
+  and `/terms` with the review banners. Regression: the v1.2.2
+  smoke steps (plans/leads/analytics) and the v1.2.0/1.2.1
+  billing + trial + usage flows all pass inside the same run.
+- Gaps / placeholder (not built, per the spec): lawyer review
+  of the privacy policy, terms, and data processing (internal
+  review only — must not be described as compliant); real
+  Stripe (mock provider unchanged); real mailer (log driver —
+  no email leaves the server); production hosting, domain and
+  site URL (sitemap empty, robots.txt lists no sitemap until
+  then); backup retention `keep_days` is configured at 30 days
+  but enforced by no command; no alerting channel for
+  monitoring failures; no account/organization deletion flow;
+  product screenshots still placeholders (v1.2.2). Standing
+  unverified items unchanged: browser E2E, live Postgres, live
+  Redis, Docker, real mailer. Lint: the two remaining findings
+  are pre-existing from v1.2.2, not this version
+  (`register/page.tsx` set-state-in-effect error,
+  `PricingTable` unused `MARKETING_PLANS` warning) — left
+  untouched, out of scope.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **v1.2.3 COMPLETE AND VERIFIED, NOT PUSHED** — waits
+  on Aqib's yes in the main chat + approval card. 65 files in the
+  delta against remote head `fbf378e1` (35 changed + 30 new,
+  984,548 bytes). Next run may push it, then start v1.3.0.
+- Next task: **v1.3.0 — Email Intake (Phase 4).** Phase 3 is
+  complete with v1.2.3. Aqib's launch decision (open signups vs
+  closed pilot first) is still open.
 
 ### 2026-11-26 — v1.2.2 Marketing and Acquisition built and verified
 
@@ -220,7 +389,10 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.**
+- Push status: **v1.2.2 PUSHED 2026-11-26** after Aqib's yes in the main
+  chat + approval card. New remote head `fbf378e1`, 54 files in one
+  commit (15 changed + 39 new). Read-back verified. Next run may
+  start v1.2.3.
 - Next task: **v1.2.3 — Production Launch.** v0.2.0 Customer
   Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
   interviews.

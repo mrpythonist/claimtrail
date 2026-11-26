@@ -41,6 +41,33 @@ only) shows the same checks plus the application version, PHP and
 Laravel versions, and queue totals. The underlying endpoint is
 `GET /api/v1/ops/health`.
 
+## Production monitoring (v1.2.3)
+
+The health endpoint answers one question at one moment. The
+monitoring check answers it every hour and keeps the answer:
+
+```sh
+php artisan monitoring:check
+```
+
+It runs the same four health checks, counts failed jobs, and
+counts queue depth, then stores the result as a `monitoring_checks`
+row. The operations page shows the latest run and the recent
+history under "Production monitoring", with a "Run check now"
+button. The API is `GET /api/v1/ops/monitoring` (latest + last
+24 runs) and `POST /api/v1/ops/monitoring/check` (run now);
+both need view-operations (owner and admin). The command is
+scheduled hourly; a failing run writes a warning to the log and
+exits 1.
+
+A failing check means: look at the operations page first (which
+check failed and what its detail says), then the recent errors
+below it, then the queue. There is **no alerting channel yet**:
+nobody is paged or emailed when a check fails. The failure is
+visible on the operations page and in the log, and that is all.
+Choosing an alerting channel (email, chat, phone) is a launch
+decision; see `docs/PRODUCTION-LAUNCH-CHECKLIST.md`.
+
 ## Queue monitoring
 
 `GET /api/v1/ops/queue` reports, per queue, how many jobs are
@@ -210,8 +237,18 @@ path is never exposed.
 Verify a backup before relying on it: `POST
 /backups/{backup}/verify` from the Security settings hub
 re-hashes the database copy and every stored file against the
-manifest and returns any mismatches. There is no artisan verify
-command; the API endpoint is the verification path.
+manifest and returns any mismatches. The same check is available
+from the command line (v1.2.3) and runs weekly on Sundays at
+04:00:
+
+```sh
+php artisan backup:verify            # latest completed run
+php artisan backup:verify --run=<uuid>
+```
+
+Exit code 0 means the backup is intact; 1 means it is missing,
+corrupt, or not completed. A failed weekly verification writes
+to the log.
 
 Restore procedure (operator action only, no API endpoint):
 
@@ -230,9 +267,13 @@ state before restoring. A successful restore sets
 run against live PostgreSQL on the development VM.
 
 Retention for backups themselves is `config/backup.php`
-(`keep_days`, default 30). Backups are deployment-wide: a
-restore restores every organization at once, so it is not a
-per-tenant operation.
+(`keep_days`, default 30), but that value is **not enforced by
+any command yet**: backup runs accumulate until an operator
+deletes them. A backup retention policy (how long runs are kept,
+who deletes them) is an open operator decision; see
+`docs/PRODUCTION-LAUNCH-CHECKLIST.md`. Backups are
+deployment-wide: a restore restores every organization at once,
+so it is not a per-tenant operation.
 
 ## Retention (v1.1.3)
 

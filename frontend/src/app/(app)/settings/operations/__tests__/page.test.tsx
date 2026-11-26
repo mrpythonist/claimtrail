@@ -174,6 +174,32 @@ beforeEach(() => {
       return { data: { deleted: 5 } };
     }
     if (path.startsWith("/ops/errors?")) return { data: ERRORS };
+    if (path === "/ops/monitoring") {
+      return { data: { latest: null, history: [] } };
+    }
+    if (path === "/ops/monitoring/check") {
+      return {
+        data: {
+          id: "chk-1",
+          status: "ok",
+          checks: {
+            database: {
+              status: "ok",
+              latency_ms: 2,
+              detail: "Database connection healthy.",
+            },
+            queue: { status: "ok", latency_ms: null, detail: null },
+            storage: { status: "ok", latency_ms: null, detail: null },
+            mailer: { status: "ok", latency_ms: null, detail: null },
+            backup: { status: "ok", latency_ms: null, detail: null },
+          },
+          failed_jobs: 0,
+          queue_depth: 0,
+          checked_at: "2026-11-26T00:00:00Z",
+        },
+      };
+    }
+
     throw new Error(`Unexpected call: ${path}`);
   });
   mockAuth(ADMIN_ORG);
@@ -337,5 +363,116 @@ describe("OperationsPage", () => {
       ),
     ).toBeInTheDocument();
     expect(mockedApiFetch).not.toHaveBeenCalled();
+  });
+  it("shows the production monitoring card and runs a check on demand", async () => {
+    const user = userEvent.setup();
+    const check = {
+      id: "chk-1",
+      status: "ok",
+      checks: {
+        database: {
+          status: "ok",
+          latency_ms: 2,
+          detail: "Database connection healthy.",
+        },
+        queue: { status: "ok", latency_ms: null, detail: null },
+        storage: { status: "ok", latency_ms: null, detail: null },
+        mailer: { status: "ok", latency_ms: null, detail: null },
+        backup: { status: "ok", latency_ms: null, detail: null },
+      },
+      failed_jobs: 0,
+      queue_depth: 0,
+      checked_at: "2026-11-26T00:00:00Z",
+    };
+    // The card refreshes from GET /ops/monitoring after the run, so
+    // the mock only reports the check once the POST has happened.
+    let monitoringData: { latest: unknown; history: unknown[] } = {
+      latest: null,
+      history: [],
+    };
+    mockedApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/ops/health") return { data: HEALTH };
+      if (path === "/ops/queue") return { data: queueFixture };
+      if (path.startsWith("/ops/failed-jobs?")) {
+        return {
+          data: JOBS,
+          meta: { current_page: 1, last_page: 2, per_page: 15, total: 16 },
+        };
+      }
+      if (path.startsWith("/ops/errors?")) return { data: ERRORS };
+      if (path === "/ops/monitoring") return { data: monitoringData };
+      if (path === "/ops/monitoring/check") {
+        monitoringData = { latest: check, history: [check] };
+        return { data: check };
+      }
+      throw new Error(`Unexpected call: ${path}`);
+    });
+    render(<OperationsPage />);
+
+    expect(await screen.findByText("Production monitoring")).toBeInTheDocument();
+    expect(
+      screen.getByText("No check has run yet. Run one now, or wait for the hourly schedule."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Run check now" }));
+
+    await waitFor(() => {
+      expect(mockedApiFetch).toHaveBeenCalledWith("/ops/monitoring/check", {
+        method: "POST",
+        orgId: "org-1",
+      });
+    });
+    expect(await screen.findByText("database")).toBeInTheDocument();
+    expect(screen.getByText("Database connection healthy.")).toBeInTheDocument();
+  });
+
+  it("shows the latest monitoring check with per-check statuses", async () => {
+    mockedApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/ops/health") return { data: HEALTH };
+      if (path === "/ops/queue") return { data: queueFixture };
+      if (path.startsWith("/ops/failed-jobs?")) {
+        return {
+          data: JOBS,
+          meta: { current_page: 1, last_page: 2, per_page: 15, total: 16 },
+        };
+      }
+      if (path.startsWith("/ops/errors?")) return { data: ERRORS };
+      if (path === "/ops/monitoring") {
+        return {
+          data: {
+            latest: {
+              id: "chk-1",
+              status: "degraded",
+              checks: {
+                database: {
+                  status: "ok",
+                  latency_ms: 2,
+                  detail: "Database connection healthy.",
+                },
+                queue: {
+                  status: "degraded",
+                  latency_ms: null,
+                  detail: "3 jobs pending longer than 15 minutes.",
+                },
+              },
+              failed_jobs: 1,
+              queue_depth: 3,
+              checked_at: "2026-11-26T00:00:00Z",
+            },
+            history: [],
+          },
+        };
+      }
+      throw new Error(`Unexpected call: ${path}`);
+    });
+    render(<OperationsPage />);
+
+    expect(await screen.findByText("Production monitoring")).toBeInTheDocument();
+    expect(screen.getByText("database")).toBeInTheDocument();
+    expect(screen.getByText("queue")).toBeInTheDocument();
+    expect(
+      screen.getByText("3 jobs pending longer than 15 minutes."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Degraded").length).toBeGreaterThanOrEqual(2);
   });
 });

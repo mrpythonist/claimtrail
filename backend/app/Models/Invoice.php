@@ -35,6 +35,10 @@ class Invoice extends Model
 
     public const STATUS_UNCOLLECTIBLE = 'uncollectible';
 
+    public const STATUS_REFUNDED = 'refunded';
+
+    public const STATUS_PARTIALLY_REFUNDED = 'partially_refunded';
+
     protected $fillable = [
         'organization_id',
         'subscription_id',
@@ -44,6 +48,7 @@ class Invoice extends Model
         'subtotal_cents',
         'total_cents',
         'amount_paid_cents',
+        'amount_refunded_cents',
         'period_start',
         'period_end',
         'due_date',
@@ -63,6 +68,7 @@ class Invoice extends Model
             'subtotal_cents' => 'integer',
             'total_cents' => 'integer',
             'amount_paid_cents' => 'integer',
+            'amount_refunded_cents' => 'integer',
             'period_start' => 'datetime',
             'period_end' => 'datetime',
             'due_date' => 'datetime',
@@ -94,6 +100,14 @@ class Invoice extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(InvoiceLine::class)->orderBy('created_at');
+    }
+
+    /**
+     * Refunds issued against this invoice, oldest first.
+     */
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class)->orderBy('created_at');
     }
 
     /**

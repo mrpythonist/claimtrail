@@ -4,11 +4,13 @@ import {
   flushFailedJobs,
   forgetFailedJob,
   getFailedJobs,
+  getMonitoring,
   getOpsHealth,
   getQueueStats,
   getRecentErrors,
   retryAllFailedJobs,
   retryFailedJob,
+  runMonitoringCheck,
 } from "../ops";
 
 vi.mock("@/lib/api", () => {
@@ -151,6 +153,41 @@ describe("getRecentErrors", () => {
     });
     await getRecentErrors("org-1", 10);
     expect(mockedApiFetch).toHaveBeenCalledWith("/ops/errors?limit=10", {
+      orgId: "org-1",
+    });
+  });
+});
+
+describe("getMonitoring", () => {
+  it("calls /ops/monitoring with the org id and unwraps data", async () => {
+    mockedApiFetch.mockResolvedValue({
+      data: { latest: null, history: [] },
+    });
+    await expect(getMonitoring("org-1")).resolves.toEqual({
+      latest: null,
+      history: [],
+    });
+    expect(mockedApiFetch).toHaveBeenCalledWith("/ops/monitoring", {
+      orgId: "org-1",
+    });
+  });
+});
+
+describe("runMonitoringCheck", () => {
+  it("posts to /ops/monitoring/check and unwraps the check", async () => {
+    const check = {
+      id: "chk-1",
+      organization_id: "org-1",
+      kind: "database",
+      status: "ok",
+      message: "Database connection healthy.",
+      details: null,
+      checked_at: "2026-11-26T00:00:00Z",
+    };
+    mockedApiFetch.mockResolvedValue({ data: check });
+    await expect(runMonitoringCheck("org-1")).resolves.toEqual(check);
+    expect(mockedApiFetch).toHaveBeenCalledWith("/ops/monitoring/check", {
+      method: "POST",
       orgId: "org-1",
     });
   });

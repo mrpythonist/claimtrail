@@ -337,6 +337,57 @@ class BillingController extends Controller
     }
 
     /**
+     * Refund part or all of a paid invoice. The amount defaults
+     * to everything still refundable; the reason is required.
+     */
+    public function refundInvoice(Request $request, Invoice $invoice): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ManageBilling->value, $organization);
+
+        $validated = $request->validate([
+            'amount_cents' => ['nullable', 'integer', 'min:1'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $refund = $this->billing->refundInvoice(
+            $organization,
+            $invoice,
+            $validated['amount_cents'] ?? null,
+            $validated['reason'],
+            $request->user(),
+        );
+
+        return response()->json([
+            'data' => $this->billing->refundPayload($refund),
+        ], 201);
+    }
+
+    /**
+     * Billing events for the organization, newest first: every
+     * checkout, renewal, payment, failure, dunning step, refund,
+     * and cancellation the service recorded.
+     */
+    public function billingEvents(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ManageBilling->value, $organization);
+
+        $history = $this->billing->billingEvents(
+            $organization,
+            (int) $request->input('page', 1),
+            $this->perPage($request, 25),
+        );
+
+        return response()->json([
+            'data' => $history['data'],
+            'meta' => $history['meta'],
+        ]);
+    }
+
+    /**
      * Store a dummy payment method (mock test card or token).
      */
     public function updatePaymentMethod(Request $request): JsonResponse

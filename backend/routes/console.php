@@ -38,3 +38,15 @@ Schedule::command('billing:renew')->dailyAt('03:30');
 // Past-due invoices are retried at the configured delays, and
 // organizations 14+ days past due are downgraded to Free.
 Schedule::command('billing:dunning')->dailyAt('04:00');
+
+// Production monitoring runs hourly: health checks, failed job
+// count, and queue depth, stored for the operations dashboard.
+// A failing run writes a warning to the log; there is no
+// alerting channel yet, so the dashboard is where a failure
+// is seen.
+Schedule::command('monitoring:check')->hourly();
+
+// The latest completed backup is re-hashed against its manifest
+// weekly on Sunday at 04:00, so a silently rotting backup is
+// caught before it is needed. A failure writes to the log.
+Schedule::command('backup:verify')->weeklyOn(0, '04:00');

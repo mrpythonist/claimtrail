@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableCell } from "@/components/ui/Table";
@@ -19,6 +20,7 @@ import {
   createPortalSession,
   formatBytes,
   formatCents,
+  getBillingEvents,
   getInvoices,
   getPlans,
   getSubscription,
@@ -28,6 +30,7 @@ import {
   invoiceStatusTone,
   payInvoice,
   previewPlanChange,
+  refundInvoice,
   resumeSubscription,
   startCheckout,
   startTrial,
@@ -38,6 +41,7 @@ import {
 } from "@/lib/billing";
 import { canManageBilling } from "@/lib/permissions";
 import type {
+  BillingEvent,
   BillingInvoice,
   BillingPlan,
   BillingSubscription,
@@ -90,6 +94,10 @@ function BillingContent({ org }: { org: Organization }) {
     useState<BillingSubscription | null>(null);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [invoicesMeta, setInvoicesMeta] = useState<PaginatedMeta | null>(null);
+  const [events, setEvents] = useState<BillingEvent[]>([]);
+  const [refundTarget, setRefundTarget] = useState<BillingInvoice | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
   // No loading state for roles that cannot see the page: the
   // access-denied alert renders immediately instead of a spinner.
   const [loading, setLoading] = useState(canManage);
@@ -120,6 +128,7 @@ function BillingContent({ org }: { org: Organization }) {
       getPlans(orgId),
       getSubscription(orgId),
       getInvoices(orgId),
+      getBillingEvents(orgId),
     ]);
     if (requestId !== requestIdRef.current) return;
 
@@ -139,6 +148,11 @@ function BillingContent({ org }: { org: Organization }) {
       setInvoicesMeta(results[2].value.meta);
     } else {
       failures.push("invoices");
+    }
+    if (results[3].status === "fulfilled") {
+      setEvents(results[3].value.data);
+    } else {
+      failures.push("billing events");
     }
     setError(
       failures.length > 0
@@ -267,6 +281,52 @@ function BillingContent({ org }: { org: Organization }) {
     void runAction(`pay:${invoice.id}`, async () => {
       await payInvoice(org.id, invoice.id, testCard === "" ? null : testCard);
       return `Invoice ${invoice.number} paid.`;
+    });
+  }
+
+  /**
+   * Refund a paid invoice. An empty amount means a full refund of
+   * the remaining paid amount; a number refunds that many dollars
+   * in part. A full refund sets the invoice status to refunded; a
+   * partial refund sets it to partially_refunded. The reason is
+   * required. The refund is an audit row and a billing event.
+   */
+  function handleRefund() {
+    if (refundTarget === null) return;
+    const remaining =
+      refundTarget.amount_paid_cents - refundTarget.amount_refunded_cents;
+    const trimmed = refundAmount.trim();
+    if (refundReason.trim() === "") {
+      setError("Give a reason for the refund. Refunds are issued case by case, and the reason is the record of why.");
+      return;
+    }
+    let amountCents: number | null = null;
+    if (trimmed !== "") {
+      const dollars = Number.parseFloat(trimmed);
+      if (!Number.isFinite(dollars) || dollars <= 0) {
+        setError("Enter a refund amount greater than zero, or leave it empty for a full refund.");
+        return;
+      }
+      amountCents = Math.round(dollars * 100);
+      if (amountCents > remaining) {
+        setError(
+          `The most that can be refunded on this invoice is ${formatCents(remaining)}.`,
+        );
+        return;
+      }
+    }
+    const target = refundTarget;
+    void runAction(`refund:${target.id}`, async () => {
+      const refund = await refundInvoice(
+        org.id,
+        target.id,
+        amountCents,
+        refundReason.trim(),
+      );
+      setRefundTarget(null);
+      setRefundAmount("");
+      setRefundReason("");
+      return `Refunded ${formatCents(refund.amount_cents)} on invoice ${target.number}.`;
     });
   }
 
@@ -867,6 +927,11 @@ function BillingContent({ org }: { org: Organization }) {
                             .join(" · ")}
                         </span>
                       )}
+                      {invoice.amount_refunded_cents > 0 && (
+                        <span className="block text-xs font-normal text-slate-500">
+                          Refunded {formatCents(invoice.amount_refunded_cents)}
+                        </span>
+                      )}
                       {invoice.failure_message && (
                         <span className="block text-xs font-normal text-red-600">
                           {invoice.failure_message}
@@ -893,6 +958,29 @@ function BillingContent({ org }: { org: Organization }) {
                           Pay now
                         </Button>
                       )}
+                      {(invoice.status === "paid" ||
+                        invoice.status === "partially_refunded") &&
+                        invoice.amount_paid_cents >
+                          invoice.amount_refunded_cents && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={busyAction === `refund:${invoice.id}`}
+                            onClick={() => {
+                              setRefundTarget(invoice);
+                              setRefundAmount(
+                                (
+                                  (invoice.amount_paid_cents -
+                                    invoice.amount_refunded_cents) /
+                                  100
+                                ).toFixed(2),
+                              );
+                              setRefundReason("");
+                            }}
+                          >
+                            Refund
+                          </Button>
+                        )}
                     </TableCell>
                   </tr>
                 ))}
@@ -909,6 +997,96 @@ function BillingContent({ org }: { org: Organization }) {
               <p className="border-t border-slate-200 px-5 py-3 text-sm text-slate-500">
                 Showing {invoices.length} of {invoicesMeta.total} invoices.
               </p>
+            )}
+          </Card>
+
+          {refundTarget ? (
+            <Card>
+              <CardHeader
+                title={`Refund invoice ${refundTarget.number}`}
+                description={`Paid ${formatCents(refundTarget.amount_paid_cents)}, already refunded ${formatCents(refundTarget.amount_refunded_cents)}. A full refund sets the invoice status to refunded.`}
+              />
+              <CardBody>
+                <div className="space-y-4">
+                  <Input
+                    id="refund-amount"
+                    label="Amount in dollars (empty for a full refund of the remaining amount)"
+                    value={refundAmount}
+                    onChange={(event) => setRefundAmount(event.target.value)}
+                    inputMode="decimal"
+                    placeholder={(
+                      (refundTarget.amount_paid_cents -
+                        refundTarget.amount_refunded_cents) /
+                      100
+                    ).toFixed(2)}
+                  />
+                  <Input
+                    id="refund-reason"
+                    label="Reason (required; refunds are issued case by case, and the reason is the record of why)"
+                    value={refundReason}
+                    onChange={(event) => setRefundReason(event.target.value)}
+                    required
+                    maxLength={500}
+                    placeholder="Duplicate charge"
+                  />
+                  <div className="flex gap-3">
+                    <Button
+                      loading={busyAction === `refund:${refundTarget.id}`}
+                      onClick={handleRefund}
+                    >
+                      Confirm refund
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setRefundTarget(null);
+                        setRefundAmount("");
+                        setRefundReason("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          ) : null}
+
+          <Card>
+            <CardHeader
+              title="Billing events"
+              description="Recent subscription, invoice, payment, and refund events, newest first."
+            />
+            {events.length > 0 ? (
+              <Table headers={["When", "Event", "Status", ""]}>
+                {events.map((event) => (
+                  <tr key={event.id}>
+                    <TableCell>{formatDate(event.created_at)}</TableCell>
+                    <TableCell className="font-medium">{event.type}</TableCell>
+                    <TableCell>
+                      <Badge
+                        tone={
+                          event.status === "processed"
+                            ? "success"
+                            : event.status === "failed"
+                              ? "danger"
+                              : "neutral"
+                        }
+                      >
+                        {event.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{event.error_message ?? ""}</TableCell>
+                  </tr>
+                ))}
+              </Table>
+            ) : (
+              <CardBody>
+                <EmptyState
+                  title="No billing events yet"
+                  description="Events appear here when subscriptions change, invoices are paid, or refunds are issued."
+                />
+              </CardBody>
             )}
           </Card>
 

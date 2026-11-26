@@ -6,6 +6,7 @@ import {
   completeCheckout,
   createPortalSession,
   formatCents,
+  getBillingEvents,
   getInvoices,
   getPlans,
   getSubscription,
@@ -16,6 +17,7 @@ import {
   invoiceStatusTone,
   payInvoice,
   previewPlanChange,
+  refundInvoice,
   resumeSubscription,
   startCheckout,
   startTrial,
@@ -94,6 +96,7 @@ const INVOICE: BillingInvoice = {
   subtotal_cents: 4900,
   total_cents: 4900,
   amount_paid_cents: 4900,
+  amount_refunded_cents: 0,
   period_start: "2026-11-10T00:00:00Z",
   period_end: "2026-12-10T00:00:00Z",
   due_date: "2026-11-10T00:00:00Z",
@@ -409,5 +412,90 @@ describe("intervalLabel", () => {
   it("labels monthly and annual", () => {
     expect(intervalLabel("monthly")).toBe("Monthly");
     expect(intervalLabel("annual")).toBe("Annual");
+  });
+});
+
+describe("invoiceStatusLabel", () => {
+  it("labels the refund statuses", () => {
+    expect(invoiceStatusLabel("refunded")).toBe("Refunded");
+    expect(invoiceStatusLabel("partially_refunded")).toBe(
+      "Partially refunded",
+    );
+    expect(invoiceStatusLabel("open")).toBe("Open");
+  });
+});
+
+describe("invoiceStatusTone", () => {
+  it("tones the refund statuses", () => {
+    expect(invoiceStatusTone("refunded")).toBe("neutral");
+    expect(invoiceStatusTone("partially_refunded")).toBe("warning");
+    expect(invoiceStatusTone("paid")).toBe("success");
+  });
+});
+
+describe("refundInvoice", () => {
+  it("posts the amount and reason and unwraps the refund record", async () => {
+    const refund = {
+      id: "ref-1",
+      invoice_id: "inv-1",
+      amount_cents: 4900,
+      reason: "Duplicate charge",
+      status: "succeeded",
+      provider_refund_id: "re_mock_1",
+      failure_message: null,
+      created_at: "2026-11-26T00:00:00Z",
+    };
+    mockedApiFetch.mockResolvedValue({ data: refund });
+    await expect(
+      refundInvoice("org-1", "inv-1", 4900, "Duplicate charge"),
+    ).resolves.toEqual(refund);
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      "/billing/invoices/inv-1/refund",
+      {
+        method: "POST",
+        orgId: "org-1",
+        body: { amount_cents: 4900, reason: "Duplicate charge" },
+      },
+    );
+  });
+
+  it("sends null for the amount on a full refund", async () => {
+    mockedApiFetch.mockResolvedValue({ data: { id: "ref-1" } });
+    await refundInvoice("org-1", "inv-1", null, "Service not delivered");
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      "/billing/invoices/inv-1/refund",
+      {
+        method: "POST",
+        orgId: "org-1",
+        body: { amount_cents: null, reason: "Service not delivered" },
+      },
+    );
+  });
+});
+
+describe("getBillingEvents", () => {
+  it("calls /billing/events with pagination and unwraps data and meta", async () => {
+    const events = [
+      {
+        id: "evt-1",
+        type: "invoice.refunded",
+        status: "succeeded",
+        payload: { invoice_id: "inv-1" },
+        error_message: null,
+        created_at: "2026-11-26T00:00:00Z",
+      },
+    ];
+    mockedApiFetch.mockResolvedValue({
+      data: events,
+      meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+    });
+    await expect(getBillingEvents("org-1", 1)).resolves.toEqual({
+      data: events,
+      meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+    });
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      "/billing/events?page=1&per_page=15",
+      { orgId: "org-1" },
+    );
   });
 });

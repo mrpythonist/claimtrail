@@ -14,6 +14,7 @@ use App\Models\InvoiceLine;
 use App\Models\InvoiceSequence;
 use App\Models\Organization;
 use App\Models\PortalSession;
+use App\Models\Refund;
 use App\Models\Subscription;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -872,6 +873,179 @@ class BillingService
         $this->audit->record($organization, 'billing.invoice_paid', $subscription, $actor, null, ['invoice' => $invoice->number]);
 
         return $invoice->fresh();
+    }
+
+    /**
+     * Refund part or all of a paid invoice (v1.2.3).
+     *
+     * The amount defaults to everything still refundable
+     * (paid minus already refunded). The reason is required:
+     * until Aqib publishes a written refund policy, refunds are
+     * issued case by case, and the reason is the record of why.
+     * The provider is asked first, with an idempotency key tied
+     * to the refund row, so a retry never refunds twice. A
+     * provider failure is recorded on the row and reported; the
+     * invoice is untouched. A success updates the invoice's
+     * refunded total and status, records a billing event, and
+     * writes an audit row.
+     *
+     * A refund does not change metered success-fee usage: the fee
+     * is on claim payments recorded as paid, not on subscription
+     * invoices, so refunding a fee invoice is just money back.
+     *
+     * @throws ValidationException
+     */
+    public function refundInvoice(
+        Organization $organization,
+        Invoice $invoice,
+        ?int $amountCents,
+        string $reason,
+        ?User $actor = null,
+    ): Refund {
+        if ($invoice->organization_id !== $organization->getKey()) {
+            throw ValidationException::withMessages([
+                'invoice' => 'Invoice not found.',
+            ]);
+        }
+
+        if (! in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_PARTIALLY_REFUNDED], true)) {
+            throw ValidationException::withMessages([
+                'invoice' => 'Only a paid invoice can be refunded.',
+            ]);
+        }
+
+        $remaining = $invoice->amount_paid_cents - $invoice->amount_refunded_cents;
+        $amount = $amountCents ?? $remaining;
+
+        if ($amount <= 0 || $amount > $remaining) {
+            throw ValidationException::withMessages([
+                'amount_cents' => 'The refund amount must be between 1 and the amount still refundable.',
+            ]);
+        }
+
+        $subscription = $this->subscriptionFor($organization);
+
+        $refund = DB::transaction(function () use ($organization, $invoice, $amount, $reason, $actor, $subscription) {
+            $refund = Refund::create([
+                'organization_id' => $organization->getKey(),
+                'invoice_id' => $invoice->getKey(),
+                'requested_by' => $actor?->getKey(),
+                'amount_cents' => $amount,
+                'reason' => $reason,
+                'status' => Refund::STATUS_PENDING,
+            ]);
+
+            $result = $this->provider->refund(
+                $organization,
+                $subscription->provider_customer_id,
+                $invoice->provider_charge_id,
+                $amount,
+                $reason,
+                "refund:{$refund->getKey()}",
+            );
+
+            if (! $result['success']) {
+                $refund->update([
+                    'status' => Refund::STATUS_FAILED,
+                    'failure_code' => $result['failure_code'],
+                    'failure_message' => $result['failure_message'],
+                ]);
+
+                return $refund;
+            }
+
+            $refund->update([
+                'status' => Refund::STATUS_SUCCEEDED,
+                'provider_refund_id' => $result['refund_id'],
+            ]);
+
+            $refundedTotal = $invoice->amount_refunded_cents + $amount;
+
+            $invoice->update([
+                'amount_refunded_cents' => $refundedTotal,
+                'status' => $refundedTotal >= $invoice->amount_paid_cents
+                    ? Invoice::STATUS_REFUNDED
+                    : Invoice::STATUS_PARTIALLY_REFUNDED,
+            ]);
+
+            $this->recordBillingEvent($organization, 'invoice.refunded', [
+                'invoice_id' => $invoice->getKey(),
+                'invoice_number' => $invoice->number,
+                'refund_id' => $refund->getKey(),
+                'amount_cents' => $amount,
+            ]);
+
+            $this->audit->record(
+                $organization,
+                'billing.invoice_refunded',
+                $invoice,
+                $actor,
+                ['amount_refunded_cents' => $invoice->amount_refunded_cents],
+                ['amount_refunded_cents' => $refundedTotal, 'refund_id' => $refund->getKey()],
+            );
+
+            return $refund;
+        });
+
+        if ($refund->status === Refund::STATUS_FAILED) {
+            throw ValidationException::withMessages([
+                'refund' => $refund->failure_message ?? 'The refund failed.',
+            ]);
+        }
+
+        return $refund->fresh();
+    }
+
+    /**
+     * Billing events for one organization, newest first: every
+     * checkout, renewal, payment, failure, dunning step, refund,
+     * and cancellation the service recorded. This is the
+     * subscription administration view: an admin can see what
+     * happened to the subscription without asking the operator.
+     *
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function billingEvents(Organization $organization, int $page = 1, int $perPage = 25): array
+    {
+        $paginator = BillingEvent::where('organization_id', $organization->getKey())
+            ->orderByDesc('created_at')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        return [
+            'data' => array_map(fn (BillingEvent $event) => [
+                'id' => $event->getKey(),
+                'type' => $event->type,
+                'status' => $event->status,
+                'payload' => $event->payload,
+                'error_message' => $event->error_message,
+                'created_at' => $event->created_at->toIso8601String(),
+            ], $paginator->items()),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ];
+    }
+
+    /**
+     * One refund as the API returns it.
+     *
+     * @return array<string, mixed>
+     */
+    public function refundPayload(Refund $refund): array
+    {
+        return [
+            'id' => $refund->getKey(),
+            'invoice_id' => $refund->invoice_id,
+            'amount_cents' => $refund->amount_cents,
+            'reason' => $refund->reason,
+            'status' => $refund->status,
+            'provider_refund_id' => $refund->provider_refund_id,
+            'failure_message' => $refund->failure_message,
+            'created_at' => $refund->created_at->toIso8601String(),
+        ];
     }
 
     // ------------------------------------------------------------------
@@ -2034,7 +2208,7 @@ class BillingService
      */
     public function invoicePayload(Invoice $invoice): array
     {
-        $invoice->loadMissing('lines');
+        $invoice->loadMissing(['lines', 'refunds']);
 
         return [
             'id' => $invoice->getKey(),
@@ -2044,6 +2218,7 @@ class BillingService
             'subtotal_cents' => $invoice->subtotal_cents,
             'total_cents' => $invoice->total_cents,
             'amount_paid_cents' => $invoice->amount_paid_cents,
+            'amount_refunded_cents' => $invoice->amount_refunded_cents,
             'period_start' => $invoice->period_start?->toIso8601String(),
             'period_end' => $invoice->period_end?->toIso8601String(),
             'due_date' => $invoice->due_date?->toIso8601String(),
@@ -2059,6 +2234,7 @@ class BillingService
                 'description' => $line->description,
                 'amount_cents' => $line->amount_cents,
             ])->all(),
+            'refunds' => $invoice->refunds->map(fn (Refund $refund) => $this->refundPayload($refund))->all(),
             'created_at' => $invoice->created_at->toIso8601String(),
         ];
     }

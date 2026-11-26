@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\MonitoringCheck;
 use App\Models\Organization;
 use App\Permission;
 use App\Services\ErrorLogService;
 use App\Services\FailedJobService;
+use App\Services\MonitoringService;
 use App\Services\QueueMonitorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ class OpsController extends Controller
         protected QueueMonitorService $queues,
         protected FailedJobService $failedJobs,
         protected ErrorLogService $errors,
+        protected MonitoringService $monitoring,
     ) {}
 
     /**
@@ -154,6 +157,49 @@ class OpsController extends Controller
 
         return response()->json([
             'data' => $this->errors->recentForOrganization($organization->getKey(), $limit),
+        ]);
+    }
+
+    /**
+     * Production monitoring: the latest check run and the recent
+     * history. Monitoring is deployment-wide, not per
+     * organization, but the endpoint is still gated on
+     * view-operations so only org admins see it.
+     */
+    public function monitoring(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ViewOperations->value, $organization);
+
+        $latest = $this->monitoring->latest();
+
+        return response()->json([
+            'data' => [
+                'latest' => $latest !== null ? $this->monitoring->payload($latest) : null,
+                'history' => $this->monitoring->history(24)
+                    ->map(fn (MonitoringCheck $check) => $this->monitoring->payload($check))
+                    ->all(),
+            ],
+        ]);
+    }
+
+    /**
+     * Run the monitoring check now and return the result.
+     */
+    public function runMonitoringCheck(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ViewOperations->value, $organization);
+
+        $check = $this->monitoring->run();
+
+        // Always 200: a failing check is a successful check run
+        // with a failing result, not an HTTP error. The status
+        // lives in the body.
+        return response()->json([
+            'data' => $this->monitoring->payload($check),
         ]);
     }
 

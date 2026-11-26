@@ -3,6 +3,100 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.2.3] - 2026-11-26
+
+Phase 3, Production Launch — customer support, help documentation,
+subscription administration, refunds and cancellations, production
+monitoring, backup verification, and the internal review of the
+privacy policy, terms of service, and data processing documentation.
+Phase 3 is complete with this version. App version bumped to 1.2.3;
+OpenAPI at 127 paths (119 + 8 new paths).
+
+### Added
+
+- Customer support tickets: any member can open a ticket and reply
+  on it (`GET/POST /support/tickets`, `GET /support/tickets/{id}`,
+  `POST /support/tickets/{id}/messages`, `POST
+  /support/tickets/{id}/status`). Owner and admin triage, change
+  statuses, and write internal notes that only they see. A staff
+  reply moves an open or resolved ticket to in progress; a customer
+  reply on a resolved ticket reopens it; a closed ticket takes no
+  more messages. Ticket bodies and messages are never written to
+  the audit log; status changes are audit rows without the message
+  text. Support pages in the app sidebar, plus operator commands
+  `support:list` (`--status`, `--organization`, `--limit`) and
+  `support:show`.
+- Help documentation: public help page at `/help` (linked from the
+  marketing footer, listed in the sitemap) and `docs/HELP.md`
+  covering the product, billing, refunds, roles, data, and what the
+  app does not do.
+- Invoice refunds: `POST /billing/invoices/{invoice}/refund`
+  (manage-billing). No amount means a full refund of the remaining
+  paid amount; a full refund sets the invoice status to refunded,
+  a partial refund to partially_refunded. The reason is required.
+  Amounts above the remaining paid amount, refunds on unpaid
+  invoices, and negative amounts are rejected. Every refund is a
+  `refunds` row, an audit row, and a billing event, and the billing
+  page has a Refund button on paid invoices with a confirm form.
+  Refunds run against the mock provider; no real money moves.
+- Billing event log: `GET /billing/events` (manage-billing) returns
+  subscription, invoice, payment, and refund events, newest first,
+  shown on the billing page under "Billing events".
+- Subscription administration: `php artisan billing:admin
+  <uuid or slug>` prints a subscription, its period, trial, payment
+  method, credit balance, recent invoices with refunded amounts,
+  and recent billing events. It changes nothing.
+- Production monitoring: `monitoring:check` runs the health checks,
+  counts failed jobs and queue depth, and stores the result
+  (hourly by schedule). The operations page shows the latest run
+  and the recent history with a "Run check now" button
+  (`GET /ops/monitoring`, `POST /ops/monitoring/check`). A failing
+  check writes a warning to the log; there is no alerting channel
+  yet.
+- Backup verification command: `php artisan backup:verify`
+  re-hashes the latest completed run (or `--run=<uuid>`) against
+  its manifest; weekly on Sundays at 04:00. Exit code 0 means the
+  backup is intact, 1 means it is missing, corrupt, or not
+  completed.
+- Privacy policy, terms of service, and data processing
+  documentation: internally reviewed against the app's actual data
+  practices (`docs/legal-review-1.2.3.md`,
+  `docs/DATA-PROCESSING.md`). The public `/privacy` and `/terms`
+  pages are now full drafts carrying the review date and the banner
+  that they are not legal advice and have not been reviewed by a
+  lawyer. They must not be described as compliant with any law.
+- Production launch checklist: `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
+  lists what is done in the code, what still needs a person
+  (lawyer review, real Stripe, real mailer, production hosting,
+  domain, backup retention policy, account deletion flow,
+  alerting channel), and the known gaps that stay open after
+  launch.
+- Docs: refund, cancellation, and subscription administration
+  sections in `docs/BILLING.md`; production monitoring and backup
+  verification sections in `docs/OPERATIONS.md`; the backup
+  retention note corrected (`keep_days` is configured at 30 days
+  but enforced by no command).
+
+### Changed
+
+- OpenAPI info version bumped to 1.2.3 with the v1.2.0-v1.2.3
+  history in the description; `Billing` and `Support` tags are now
+  declared. `BillingInvoice` carries `amount_refunded_cents`.
+
+### Known gaps (unchanged)
+
+- Sanctum tokens never expire; access tokens live in browser
+  localStorage. No malware scanning on uploads. No
+  application-level encryption for backups or stored files.
+- A refunded payment does not change metered success-fee usage:
+  the fee is on claim payments recorded as paid, not on
+  subscription invoices, so refunding a fee invoice is just money
+  back.
+- No alerting channel for monitoring failures; no account or
+  organization deletion flow; carriers cannot be deleted.
+- Browser E2E, live Postgres, live Redis, Docker, and real mailer
+  remain unverified on this VM.
+
 ## [1.2.2] - 2026-11-26
 
 Phase 3, Marketing and Acquisition — the public marketing site, lead

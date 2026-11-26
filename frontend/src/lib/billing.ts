@@ -1,10 +1,12 @@
 import { apiFetch } from "./api";
 import type {
   BillingCheckoutSession,
+  BillingEvent,
   BillingInvoice,
   BillingPlan,
   BillingPortalSession,
   BillingProration,
+  BillingRefund,
   BillingSubscription,
   BillingUsageSummary,
   PaginatedMeta,
@@ -187,6 +189,48 @@ export async function payInvoice(
   return response.data;
 }
 
+/**
+ * Refund a paid invoice, in full or in part. The refund is
+ * recorded against the mock provider, the invoice's refunded
+ * total grows, and the refund appears in the billing event log.
+ * A full refund sets the invoice status to refunded; a partial
+ * refund sets it to partially_refunded. The reason is required:
+ * refunds are issued case by case, and the reason is the record
+ * of why. See docs/BILLING.md for the process.
+ */
+export async function refundInvoice(
+  orgId: string,
+  invoiceId: string,
+  amountCents: number | null,
+  reason: string,
+): Promise<BillingRefund> {
+  const response = await apiFetch<{ data: BillingRefund }>(
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/refund`,
+    {
+      method: "POST",
+      orgId,
+      body: { amount_cents: amountCents, reason },
+    },
+  );
+  return response.data;
+}
+
+/** Recent billing events for the organization, newest first. */
+export async function getBillingEvents(
+  orgId: string,
+  page = 1,
+  perPage = 15,
+): Promise<{ data: BillingEvent[]; meta: PaginatedMeta }> {
+  const params = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  });
+  return apiFetch<{ data: BillingEvent[]; meta: PaginatedMeta }>(
+    `/billing/events?${params.toString()}`,
+    { orgId },
+  );
+}
+
 export async function updatePaymentMethod(
   orgId: string,
   paymentMethod: string,
@@ -283,6 +327,10 @@ export function invoiceStatusLabel(status: BillingInvoice["status"]): string {
       return "Void";
     case "uncollectible":
       return "Uncollectible";
+    case "refunded":
+      return "Refunded";
+    case "partially_refunded":
+      return "Partially refunded";
   }
 }
 
@@ -296,10 +344,12 @@ export function invoiceStatusTone(
     case "past_due":
       return "danger";
     case "open":
+    case "partially_refunded":
       return "warning";
     case "draft":
     case "void":
     case "uncollectible":
+    case "refunded":
       return "neutral";
   }
 }

@@ -416,6 +416,7 @@ export const MARKETING_ROUTES = [
   { path: "/demo-request", priority: 0.7 },
   { path: "/screenshots", priority: 0.7 },
   { path: "/getting-started", priority: 0.8 },
+  { path: "/help", priority: 0.7 },
   { path: "/privacy", priority: 0.3 },
   { path: "/terms", priority: 0.3 },
   { path: "/login", priority: 0.5 },

@@ -885,7 +885,9 @@ export type BillingInvoiceStatus =
   | "paid"
   | "past_due"
   | "void"
-  | "uncollectible";
+  | "uncollectible"
+  | "refunded"
+  | "partially_refunded";
 
 /** Invoice line kinds from the billing API. */
 export type BillingInvoiceLineKind =
@@ -913,6 +915,7 @@ export interface BillingInvoice {
   subtotal_cents: number;
   total_cents: number;
   amount_paid_cents: number;
+  amount_refunded_cents: number;
   period_start: string | null;
   period_end: string | null;
   due_date: string | null;
@@ -924,6 +927,79 @@ export interface BillingInvoice {
   memo: string | null;
   lines: BillingInvoiceLine[];
   created_at: string;
+}
+
+/** One refund from POST /billing/invoices/{id}/refund. */
+export interface BillingRefund {
+  id: string;
+  invoice_id: string;
+  amount_cents: number;
+  reason: string | null;
+  status: string;
+  provider_refund_id: string | null;
+  failure_message: string | null;
+  created_at: string;
+}
+
+/** One billing event from GET /billing/events. */
+export interface BillingEvent {
+  id: string;
+  type: string;
+  status: string;
+  payload: Record<string, unknown>;
+  error_message: string | null;
+  created_at: string;
+}
+
+/** Support ticket statuses, categories, and priorities from the API. */
+export type SupportTicketStatus =
+  | "open"
+  | "in_progress"
+  | "waiting_on_customer"
+  | "resolved"
+  | "closed";
+
+export type SupportTicketCategory =
+  | "billing"
+  | "technical"
+  | "feature_request"
+  | "account"
+  | "other";
+
+export type SupportTicketPriority = "low" | "normal" | "high" | "urgent";
+
+/** One message on a support ticket. */
+export interface SupportTicketMessage {
+  id: string;
+  user: { id: string; name: string } | null;
+  body: string;
+  internal: boolean;
+  created_at: string;
+}
+
+/** One support ticket from GET /support/tickets. */
+export interface SupportTicket {
+  id: string;
+  subject: string;
+  category: SupportTicketCategory;
+  priority: SupportTicketPriority;
+  status: SupportTicketStatus;
+  requester: { id: string; name: string; email: string } | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: SupportTicketMessage[];
+}
+
+/** One monitoring check run from GET /ops/monitoring. */
+export interface MonitoringCheck {
+  id: string;
+  status: "ok" | "degraded" | "down";
+  checks: Record<string, HealthCheck>;
+  failed_jobs: number;
+  queue_depth: number;
+  checked_at: string;
 }
 
 /** One metered success-fee usage record from GET /billing/usage. */

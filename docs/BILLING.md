@@ -239,6 +239,80 @@ Invoice statuses: `draft`, `open`, `paid`, `past_due`, `void`,
 `proration_charge`, `success_fee`, `cap_adjustment`,
 `credit_applied`. Negative lines are credits and cap adjustments.
 
+## Refunds (v1.2.3)
+
+Refunds are issued by the operator, not by the customer
+self-service: the customer opens a support ticket within 14
+days of the charge, stating the invoice number and the reason.
+The operator reviews the request and records the refund with
+`POST /billing/invoices/{id}/refund` (manage-billing permission)
+or from the billing page's Refund button on a paid invoice. The
+reason is required: until a written refund policy is published,
+refunds are issued case by case, and the reason is the record
+of why.
+
+- No `amount_cents` in the request means a full refund of the
+  remaining paid amount. A full refund sets the invoice status
+  to `refunded`.
+- An `amount_cents` refunds that many cents in part; the invoice
+  status becomes `partially_refunded`, and it can be refunded
+  again until nothing remains.
+- An amount above the remaining paid amount, a refund on an
+  unpaid invoice, or a negative amount is rejected with 422.
+- Every refund is a `refunds` row (invoice, amount, reason,
+  status, provider refund id, who requested it), an audit row
+  (`billing.invoice_refunded`), and a billing event
+  (`invoice.refunded`), so the billing events log
+  (`GET /billing/events`) shows the full history. The endpoint
+  returns 201 with the refund record.
+- The provider is asked first, with an idempotency key tied to
+  the refund row, so a retry never refunds twice. A provider
+  failure is recorded on the row and reported; the invoice is
+  untouched.
+- A refund does not change metered success-fee usage: the fee is
+  on claim payments recorded as paid, not on subscription
+  invoices, so refunding a fee invoice is just money back.
+
+With the mock provider the refund is recorded locally and no
+real money moves. When real Stripe is connected, the same
+endpoint calls the provider's refund; the terms already promise
+refunds to the original payment method where the provider
+supports it. A charge that never happened (no provider charge
+id, a zero-amount invoice) cannot be refunded: the mock reports
+"nothing to refund".
+
+## Cancellation (v1.2.3)
+
+Cancellation is unchanged from v1.2.0 (cancel from the billing
+page, or resume before the period ends), plus two administration
+paths: the customer may cancel by support ticket, and the
+operator may cancel from the subscription administration view
+(`billing:admin`). Cancelling moves the organization to Free at
+the end of the current period; cancelling immediately moves it
+to Free at once. Either way the data stays, and the trial or
+paid period's invoices remain payable or refundable as above.
+Dunning still applies to unpaid invoices after a cancellation at
+period end until the period closes.
+
+## Subscription administration (v1.2.3)
+
+The customer billing hub (`/settings/billing`) is for the
+customer. The operator's view is the `billing:admin` command
+and the billing events log:
+
+```sh
+php artisan billing:admin <organization uuid or slug>
+php artisan billing:admin <slug> --invoices=10 --events=20
+```
+
+It prints the plan, status, interval, period, trial, payment
+method, credit balance, recent invoices (with refunded amounts),
+and recent billing events. It changes nothing. The same event
+history is available in the app at `GET /billing/events`
+(manage-billing), shown on the billing page under "Billing
+events". Use it when a support ticket asks about a subscription:
+the answer should come from this view, not from memory.
+
 ## Scheduled commands
 
 | Command | Schedule | What it does |

@@ -74,6 +74,28 @@ interface BillingProvider
     public function createPortalSession(Organization $organization, string $customerId): array;
 
     /**
+     * Refund part or all of a charge.
+     *
+     * @param  string|null  $chargeId  The provider charge id from the
+     *                                  paid invoice; null when nothing
+     *                                  was ever charged (a zero-amount
+     *                                  invoice), which cannot be refunded.
+     * @param  string  $idempotencyKey  Caller-supplied; a repeated
+     *                                  refund with the same key must
+     *                                  not refund twice.
+     *
+     * @return array{success: bool, refund_id: string|null, failure_code: string|null, failure_message: string|null}
+     */
+    public function refund(
+        Organization $organization,
+        string $customerId,
+        ?string $chargeId,
+        int $amountCents,
+        string $reason,
+        string $idempotencyKey,
+    ): array;
+
+    /**
      * Verify a webhook signature over the raw request body.
      */
     public function verifyWebhookSignature(string $payload, string $signature, string $secret): bool;

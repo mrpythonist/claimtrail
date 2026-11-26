@@ -241,6 +241,16 @@ export function canManageBilling(role: OrganizationRole | null | undefined): boo
   return isOneOf(role, BILLING_MANAGERS);
 }
 
+// ManageSupport in the backend map (config/permissions.php):
+// Owner and Admin. They triage tickets, change statuses, and
+// write internal notes. Every member may open a ticket and
+// reply on it.
+const SUPPORT_MANAGERS: OrganizationRole[] = ["owner", "admin"];
+
+export function canManageSupport(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, SUPPORT_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

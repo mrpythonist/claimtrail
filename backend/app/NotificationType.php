@@ -22,6 +22,7 @@ enum NotificationType: string
     case ClaimRejected = 'claim.rejected';
     case PaymentRecorded = 'payment.recorded';
     case OrganizationInvitation = 'organization.invitation';
+    case SupportTicketReply = 'support.ticket_reply';
 
     public function label(): string
     {
@@ -36,6 +37,7 @@ enum NotificationType: string
             self::ClaimRejected => 'Claim rejected',
             self::PaymentRecorded => 'Payment recorded',
             self::OrganizationInvitation => 'Organization invitation',
+            self::SupportTicketReply => 'Support ticket reply',
         };
     }
 
