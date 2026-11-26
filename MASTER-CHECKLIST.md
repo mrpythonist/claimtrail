@@ -497,13 +497,15 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.3.0 — Email Intake
 
-- [ ] Organization-specific email addresses.
-- [ ] Inbound email processing.
-- [ ] Attachment extraction.
-- [ ] Shipment reference extraction.
-- [ ] Automatic shipment matching.
-- [ ] Manual matching interface.
-- [ ] Email processing history.
+> Verified 2026-11-26 (daily build run): backend 497 passed (2576 assertions), frontend 333 passed, `npm run build` succeeds (60/60 pages, incl. /email-intake and /email-intake/[id]), `tsc --noEmit` clean, lint clean of new findings (the two remaining findings are pre-existing from v1.2.2), fresh-DB `migrate:fresh` passes (1 new migration, 3 new tables), live HTTP smoke test over the built-in server passed 48/48 backend steps + 3/3 CLI checks on a fresh SQLite DB (address provisioning on org creation, webhook bad signature 401, unknown recipient 422 with a generic message, disallowed attachment 422, valid email auto-matched with attachments stored as evidence, duplicate message_id deduped, no-reference email unmatched then manually matched, unmatch, dismiss, dismiss-of-matched refused 422, multi-match unmatched, list filters, cross-tenant 404s, plus a regression pass of plans, register, org, ops health version 1.3.0, and support create). OpenAPI 136 paths, verified to match the 136 live `api/v1` route URIs exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no real inbound provider is wired (see docs/EMAIL-INTAKE.md).
+
+- [x] Organization-specific email addresses.
+- [x] Inbound email processing.
+- [x] Attachment extraction.
+- [x] Shipment reference extraction.
+- [x] Automatic shipment matching.
+- [x] Manual matching interface.
+- [x] Email processing history.
 
 ### v1.3.1 — Advanced Imports
 

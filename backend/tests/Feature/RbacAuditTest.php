@@ -140,6 +140,9 @@ class RbacAuditTest extends TestCase
             // Billing webhook: the provider cannot hold a Sanctum
             // token; authenticity is verified by HMAC signature.
             ['POST', 'api/v1/billing/webhooks'],
+            // Email intake webhook (v1.3.0): same shape as the
+            // billing webhook, HMAC-signed, no Sanctum token.
+            ['POST', 'api/v1/email-intake/inbound'],
             // Mocked billing portal: the token in the URL is the
             // bearer secret, like the email-verify link above.
             ['GET', 'api/v1/billing/portal/{token}'],

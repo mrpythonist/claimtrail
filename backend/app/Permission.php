@@ -89,6 +89,12 @@ enum Permission: string
     // reply on their own tickets.
     case ManageSupport = 'manage-support';
 
+    // Email intake (enforced from v1.3.0): organization inbound
+    // addresses, and manual matching, unmatching, and dismissal
+    // of inbound emails. Owner, admin, operations manager, and
+    // dispatcher. Any member may list and read inbound emails.
+    case ManageEmailIntake = 'manage-email-intake';
+
     /**
      * Every permission value, for validation and documentation.
      *

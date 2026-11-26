@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\ClaimReviewNoteController;
 use App\Http\Controllers\Api\V1\CustomFieldController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DeadlineSettingController;
+use App\Http\Controllers\Api\V1\EmailIntakeWebhookController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
@@ -21,6 +22,8 @@ use App\Http\Controllers\Api\V1\EvidenceRequirementController;
 use App\Http\Controllers\Api\V1\EvidenceTemplateController;
 use App\Http\Controllers\Api\V1\ExportTemplateController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\InboundEmailAddressController;
+use App\Http\Controllers\Api\V1\InboundEmailController;
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
@@ -304,6 +307,23 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/support/tickets/{ticket}', [SupportTicketController::class, 'show']);
             Route::post('/support/tickets/{ticket}/messages', [SupportTicketController::class, 'reply']);
             Route::post('/support/tickets/{ticket}/status', [SupportTicketController::class, 'setStatus']);
+
+            // Email intake (v1.3.0): organization-specific inbound
+            // addresses and the manual matching interface. Any
+            // member may list and read addresses and emails;
+            // creating, regenerating, and deactivating addresses,
+            // and matching, unmatching, and dismissing emails need
+            // manage-email-intake (owner, admin, operations
+            // manager, dispatcher).
+            Route::get('/email-intake/addresses', [InboundEmailAddressController::class, 'index']);
+            Route::post('/email-intake/addresses', [InboundEmailAddressController::class, 'store']);
+            Route::post('/email-intake/addresses/{address}/regenerate', [InboundEmailAddressController::class, 'regenerate']);
+            Route::post('/email-intake/addresses/{address}/deactivate', [InboundEmailAddressController::class, 'deactivate']);
+            Route::get('/email-intake/emails', [InboundEmailController::class, 'index']);
+            Route::get('/email-intake/emails/{email}', [InboundEmailController::class, 'show']);
+            Route::post('/email-intake/emails/{email}/match', [InboundEmailController::class, 'match']);
+            Route::post('/email-intake/emails/{email}/unmatch', [InboundEmailController::class, 'unmatch']);
+            Route::post('/email-intake/emails/{email}/dismiss', [InboundEmailController::class, 'dismiss']);
         });
     });
 
@@ -313,4 +333,12 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
     // credential, and it expires after 30 minutes.
     Route::post('/billing/webhooks', [BillingWebhookController::class, 'handle']);
     Route::get('/billing/portal/{token}', [BillingWebhookController::class, 'portal']);
+
+    // Inbound email webhook (v1.3.0): public, authenticated by
+    // the HMAC signature over the raw body. The provider sends a
+    // normalized JSON payload; no real provider is wired yet.
+    // Tight rate limit with its own prefix, so inbound mail
+    // cannot share a bucket with the marketing endpoints.
+    Route::post('/email-intake/inbound', [EmailIntakeWebhookController::class, 'inbound'])
+        ->middleware('throttle:120,1,email-intake');
 });

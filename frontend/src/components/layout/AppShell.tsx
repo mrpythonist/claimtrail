@@ -32,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Deadlines", href: "/deadlines", section: "Workspace" },
   { label: "Evidence", href: "/evidence", section: "Workspace" },
   { label: "Notifications", href: "/notifications", section: "Workspace" },
+  { label: "Email Intake", href: "/email-intake", section: "Workspace" },
   { label: "Support", href: "/support", section: "Workspace" },
   { label: "Reports", href: "/reports", section: "Insights", visibleFor: canViewReports },
   { label: "Audit Logs", href: "/audit-logs", section: "Insights", visibleFor: canViewAuditLogs },
@@ -320,7 +321,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Menu
           </button>
           <p className="hidden text-sm text-slate-500 md:block">
-            ClaimTrail v1.2.3
+            ClaimTrail v1.3.0
           </p>
 
           <div className="relative" ref={menuRef}>
@@ -373,7 +374,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
 
         <footer className="border-t border-slate-200 px-4 py-4 text-center text-xs text-slate-500 sm:px-6">
-          ClaimTrail v1.2.3. Claim amounts shown anywhere in the product are
+          ClaimTrail v1.3.0. Claim amounts shown anywhere in the product are
           potential amounts, never a guarantee of recovery.
         </footer>
       </div>

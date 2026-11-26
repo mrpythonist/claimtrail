@@ -7,6 +7,7 @@ use App\Http\Resources\OrganizationResource;
 use App\MembershipStatus;
 use App\Models\Organization;
 use App\OrganizationRole;
+use App\Services\EmailIntakeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,10 @@ use Illuminate\Validation\Rule;
 
 class OrganizationController extends Controller
 {
+    public function __construct(
+        protected EmailIntakeService $intake,
+    ) {}
+
     /**
      * List the organizations the authenticated user belongs to.
      */
@@ -57,6 +62,11 @@ class OrganizationController extends Controller
                 'status' => MembershipStatus::Active,
                 'joined_at' => now(),
             ]);
+
+            // Email intake (v1.3.0): every new organization gets
+            // its inbound address at creation, so mail can be
+            // forwarded to it from day one.
+            $this->intake->provisionDefaultAddress($organization);
 
             return $organization;
         });

@@ -992,6 +992,69 @@ export interface SupportTicket {
   messages: SupportTicketMessage[];
 }
 
+/** One organization-specific inbound email address. */
+export interface InboundEmailAddress {
+  id: string;
+  local_part: string;
+  address: string;
+  label: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InboundEmailStatus =
+  | "received"
+  | "processed"
+  | "matched"
+  | "unmatched"
+  | "failed"
+  | "dismissed";
+
+/** One extracted shipment reference candidate from an inbound email. */
+export interface ExtractedReference {
+  value: string;
+  source: string;
+  matched_shipment_id: string | null;
+  matched_field: string | null;
+}
+
+/** One attachment decoded from an inbound email. */
+export interface InboundEmailAttachment {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  evidence_file_id: string | null;
+}
+
+/** One inbound email from GET /email-intake/emails. */
+export interface InboundEmail {
+  id: string;
+  from: string;
+  to: string;
+  subject: string | null;
+  text_body: string | null;
+  message_id: string;
+  status: InboundEmailStatus;
+  matched_shipment_id: string | null;
+  matched_shipment: {
+    id: string;
+    internal_reference: string;
+    external_load_reference: string | null;
+    broker_or_customer_name: string;
+  } | null;
+  inbound_email_address_id: string | null;
+  extracted_references: ExtractedReference[];
+  match_reason: string | null;
+  match_confidence: string | null;
+  dismissed_reason: string | null;
+  processing_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  attachments: InboundEmailAttachment[];
+}
+
 /** One monitoring check run from GET /ops/monitoring. */
 export interface MonitoringCheck {
   id: string;

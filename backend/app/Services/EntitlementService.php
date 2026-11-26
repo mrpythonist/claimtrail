@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Billing\PlanCatalog;
 use App\Exceptions\EntitlementExceededException;
+use App\Models\InboundEmailAttachment;
 use App\Models\Organization;
 use App\Models\Subscription;
 
@@ -25,7 +26,9 @@ use App\Models\Subscription;
  *   unlimited. Success Fee: unlimited.
  * - Storage: Free 100 MB, Starter 1 GB, Growth 10 GB, Fleet 50 GB,
  *   Agency 10 GB per carrier. Success Fee: unlimited. Measured on
- *   evidence files and claim packages.
+ *   evidence files, claim packages, and unfiled email attachments
+ *   (v1.3.0; an attachment counts once it is linked as evidence,
+ *   never twice).
  * - PDF package exports: Free none, all paid tiers unlimited.
  *   Evidence files per claim have no hard cap; the storage limit
  *   governs them.
@@ -151,12 +154,22 @@ class EntitlementService
         $evidenceBytes = (int) $organization->evidenceFiles()->sum('file_size');
         $packageBytes = (int) $organization->generatedDocuments()->sum('file_size');
 
+        // Unfiled email attachments also consume storage: bytes
+        // stored from inbound mail count until the attachment is
+        // linked as evidence, at which point the evidence row
+        // counts it instead. Counting only rows without an
+        // evidence link keeps every byte counted exactly once.
+        $intakeBytes = (int) InboundEmailAttachment::query()
+            ->whereNull('evidence_file_id')
+            ->whereHas('email', fn ($query) => $query->where('organization_id', $organization->getKey()))
+            ->sum('size_bytes');
+
         return [
             'claims_created' => (int) $claims + (int) $subscription->claims_carryover,
             'claims_carryover' => (int) $subscription->claims_carryover,
             'members' => (int) $organization->activeMembers()->count(),
             'pending_invitations' => (int) $organization->pendingInvitations()->count(),
-            'storage_bytes' => $evidenceBytes + $packageBytes,
+            'storage_bytes' => $evidenceBytes + $packageBytes + $intakeBytes,
         ];
     }
 

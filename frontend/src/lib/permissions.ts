@@ -251,6 +251,21 @@ export function canManageSupport(role: OrganizationRole | null | undefined): boo
   return isOneOf(role, SUPPORT_MANAGERS);
 }
 
+// ManageEmailIntake in the backend map (config/permissions.php):
+// Owner, Admin, Operations Manager, and Dispatcher. They manage
+// inbound addresses and match, unmatch, and dismiss inbound
+// emails. Every member may list and read them.
+const EMAIL_INTAKE_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageEmailIntake(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, EMAIL_INTAKE_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

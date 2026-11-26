@@ -3,6 +3,125 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.3.0] - 2026-11-26
+
+Phase 4, Email Intake: organization-specific inbound email
+addresses, the HMAC-signed inbound webhook, attachment
+extraction, shipment reference extraction, automatic shipment
+matching, the manual matching interface, and the processing
+history. App version bumped to 1.3.0; OpenAPI at 136 paths
+(127 + 9 new paths).
+
+### Added
+
+- Organization-specific email addresses: every organization
+  gets one address when it is created, shaped
+  `{org-slug}-{random6}@{domain}` with the domain from
+  `EMAIL_INTAKE_DOMAIN` (default `inbound.claimtrail.local`, a
+  placeholder that resolves nowhere). `GET/POST
+  /email-intake/addresses`, `POST
+  /email-intake/addresses/{address}/regenerate` (the old address
+  stops working), `POST
+  /email-intake/addresses/{address}/deactivate` (the last active
+  address cannot be deactivated). Listing provisions the default
+  address for organizations created before v1.3.0. Managing
+  addresses needs the new `manage-email-intake` permission
+  (owner, admin, operations manager, dispatcher); any member may
+  list.
+- Inbound email webhook: `POST /email-intake/inbound` (public,
+  120/min) takes a normalized JSON payload (`from`, `to`,
+  `subject`, `text_body`, `html_body`, `message_id`,
+  `attachments` as base64 with filename and MIME type),
+  authenticated by HMAC-SHA256 over the raw body
+  (`X-Email-Intake-Signature: sha256=<hex>`,
+  `EMAIL_INTAKE_WEBHOOK_SECRET`). Bad signatures return 401;
+  unknown `to` addresses return 422 with a generic message that
+  never says whether an address exists. A repeated `message_id`
+  for the same organization returns the stored email with
+  `duplicate: true` and is not processed twice.
+- Attachment extraction: attachments are validated with the same
+  limits as evidence uploads (20480 KB, the same extension
+  allowlist, MIME type checked against real content) and stored
+  on the private disk. A delivery whose attachments would pass
+  the organization's storage cap is refused with 402 before
+  anything is stored.
+- Shipment reference extraction: `ShipmentReferenceExtractor`
+  pulls reference-shaped tokens from the subject, body, and
+  attachment filenames and matches them exactly (case-insensitive)
+  against the org's shipments on `internal_reference` and
+  `external_load_reference`. Candidates are stored on the email
+  as JSON with their source and what matched.
+- Automatic shipment matching: exactly one matching shipment
+  auto-matches (status `matched`, reason "exact reference match",
+  confidence "high") and files the attachments as evidence;
+  zero matches leave the email `unmatched` ("no shipment
+  reference found"), several matches leave it `unmatched`
+  ("multiple shipments match the extracted references"). The
+  queued `ProcessInboundEmail` job wraps the same processor for
+  reprocessing.
+- Manual matching interface: `GET /email-intake/emails` (the
+  processing history, filter by `status` or `matched`,
+  paginated), `GET /email-intake/emails/{email}`, `POST
+  /email-intake/emails/{email}/match`, `POST .../unmatch`, `POST
+  .../dismiss` (reason required). Matching files attachments as
+  evidence (category `other`, source email named in the
+  description). Email bodies are never written to the audit log;
+  intake events are audit rows (`email_intake.received`,
+  `auto_matched`, `unmatched`, `manually_matched`, `dismissed`,
+  `failed`).
+- Email intake pages: `/email-intake` (addresses with create,
+  regenerate, and deactivate; status filter; history) and
+  `/email-intake/[id]` (message, extracted references,
+  attachments, shipment search, match, unmatch, dismiss),
+  linked from the sidebar for every member, with management
+  actions gated on `canManageEmailIntake`. New typed client
+  `src/lib/emailIntake.ts`.
+- Operator command: `php artisan email-intake:list` (`--status`,
+  `--organization`, `--limit`), following the `support:list`
+  pattern.
+- Docs: new `docs/EMAIL-INTAKE.md` runbook (addresses, webhook
+  contract with an example payload, HMAC scheme, matching
+  rules, provider setup as a future step); the email-intake
+  section in `docs/API.md`; OpenAPI `EmailIntake` tag with
+  `InboundEmailAddress`, `InboundEmail`,
+  `InboundEmailAttachment`, and `ExtractedReference` schemas.
+
+### Fixed
+
+- The ops health version assertion in `HealthCheckTest` now
+  expects 1.3.0 (the only test that pinned the old version).
+
+### Not in v1.3.0
+
+- No real inbound provider is wired: no SendGrid, Mailgun, or
+  SES client, no provider credentials, no real mail delivered.
+  Wiring one is a documented future step (domain, webhook
+  secret, normalized payload, signature header).
+- No OCR: text is read from the subject, the text body, and
+  attachment filenames only. Reading scanned documents is
+  v2.0.1.
+- The webhook processes synchronously; the queued job exists
+  for reprocessing, not as the primary path.
+
+### Verification
+
+- Backend 497 tests, 2576 assertions, all passing (479 before
+  this version + 18 email intake tests).
+- Frontend 333 tests, all passing (318 + 15 new);
+  `tsc --noEmit` clean; lint clean of new findings (the two
+  remaining findings are pre-existing from v1.2.2);
+  `npm run build` succeeds, 60/60 pages including
+  `/email-intake` and `/email-intake/[id]`.
+- Live HTTP smoke test on a fresh SQLite DB: address
+  provisioning, webhook bad signature 401, unknown recipient
+  422, valid email auto-matched with attachments stored as
+  evidence, no-reference email unmatched then manually matched,
+  duplicate message_id deduped, cross-tenant 404, plus a
+  regression pass (register, login, organization, plans, trial,
+  support create).
+- Still unverified (standing blockers): browser E2E, live
+  Postgres, live Redis, Docker, real mailer.
+
 ## [1.2.3] - 2026-11-26
 
 Phase 3, Production Launch — customer support, help documentation,

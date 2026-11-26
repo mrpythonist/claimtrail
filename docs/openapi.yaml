@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.2.3
+  version: 1.3.0
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -29,7 +29,11 @@ info:
     Version 1.2.2 adds the public marketing API: plan catalog,
     lead capture, and analytics events. Version 1.2.3 adds
     production launch: support tickets, invoice refunds, the
-    billing event log, and production monitoring.
+    billing event log, and production monitoring. Version 1.3.0
+    adds email intake: organization-specific inbound addresses,
+    the HMAC-signed inbound webhook, attachment extraction,
+    shipment reference extraction, automatic shipment matching,
+    and manual matching with processing history.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -59,6 +63,7 @@ tags:
   - name: Security
   - name: Billing
   - name: Support
+  - name: EmailIntake
 paths:
   /auth/register:
     post:
@@ -4784,6 +4789,354 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/addresses:
+    get:
+      tags: [EmailIntake]
+      summary: Inbound addresses for the organization
+      description: >
+        Any member may list addresses. Listing provisions the
+        default address for organizations created before v1.3.0.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Inbound addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InboundEmailAddress"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [EmailIntake]
+      summary: Create an additional inbound address
+      description: >
+        Requires manage-email-intake (owner, admin, operations
+        manager, dispatcher). The local part is generated as
+        {org-slug}-{random6}.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 100, nullable: true }
+      responses:
+        "201":
+          description: Created address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmailAddress"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/addresses/{address}/regenerate:
+    post:
+      tags: [EmailIntake]
+      summary: Replace an address with a fresh random local part
+      description: >
+        Requires manage-email-intake. The old address stops
+        working immediately.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: address
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Regenerated address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmailAddress"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /email-intake/addresses/{address}/deactivate:
+    post:
+      tags: [EmailIntake]
+      summary: Deactivate an inbound address
+      description: >
+        Requires manage-email-intake. The last active address
+        cannot be deactivated (422).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: address
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deactivated address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmailAddress"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/emails:
+    get:
+      tags: [EmailIntake]
+      summary: Inbound emails for the organization, newest first
+      description: >
+        The list is the processing history. Filter by status or
+        by matched/unmatched. Any member may list emails.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema: { type: string, enum: [received, processed, matched, unmatched, failed, dismissed] }
+        - name: matched
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Inbound emails
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InboundEmail"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /email-intake/emails/{email}:
+    get:
+      tags: [EmailIntake]
+      summary: One inbound email with references and attachments
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Inbound email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /email-intake/emails/{email}/match:
+    post:
+      tags: [EmailIntake]
+      summary: Manually match an email to a shipment
+      description: >
+        Requires manage-email-intake. The email's attachments
+        become evidence on the shipment (category other, source
+        email named in the description). A dismissed email
+        cannot be matched (422).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipment_id]
+              properties:
+                shipment_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Matched email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/emails/{email}/unmatch:
+    post:
+      tags: [EmailIntake]
+      summary: Unmatch an email, returning it to unmatched
+      description: >
+        Requires manage-email-intake. Evidence already filed on
+        the old shipment stays filed.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500, nullable: true }
+      responses:
+        "200":
+          description: Unmatched email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/emails/{email}/dismiss:
+    post:
+      tags: [EmailIntake]
+      summary: Dismiss an email after review, with a reason
+      description: >
+        Requires manage-email-intake. A matched email cannot be
+        dismissed; unmatch it first (422).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Dismissed email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InboundEmail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /email-intake/inbound:
+    post:
+      tags: [EmailIntake]
+      summary: Inbound email webhook (public, HMAC-verified)
+      description: >
+        No Sanctum token: authenticity is verified by HMAC-SHA256
+        signature (X-Email-Intake-Signature: sha256=<hex>) over
+        the raw body, using the configured webhook secret. The
+        payload is the normalized JSON an inbound parse provider
+        sends; no real provider is wired yet. An unknown `to`
+        address returns 422 with a generic message that never
+        says whether the address exists. A repeated message_id
+        for the same organization returns the stored email with
+        duplicate: true and is not processed twice.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to, message_id]
+              properties:
+                from: { type: string, example: broker@example.com }
+                to: { type: string, example: acme-abc123@inbound.claimtrail.local }
+                subject: { type: string, nullable: true }
+                text_body: { type: string, nullable: true }
+                html_body: { type: string, nullable: true }
+                message_id: { type: string, example: "<msg-1@example.com>" }
+                attachments:
+                  type: array
+                  items:
+                    type: object
+                    required: [filename, mime_type, content_base64]
+                    properties:
+                      filename: { type: string, example: detention-proof.pdf }
+                      mime_type: { type: string, example: application/pdf }
+                      content_base64: { type: string }
+      responses:
+        "201":
+          description: Stored and processed email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string, enum: [received, processed, matched, unmatched, failed, dismissed] }
+                      matched_shipment_id: { type: string, format: uuid, nullable: true }
+                      duplicate: { type: boolean }
+        "200":
+          description: Duplicate redelivery of an already stored email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string, enum: [received, processed, matched, unmatched, failed, dismissed] }
+                      duplicate: { type: boolean, example: true }
+        "401":
+          description: Missing or invalid webhook signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "422": { $ref: "#/components/responses/ValidationError" }
   /billing/webhooks:
     post:
       tags: [Billing]
@@ -6317,6 +6670,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SupportTicketMessage"
+    InboundEmailAddress:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        local_part: { type: string, example: acme-abc123 }
+        address: { type: string, example: acme-abc123@inbound.claimtrail.local }
+        label: { type: string, nullable: true }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ExtractedReference:
+      type: object
+      properties:
+        value: { type: string, example: PLT-1001 }
+        source: { type: string, enum: [subject, body, attachment_filename] }
+        matched_shipment_id: { type: string, format: uuid, nullable: true }
+        matched_field: { type: string, enum: [internal_reference, external_load_reference], nullable: true }
+    InboundEmailAttachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        mime_type: { type: string }
+        size_bytes: { type: integer }
+        evidence_file_id: { type: string, format: uuid, nullable: true }
+    InboundEmail:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        from: { type: string }
+        to: { type: string }
+        subject: { type: string, nullable: true }
+        text_body: { type: string, nullable: true }
+        message_id: { type: string }
+        status: { type: string, enum: [received, processed, matched, unmatched, failed, dismissed] }
+        matched_shipment_id: { type: string, format: uuid, nullable: true }
+        matched_shipment:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            internal_reference: { type: string }
+            external_load_reference: { type: string, nullable: true }
+            broker_or_customer_name: { type: string }
+        inbound_email_address_id: { type: string, format: uuid, nullable: true }
+        extracted_references:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedReference"
+        match_reason: { type: string, nullable: true }
+        match_confidence: { type: string, enum: [high, low, none], nullable: true }
+        dismissed_reason: { type: string, nullable: true }
+        processing_notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InboundEmailAttachment"
     MonitoringCheck:
       type: object
       properties:

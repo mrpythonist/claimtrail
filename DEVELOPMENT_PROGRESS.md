@@ -6,23 +6,27 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.2.3 (Phase 3, Production Launch).
-  App version is now **1.2.3**. Phase 3 is complete with this version.
-  Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done;
-  v0.2.0 interviews deferred, still open). What remains before real
-  customers is Aqib's launch decision: open signups vs closed pilot
-  first (pilot prep is ready, no pilot customer recruited), plus the
-  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer
-  review, real Stripe, real mailer, hosting, domain).
+- **Last completed version:** v1.3.0 (Phase 4, Email Intake).
+  App version is now **1.3.0**. Phase 4 has started with this
+  version. Phase 3 is complete (v1.2.3). Phase 0 is complete
+  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0
+  interviews deferred, still open). What remains before real
+  customers is Aqib's launch decision: open signups vs closed
+  pilot first (pilot prep is ready, no pilot customer
+  recruited), plus the person-only items in
+  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
+  Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `fbf378e1` (v1.2.2, pushed 2026-11-26 after Aqib's yes + approval).
-  **v1.2.3 is built and verified locally, NOT PUSHED** — it waits on
-  Aqib's yes in the main chat + approval card.
-- **Tests at v1.2.3:** 479 backend (2467 assertions) + 318 frontend, all
-  passing. `npm run build` succeeds (58/58 pages). Live HTTP smoke test:
-  56/56 backend steps + 6/6 CLI checks + 18/18 marketing pages on a
-  fresh SQLite DB (see the 2026-11-26 v1.2.3 log entry). OpenAPI 127
-  paths, verified to match the 127 live `api/v1` route URIs exactly.
+  head `ab113770` (v1.2.3, pushed 2026-11-26 ~10:00 PKT after Aqib's
+  yes + approval card). **v1.3.0 is NOT pushed yet** — built and
+  verified locally 2026-11-26, waiting for Aqib's yes. 65 files in
+  the v1.2.3 commit, read-back verified (commit file list matches
+  the manifest exactly).
+- **Tests at v1.3.0:** 497 backend (2576 assertions) + 333 frontend, all
+  passing. `npm run build` succeeds (60/60 pages). Live HTTP smoke test:
+  48/48 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
+  2026-11-26 v1.3.0 log entry). OpenAPI 136 paths, verified to match
+  the 136 live `api/v1` route URIs exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
@@ -32,14 +36,12 @@ chat (see "Push rule" below).
 **v1.3.0 — Email Intake** (MASTER-CHECKLIST.md, Phase 4): organization-specific
 email addresses, inbound email processing, attachment extraction, shipment
 reference extraction, automatic shipment matching, manual matching interface,
-email processing history. Phase 3 is complete with v1.2.3; the next build
-is Phase 4. Before real customers, Aqib still has the launch decision:
-open signups vs closed pilot first (pilot prep ready, no pilot customer
-recruited) and the person-only items in
+email processing history. **Status 2026-11-26: v1.3.0 BUILT AND VERIFIED
+LOCALLY, NOT PUSHED — ready pending Aqib's yes.** Next build after the push:
+v1.3.1 Advanced Imports (Phase 4). Before real customers, Aqib still has
+the launch decision: open signups vs closed pilot first (pilot prep ready,
+no pilot customer recruited) and the person-only items in
 `docs/PRODUCTION-LAUNCH-CHECKLIST.md`.
-**Status 2026-11-26 ~10:00 PKT: v1.2.3 build complete and verified,
-NOT PUSHED. The 10:10 scheduled run should stand down until the push
-status is recorded here.**
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
@@ -103,6 +105,150 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-26 — v1.3.0 Email Intake built and verified (Phase 4 started)
+
+- Gate check passed first: remote head on GitHub is `ab113770`,
+  matching the recorded v1.2.3 head, so no version was waiting to be
+  pushed. Build started 2026-11-26 ~10:14 PKT as a scheduled daily
+  build run (subagent).
+- Spec: MASTER-CHECKLIST.md v1.3.0 (7 items). All seven verified and
+  checked.
+- Backend (new): migration
+  `2026_11_26_100400_create_email_intake_tables.php`
+  (`inbound_email_addresses`, `inbound_emails`,
+  `inbound_email_attachments`); `config/email_intake.php`
+  (domain `EMAIL_INTAKE_DOMAIN`, default
+  `inbound.claimtrail.local`; webhook secret
+  `EMAIL_INTAKE_WEBHOOK_SECRET`; signature header
+  `X-Email-Intake-Signature`); models `InboundEmailAddress`,
+  `InboundEmail`, `InboundEmailAttachment`;
+  `EmailIntakeService` (provision/ensure default address,
+  create, regenerate, deactivate with the last-active guard,
+  manual match/unmatch/dismiss, link attachments as evidence);
+  `ShipmentReferenceExtractor` (reference-shaped tokens from
+  subject, body, and attachment filenames, plus verbatim stored
+  references; exact match on `internal_reference` or
+  `external_load_reference`); `InboundEmailProcessor`
+  (attachment validation and storage, extraction, auto-match);
+  job `ProcessInboundEmail` (idempotent, standard retries, only
+  processes received/failed emails); controllers
+  `InboundEmailAddressController` (4 endpoints),
+  `InboundEmailController` (list/show/match/unmatch/dismiss),
+  `EmailIntakeWebhookController` (public inbound webhook);
+  command `email-intake:list` (`--status`, `--organization`,
+  `--limit`). New permission `manage-email-intake` (Admin,
+  Operations Manager, Dispatcher; Owner gets all). Organization
+  creation auto-provisions the default address; the address list
+  backfills it for organizations created before v1.3.0. The
+  webhook also enforces the storage cap (402) before anything is
+  stored, the same check evidence uploads use. Attachments
+  become evidence with category `other` and the source email
+  named in the description; there is no email category in
+  `EvidenceDocumentCategory`.
+- Frontend (new): `src/lib/emailIntake.ts` (labels + typed
+  client), `canManageEmailIntake` in `src/lib/permissions.ts`,
+  pages `/email-intake` (addresses with create/regenerate/
+  deactivate, status filter, history) and `/email-intake/[id]`
+  (message, extracted references, attachments, shipment search,
+  match, unmatch, dismiss), sidebar nav item, version strings
+  bumped to 1.3.0 (AppShell, MarketingLayout, privacy, terms).
+  Build 60/60 pages (58 at v1.2.3 + 2 new).
+- Docs: new `docs/EMAIL-INTAKE.md` (addresses, webhook contract
+  with an example payload, HMAC scheme, matching rules, provider
+  setup as a future step, no OCR, mailer stays log driver);
+  email-intake section in `docs/API.md`; OpenAPI 127 →
+  **136 paths** (9 new) with the `EmailIntake` tag and
+  `InboundEmailAddress` / `InboundEmail` /
+  `InboundEmailAttachment` / `ExtractedReference` schemas;
+  `CHANGELOG.md` [1.3.0] entry.
+- **Real defect 1 (test helper dropped the signature header,
+  found by the new backend tests):** Laravel's test `call()`
+  does not merge `withHeaders` — the header never reached the
+  controller, so every webhook delivery returned 401. Fix: the
+  test helper passes the signature as an `HTTP_` server var.
+  This was a test-only defect; the controller was correct.
+- **Real defect 2 (smoke script read the token from the wrong
+  place, found by the live smoke test):** the register response
+  carries the token top-level (`body["token"]`), not under
+  `data`. Fix: the smoke script reads `body["token"]`. Test-only
+  defect, not product code.
+- **Test-only fixes:** the address create test lists first so
+  the default address is backfilled before counting two
+  addresses; the detail page test uses a regex matcher for the
+  broker name because it shares a span with the reference and
+  separator text. No product code was changed for either.
+- Anomaly, recorded honestly: when the webhook controller was
+  read back during debugging, it contained a storage-cap check
+  (`EntitlementService::authorizeUpload`) that was not in the
+  version as first written. The check is correct and matches
+  the evidence-upload pattern (refuse with 402 before storing),
+  so it was kept. It is NOT covered by a backend test and was
+  NOT exercised live (Free cap is 100 MB, smoke attachments are
+  tiny); the underlying `authorizeUpload` is covered by v1.2.1
+  tests. Its origin could not be established from the local
+  tree (no git checkout here to diff against); the parent run
+  confirmed the branch exists (webhook controller lines 145-148)
+  and is coherent, but untested. Corrected 2026-11-26 ~10:55
+  PKT by the parent run: the first draft of this paragraph
+  wrongly said the branch was covered by the suite and the
+  smoke test.
+- Verification: backend **497 tests, 2576 assertions** (479 at
+  v1.2.3 + 18 new email intake tests), all passing, including
+  the `HealthCheckTest` version assertion updated to 1.3.0.
+  Frontend **333 tests** (318 + 15 new: emailIntake lib,
+  permissions, list + detail page tests), all passing;
+  `npm run build` 60/60 pages; `tsc --noEmit` clean; lint clean
+  of new findings (the two remaining findings are pre-existing
+  from v1.2.2: `register/page.tsx` set-state-in-effect error,
+  `PricingTable` unused `MARKETING_PLANS` warning). Live HTTP
+  smoke test **48/48 backend steps + 3/3 CLI checks** on a
+  fresh SQLite DB (script + runner in
+  `~/workspace/claimtrail-scratch-v130/smoke/`): plans, register
+  + org + ops health version 1.3.0 + support create, address
+  provisioning on org creation, create/regenerate/deactivate
+  with the last-active 422, webhook bad signature 401 / unknown
+  recipient 422 with the generic message / disallowed attachment
+  422, valid email auto-matched with the attachment stored as
+  evidence (category other) and the audit row, duplicate
+  message_id deduped (no second email or evidence row),
+  no-reference email unmatched then manually matched, unmatch,
+  dismiss, dismissed-cannot-match 422, matched-cannot-dismiss
+  422, multi-match unmatched with the reason recorded, list
+  filters, cross-tenant 404s; CLI `email-intake:list` shows the
+  matched email, rejects an unknown status, and filters by
+  organization. OpenAPI path count verified by parsing the YAML
+  and diffing against `artisan route:list`: 136 = 136, zero
+  diffs.
+- Gaps / placeholder (not built, per the spec): no real inbound
+  provider wired (no SendGrid/Mailgun/SES client, no provider
+  credentials, no real mail delivered); no OCR (v2.0.1);
+  webhook processes synchronously (the queued job is for
+  reprocessing only); the storage-cap 402 branch on the webhook
+  was not exercised live (Free cap is 100 MB, the smoke
+  attachments are tiny); the new pages were not checked in a
+  real browser. Standing unverified items unchanged: browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Post-verification cleanup by the main agent (2026-11-26 ~11:00
+  PKT): `OrganizationController::store` provisioned the default
+  intake address twice (once inside the transaction via
+  `app()`, once after it via the injected service) — a leftover
+  of the two builders working the same tree. Fixed to a single
+  call inside the transaction using the injected service; the
+  backfill behaviour for pre-v1.3.0 orgs is unchanged and is
+  documented in `docs/EMAIL-INTAKE.md`. Backend suite re-run
+  after the fix: 497 tests / 2576 assertions, all passing.
+  Frontend tests (333), build (60/60), and live smoke (48/48 +
+  3/3 CLI) re-run by the main agent with the same results.
+- Push status: **NOT pushed — ready pending Aqib's yes.**
+  Next run may start v1.3.1 after the push.
+- Next task: **v1.3.1 — Advanced Imports (Phase 4).** v0.2.0
+  Customer Interviews stays DEFERRED per Aqib 2026-11-21 — do
+  not fabricate interviews.
 
 ### 2026-11-26 — v1.2.3 Production Launch built and verified (Phase 3 complete)
 
@@ -254,10 +400,11 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **v1.2.3 COMPLETE AND VERIFIED, NOT PUSHED** — waits
-  on Aqib's yes in the main chat + approval card. 65 files in the
-  delta against remote head `fbf378e1` (35 changed + 30 new,
-  984,548 bytes). Next run may push it, then start v1.3.0.
+- Push status: **v1.2.3 PUSHED 2026-11-26 ~10:00 PKT, head
+  `ab113770`, 65 files in one commit (35 changed + 30 new), read-back
+  verified via the commits API (file list matches the manifest
+  exactly).** Sync record now has 18 entries. Next run may start
+  v1.3.0.
 - Next task: **v1.3.0 — Email Intake (Phase 4).** Phase 3 is
   complete with v1.2.3. Aqib's launch decision (open signups vs
   closed pilot first) is still open.

@@ -579,6 +579,27 @@ No authentication; each is rate-limited per IP.
 | POST | `/leads` | Public (5/min) | Capture a lead from a marketing form. Body: `name` (required), `email` (required), `company`, `fleet_size`, `message`, `source` (`demo_request`, `pricing`, `getting_started`, default `demo_request`). Idempotent by email and source: a second submission within 90 days updates the existing lead and returns 200; otherwise 201. No IP address or user agent is stored. |
 | POST | `/analytics/events` | Public (60/min) | Accept one anonymous marketing event. Body: `event` (`page_view`, `demo_request_submitted`, `trial_started`, `pricing_viewed`), `path`, `referrer`. Always 202: recording is best-effort. Events go to the driver in config/analytics.php (the Laravel log by default, or nowhere when the driver is `none`). |
 
+### Email Intake (v1.3.0)
+
+Organization-specific inbound email addresses and the manual
+matching interface. See docs/EMAIL-INTAKE.md for the full
+runbook (address format, webhook contract, HMAC scheme,
+matching rules, provider setup as a future step). No real
+provider is wired yet.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/email-intake/addresses` | Yes + org header | The organization's inbound addresses, active first. Listing provisions the default address for organizations created before v1.3.0. Any member may list. |
+| POST | `/email-intake/addresses` | Yes + org header | Create an additional address. Body: optional `label`. Requires `manage-email-intake` (owner, admin, operations manager, dispatcher). |
+| POST | `/email-intake/addresses/{address}/regenerate` | Yes + org header | Replace the address with a fresh random local part; the old address stops working. Requires `manage-email-intake`. |
+| POST | `/email-intake/addresses/{address}/deactivate` | Yes + org header | Deactivate the address. The last active address cannot be deactivated (422). Requires `manage-email-intake`. |
+| GET | `/email-intake/emails` | Yes + org header | The processing history, newest first. Query: `status` (`received`, `processed`, `matched`, `unmatched`, `failed`, `dismissed`), `matched` (true/false), `page`, `per_page`. Any member may list. |
+| GET | `/email-intake/emails/{email}` | Yes + org header | One email with its extracted references, attachments, and matched shipment. Any member may read. |
+| POST | `/email-intake/emails/{email}/match` | Yes + org header | Manually match the email to a shipment. Body: `shipment_id`. Attachments become evidence on the shipment (category `other`, source email named in the description). A dismissed email cannot be matched (422). Requires `manage-email-intake`. |
+| POST | `/email-intake/emails/{email}/unmatch` | Yes + org header | Return the email to unmatched. Body: optional `reason`. Evidence already filed stays filed. Requires `manage-email-intake`. |
+| POST | `/email-intake/emails/{email}/dismiss` | Yes + org header | Dismiss the email after review. Body: `reason` (required). A matched email cannot be dismissed (422). Requires `manage-email-intake`. |
+| POST | `/email-intake/inbound` | Public, HMAC (120/min) | Inbound email webhook. No Sanctum token: the provider signs the raw body with HMAC-SHA256 (`X-Email-Intake-Signature: sha256=<hex>`) using `EMAIL_INTAKE_WEBHOOK_SECRET`. Body: normalized JSON (`from`, `to`, `subject`, `text_body`, `html_body`, `message_id`, `attachments` as base64 with `filename` and `mime_type`). Unknown `to` returns 422 with a generic message. A repeated `message_id` for the same organization returns the stored email with `duplicate: true`. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh
