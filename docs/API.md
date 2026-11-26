@@ -634,6 +634,29 @@ and confirm endpoints accept an optional `mapping_id`.
 | POST | `/imports/sync-runs/{syncRun}/run` | Yes + org header | Run a sync workflow now. Moves it through `running` to `completed` or `failed` and returns it with the linked import run. Requires `manage-imports`. |
 | DELETE | `/imports/sync-runs/{syncRun}` | Yes + org header | Delete a sync workflow and its stored file. Runs it produced stay in the history. Requires `manage-imports`. |
 
+### TMS Integrations (v1.3.2)
+
+A generic TMS provider adapter with a mock provider and
+Trimble TMW.Suite modelled schema-only. See
+docs/TMS-INTEGRATIONS.md for the full runbook (provider
+catalogue, credential handling, sync kinds, monitoring).
+No live TMS is contacted: the mock syncs three fixed
+dummy loads, and the Trimble provider fails every fetch
+with a live-unavailable message.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/tms/providers` | Yes + org header | Provider catalogue: label, live availability, capabilities, credential fields. Any member may read. |
+| GET | `/tms/integrations` | Yes + org header | TMS integrations, newest first. Any member may list. Credentials are never returned. |
+| POST | `/tms/integrations` | Yes + org header | Create an integration. Body: `provider` (`mock`, `trimble-tmw`), `name`, optional `credentials`, optional `settings` (sync kinds, `auto_sync`, `sync_interval_hours` 1-168). Trimble needs `client_id`, `client_secret`, `account_id`. Requires `manage-tms-integrations` (owner, admin, operations manager, dispatcher). |
+| GET | `/tms/integrations/{integration}` | Yes + org header | One TMS integration. Any member may read. |
+| PUT | `/tms/integrations/{integration}` | Yes + org header | Update an integration. Credentials are only replaced when supplied; settings merge over the stored ones. Requires `manage-tms-integrations`. |
+| DELETE | `/tms/integrations/{integration}` | Yes + org header | Delete an integration. Its sync runs go with it; shipments and evidence created by syncs stay. Requires `manage-tms-integrations`. |
+| POST | `/tms/integrations/{integration}/test` | Yes + org header | Test the connection without syncing. The mock always succeeds; Trimble succeeds when the credentials are well-formed. Both report `live_available: false`. Requires `manage-tms-integrations`. |
+| POST | `/tms/integrations/{integration}/sync` | Yes + org header | Run a sync now. Body: optional `kind` (`shipments`, `status`, `appointments`, `documents`, `full`). Returns the recorded sync run. A run over a schema-only provider fails with the live-unavailable message. Requires `manage-tms-integrations`. |
+| GET | `/tms/sync-runs` | Yes + org header | TMS sync runs, newest first. Query: `tms_integration_id`, `kind`, `status`. Any member may list. |
+| GET | `/tms/sync-runs/{syncRun}` | Yes + org header | One TMS sync run. Any member may read. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

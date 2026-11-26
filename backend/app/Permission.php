@@ -102,6 +102,14 @@ enum Permission: string
     // confirming a shipment CSV still needs import-shipments.
     case ManageImports = 'manage-imports';
 
+    // TMS integrations (enforced from v1.3.2): TMS
+    // provider connections, connection tests, sync runs,
+    // and integration settings. Owner, admin, operations
+    // manager, and dispatcher. Any member may list
+    // integrations and read sync runs. Credentials are
+    // never returned by the API.
+    case ManageTmsIntegrations = 'manage-tms-integrations';
+
     /**
      * Every permission value, for validation and documentation.
      *

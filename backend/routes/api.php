@@ -46,6 +46,8 @@ use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
 use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\SyncRunController;
+use App\Http\Controllers\Api\V1\TmsIntegrationController;
+use App\Http\Controllers\Api\V1\TmsSyncRunController;
 use Illuminate\Support\Facades\Route;
 
 // Every API request gets a correlation id, echoed back on the
@@ -357,6 +359,25 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/imports/sync-runs/{syncRun}', [SyncRunController::class, 'show']);
             Route::post('/imports/sync-runs/{syncRun}/run', [SyncRunController::class, 'run']);
             Route::delete('/imports/sync-runs/{syncRun}', [SyncRunController::class, 'destroy']);
+
+            // TMS integrations (v1.3.2): a generic provider
+            // adapter with a mock provider and Trimble
+            // TMW.Suite modelled schema-only. Any member may
+            // list integrations, providers, and sync runs;
+            // creating, updating, deleting, testing, and
+            // syncing need manage-tms-integrations (owner,
+            // admin, operations manager, dispatcher).
+            // Credentials are never returned by the API.
+            Route::get('/tms/providers', [TmsIntegrationController::class, 'providers']);
+            Route::get('/tms/integrations', [TmsIntegrationController::class, 'index']);
+            Route::post('/tms/integrations', [TmsIntegrationController::class, 'store']);
+            Route::get('/tms/integrations/{integration}', [TmsIntegrationController::class, 'show']);
+            Route::put('/tms/integrations/{integration}', [TmsIntegrationController::class, 'update']);
+            Route::delete('/tms/integrations/{integration}', [TmsIntegrationController::class, 'destroy']);
+            Route::post('/tms/integrations/{integration}/test', [TmsIntegrationController::class, 'test']);
+            Route::post('/tms/integrations/{integration}/sync', [TmsIntegrationController::class, 'sync']);
+            Route::get('/tms/sync-runs', [TmsSyncRunController::class, 'index']);
+            Route::get('/tms/sync-runs/{syncRun}', [TmsSyncRunController::class, 'show']);
         });
     });
 

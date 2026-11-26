@@ -56,3 +56,9 @@ Schedule::command('backup:verify')->weeklyOn(0, '04:00');
 // file with the saved mapping. Manual schedules never run
 // here; they run on demand from the API.
 Schedule::command('imports:run-scheduled')->dailyAt('04:30');
+
+// Due TMS auto-syncs run daily at 05:00: active integrations
+// with auto-sync on whose last sync is older than their
+// interval run a full sync. Integrations with auto-sync off
+// never run here; they sync on demand from the API.
+Schedule::command('tms:run-due')->dailyAt('05:00');

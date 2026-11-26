@@ -17,11 +17,9 @@ chat (see "Push rule" below).
   `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
   Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `aad9fb7c` (v1.3.0, pushed 2026-11-26 ~11:13 PKT after Aqib's
-  yes + approval card). **v1.3.1 is built and verified but NOT pushed:**
-  it waits for Aqib's yes + approval card in the main chat. 41 files
-  in the v1.3.0 commit, read-back verified (commit file list matches
-  the manifest exactly).
+  head `5711d69b` (v1.3.1, pushed 2026-11-26 ~19:36 PKT after Aqib's
+  yes + approval card). 44 files in the v1.3.1 commit, read-back verified
+  (commit file list matches the manifest exactly).
 - **Tests at v1.3.1:** 511 backend (2723 assertions) + 354 frontend, all
   passing. `npm run build` succeeds (63/63 pages). Live HTTP smoke test:
   57/57 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
@@ -34,11 +32,14 @@ chat (see "Push rule" below).
 ## Next task
 
 **v1.3.2 — TMS Integrations** (MASTER-CHECKLIST.md, Phase 4) is the next
-build. **Status 2026-11-26: v1.3.1 built and verified, NOT pushed; it
-waits for Aqib's yes + approval card.** v1.3.2 needs Aqib's input on
-which TMS platforms to target (per the standing rules, a version
-blocked on input is recorded and reported once; the next unblocked
-version is only started if it does not depend on the blocked one).
+build. **Status 2026-11-26: v1.3.1 PUSHED, head `5711d69b`.** Aqib gave
+the TMS priority list 2026-11-26 ~19:40 PKT, so v1.3.2 is UNBLOCKED:
+1. Trimble TMW.Suite — strong market presence, documented APIs.
+2. McLeod LoadMaster — strong operational capabilities, integration
+ecosystem. 3. AscendTMS — worth investigating for smaller carriers.
+4. TruckMate — established carrier platform. 5. Rose Rocket — modern
+workflows and collaboration. (Wording is Aqib's; item 5 was cut off
+mid-word in chat, completed as "collaboration".)
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -106,6 +107,169 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-26 — v1.3.2 TMS Integrations built and verified (Phase 4 continues)
+
+- Gate check passed first: remote head on GitHub is `5711d69b`,
+  matching the recorded v1.3.1 head, and no other builder was
+  running. Build started 2026-11-26 ~20:18 PKT on Aqib's "Start
+  v1.3.2 now" in the main chat (subagent), after he chose option
+  A — Trimble first, schema-only mock — from his TMS priority
+  list: 1. Trimble TMW.Suite, 2. McLeod LoadMaster, 3. AscendTMS,
+  4. TruckMate, 5. Rose Rocket.
+- Spec: MASTER-CHECKLIST.md v1.3.2 (9 items). All nine verified
+  and checked.
+- Backend (new): `config/tms.php` (Trimble published endpoints:
+  OAuth 2.0 token URL
+  `https://cloud.api.trimblecloud.com/transportation/api/identity/v2/oauth2/token`,
+  scope `sas_token`; OData base
+  `/transportation/tte-tmwsuite/v0/odata`; CloudHub `/v2`;
+  OrderCreate `/v0/automation`); `app/Tms/TmsProvider.php`
+  (interface), `TmsProviderException.php` (provider codes
+  `live_unavailable` / `invalid_credentials` /
+  `provider_error`), `TrimbleTmwMapper.php` (provider status
+  vocabulary planned/dispatched/in_transit/delivered/completed
+  mapped to ShipmentStatus; document types mapped to evidence
+  categories; unknown status maps to null and is skipped, never
+  guessed), `MockTmsProvider.php` (deterministic 3 loads:
+  TMW-MOCK-1001 in_transit Heartland Foods with POD + BOL,
+  TMW-MOCK-1002 delivered Ozark Supply with rate confirmation,
+  TMW-MOCK-1003 planned Blue Ridge Logistics with no
+  documents), `TrimbleTmwProvider.php` (schema-only: validates
+  credential shape client_id/client_secret/account_id, builds
+  request descriptors from the published URLs, every fetch
+  throws `live_unavailable`; OData entity sets
+  Orders/Appointments/Documents are modelled, not verified),
+  `TmsProviderRegistry.php` (drivers `mock` + `trimble-tmw`,
+  catalogue with live note); models `TmsIntegration`
+  (provider, name unique per org, status active/disabled,
+  credentials `encrypted:array` cast, settings JSON with
+  effectiveSettings defaults, `canSync`, `autoSyncDue`) and
+  `TmsSyncRun` (kinds shipments/status/appointments/documents/
+  full; statuses pending/running/completed/failed); migration
+  `2026_11_26_100600_create_tms_tables.php`
+  (`tms_integrations`, `tms_sync_runs`); `TmsService`
+  (providers catalogue, validatedSettings/validatedCredentials,
+  integrationPayload with credentials never returned,
+  syncRunPayload, create/update/delete, testConnection, runSync
+  with per-kind apply: shipments create/update by external then
+  internal reference with forward-only status transitions,
+  status updates only, appointments fill times, documents stored
+  as EvidenceFile on the evidence disk with same-filename
+  dedupe, notifications `tms.sync_completed` / `tms.sync_failed`
+  to members with manage-tms-integrations excluding the actor,
+  audit records); controllers `TmsIntegrationController`
+  (index/store/show/update/destroy/test/sync) and
+  `TmsSyncRunController` (index with
+  tms_integration_id/kind/status filters, show); console
+  commands `tms:list`, `tms:sync`, `tms:run-due`.
+- Backend edits: `Permission::ManageTmsIntegrations`
+  ('manage-tms-integrations'); `NotificationType::
+  TmsSyncCompleted` / `TmsSyncFailed` (13 to 15 types);
+  `config/permissions.php` adds it to Admin, OperationsManager,
+  Dispatcher (3 places; Owner gets all); `config/app.php`
+  version 1.3.2; `routes/api.php` 10 new routes under `/tms/*`
+  (GET providers, GET/POST integrations, GET/PUT/DELETE
+  integrations/{integration}, POST .../test, POST .../sync, GET
+  sync-runs, GET sync-runs/{syncRun}); `routes/console.php`
+  schedules `tms:run-due` daily 05:00.
+- **Real defects found by the new backend tests, fixed during
+  the build:** the tenant-scope test needed `actingAsMemberOf`
+  for the other org; document creation was double-counted in
+  the summary `created` (fixed: only `documents_created`
+  counts evidence); mock `has_credentials` is false with no
+  credentials; ISO8601 assertions use `format('Y-m-d H:i:s')`
+  not `toIso8601String` (returns +00:00, not Z). Pre-existing
+  tests updated for the version bump and new types:
+  HealthCheckTest version 1.3.1 to 1.3.2, NotificationTest
+  count 13 to 15.
+- Frontend (new): `TmsProvider` / `TmsSettings` /
+  `TmsIntegration` / `TmsSyncKind` / `TmsSyncRunStatus` /
+  `TmsSyncRun` / `TmsConnectionTest` types;
+  `src/lib/tms.ts` typed client (listTmsProviders,
+  list/create/get/update/delete integrations, testTmsConnection,
+  runTmsSync, list/get sync runs, labels);
+  `canManageTmsIntegrations` in `src/lib/permissions.ts`
+  (owner/admin/operations_manager/dispatcher); pages `/tms`
+  (provider catalogue, connect form with Trimble credential
+  fields, integration list) and `/tms/[id]` (settings, test
+  connection, sync controls, run history, disable/delete);
+  AppShell nav entry "TMS Integrations"; version strings bumped
+  to 1.3.2 (AppShell, MarketingLayout). Build 65/65 pages (63 at
+  v1.3.1 + 2 new).
+- Docs: new `docs/TMS-INTEGRATIONS.md` (adapter, mock provider,
+  Trimble schema model + gating, priority list with follow-ups,
+  honest limits including the pilot beachhead and the missing
+  submission channel); TMS Integrations section in `docs/API.md`;
+  OpenAPI 148 -> **155 paths / 207 operations** (7 new paths, 10
+  operations) with the `TMS` tag and `TmsProvider` /
+  `TmsIntegration` / `TmsSyncRun` / `TmsConnectionTest`
+  schemas; `CHANGELOG.md` [1.3.2] entry.
+- **Smoke-script lessons, recorded honestly (test-only
+  defects, not product code):** the runtime redacts the literal
+  `token=token` kwarg pattern in heredoc input, so the TMS smoke
+  section passes the auth token positionally via a `TOK` alias;
+  the auth register response carries the token top-level
+  (`body["token"]`), not under `data` — the cross-tenant check
+  caught that; `tms:run-due` only picks up an integration whose
+  last sync is older than its interval, so the runner pushes
+  `last_sync_at` 25 hours into the past with tinker first (same
+  pattern as the v1.3.1 scheduled-imports check). The same pass
+  caught one OpenAPI drift before the route diff: the sync-run
+  summary nests per-kind results under `kinds`.
+- Verification (all run by the builder): backend **548
+  passed (2943 assertions)**, frontend **360 passed**
+  across 44 files, `npm run build` succeeds (65/65 pages),
+  `tsc --noEmit` clean, lint clean of new findings (the two
+  remaining findings are pre-existing from v1.2.2: a
+  set-state-in-effect error in register/page.tsx and an
+  unused variable in PricingTable.tsx). Live HTTP smoke test
+  over the built-in server on a fresh SQLite DB passed
+  **52/52 backend steps + 7/7 CLI checks**: provider catalogue
+  (mock + trimble-tmw, neither live), Trimble credential
+  validation and duplicate-name 422s, connection tests (mock ok
+  but not live; Trimble well-formed but not live, token null),
+  per-kind syncs (status draft to planned, appointments filled,
+  documents zero for a load with none, shipments creating the
+  other two), full sync storing 3 documents as evidence, dedupe
+  re-run with zero created/updated/documents, Trimble sync
+  failing honestly with live-unavailable and no shipments,
+  disabled sync failing fast, sync-run history filters,
+  dispatcher notified with `tms.sync_completed` and
+  `tms.sync_failed`, cross-tenant 404s, CLI `tms:list` showing
+  both integrations, `tms:sync` recording the ninth run, and
+  `tms:run-due` running a due auto-sync (tenth run) and
+  reporting nothing due on a second run. OpenAPI 155 paths /
+  207 operations, verified to match the 207 live `api/v1` route
+  operations exactly.
+- Still unverified (standing blockers, unchanged): browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+  v1.3.2-specific notes: **no live TMS test was possible** —
+  the Trimble provider is schema-only against the published
+  OAuth 2.0 / OData / CloudHub / OrderCreate endpoints until a
+  TMW customer, a Trimble representative, and an on-prem Cloud
+  Hub Connector exist; all sync verification ran through the
+  mock provider. McLeod, AscendTMS, TruckMate, and Rose Rocket
+  are not built (partner-gated follow-ups). The submission
+  channel (sending a claim package to a broker) is still
+  missing; v1.3.2 serves larger/enterprise customers, not the
+  pilot beachhead (pilot profiles run on phone, email,
+  spreadsheets, and a load board, not a TMS).
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build).
+- Push status: **NOT pushed. Awaiting Aqib's yes + approval
+  card in the main chat.** Delta computed against remote head
+  `5711d69b`: 16 changed + 24 new = 40 files, 808,017 bytes.
+  Manifest at `~/workspace/claimtrail-v132-paths.txt` (NUL-
+  delimited) with `claimtrail-v132-paths-manifest.json`.
+  Smoke scripts at
+  `~/workspace/claimtrail-scratch-v132/smoke/` (smoke-v132.py,
+  run-smoke.sh, diff-routes.py); delta script at
+  `~/workspace/claimtrail-scratch-v132/compute-delta.py`.
+- Next task: v1.3.3 — Communication Integrations.
 
 ### 2026-11-26 — v1.3.1 Advanced Imports built and verified (Phase 4 continues)
 
@@ -228,11 +392,10 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   not a task instruction; correctly ignored by the builder,
   not acted on (a system safety notice also flagged it during
   this build).
-- Push status: **v1.3.1 NOT pushed.** Built and verified
-  2026-11-26; waits for Aqib's yes in the main chat +
-  approval card. Remote head is still `aad9fb7c` (v1.3.0).
-  Next run may start v1.3.2 only after the v1.3.1 push, per
-  the standing rule.
+- Push status: **PUSHED 2026-11-26 ~19:36 PKT, head `5711d69b`**
+  (44 files, read-back verified: branch head, commit message, file
+  list, and two files read from GitHub). Next run may start v1.3.2
+  (blocked on Aqib's TMS platform choice — see Next task).
 - Independent verification by the main agent (2026-11-26
   ~15:45 PKT): backend suite re-run 511 tests / 2723
   assertions, frontend 354 tests, build 63/63 pages, live

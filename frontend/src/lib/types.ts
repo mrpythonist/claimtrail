@@ -1240,3 +1240,88 @@ export interface BillingPortalSession {
   token: string;
   expires_at: string;
 }
+
+export type TmsProviderName = "mock" | "trimble-tmw";
+
+/** One TMS provider from GET /tms/providers (v1.3.2). */
+export interface TmsProvider {
+  name: TmsProviderName;
+  label: string;
+  live_available: boolean;
+  capabilities: {
+    shipments: boolean;
+    status: boolean;
+    appointments: boolean;
+    documents: boolean;
+    webhooks: boolean;
+  };
+  credential_fields: string[];
+  live_note: string;
+}
+
+/** Integration sync settings from the TMS payload (v1.3.2). */
+export interface TmsSettings {
+  sync_shipments: boolean;
+  sync_status: boolean;
+  sync_appointments: boolean;
+  sync_documents: boolean;
+  auto_sync: boolean;
+  sync_interval_hours: number;
+}
+
+/** One TMS integration from GET /tms/integrations (v1.3.2). */
+export interface TmsIntegration {
+  id: string;
+  provider: TmsProviderName;
+  provider_label: string;
+  live_available: boolean;
+  name: string;
+  status: "active" | "disabled";
+  settings: TmsSettings;
+  has_credentials: boolean;
+  credential_fields_present: string[];
+  last_sync_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TmsSyncKind =
+  | "shipments"
+  | "status"
+  | "appointments"
+  | "documents"
+  | "full";
+
+export type TmsSyncRunStatus = "pending" | "running" | "completed" | "failed";
+
+/** One TMS sync run from GET /tms/sync-runs (v1.3.2). */
+export interface TmsSyncRun {
+  id: string;
+  tms_integration_id: string;
+  kind: TmsSyncKind;
+  status: TmsSyncRunStatus;
+  summary: {
+    fetched: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    documents_created: number;
+    kinds: Record<string, Record<string, number>>;
+  } | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Connection test result from POST /tms/integrations/{id}/test (v1.3.2). */
+export interface TmsConnectionTest {
+  ok: boolean;
+  live_available: boolean;
+  message: string;
+  token: string | null;
+  expires_at: string | null;
+}

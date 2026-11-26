@@ -25,6 +25,8 @@ enum NotificationType: string
     case SupportTicketReply = 'support.ticket_reply';
     case ImportCompleted = 'import.completed';
     case ImportFailed = 'import.failed';
+    case TmsSyncCompleted = 'tms.sync_completed';
+    case TmsSyncFailed = 'tms.sync_failed';
 
     public function label(): string
     {
@@ -42,6 +44,8 @@ enum NotificationType: string
             self::SupportTicketReply => 'Support ticket reply',
             self::ImportCompleted => 'Import completed',
             self::ImportFailed => 'Import failed',
+            self::TmsSyncCompleted => 'TMS sync completed',
+            self::TmsSyncFailed => 'TMS sync failed',
         };
     }
 

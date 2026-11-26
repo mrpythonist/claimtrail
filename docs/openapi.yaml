@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.3.1
+  version: 1.3.2
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -37,7 +37,10 @@ info:
     adds advanced imports: saved CSV mappings, import history
     with row-level error correction, scheduled imports, import
     notifications, and synchronization workflows over stored
-    files.
+    files. Version 1.3.2 adds TMS integrations: a generic
+    provider adapter with a mock provider and Trimble
+    TMW.Suite modelled schema-only, integration settings,
+    connection tests, syncs, and sync monitoring.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -69,6 +72,7 @@ tags:
   - name: Support
   - name: EmailIntake
   - name: Imports
+  - name: TMS
 paths:
   /auth/register:
     post:
@@ -5740,6 +5744,323 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /tms/providers:
+    get:
+      tags: [TMS]
+      summary: TMS provider catalogue
+      description: >
+        Every registered provider driver with its label,
+        live availability, capabilities, and the credential
+        fields it needs. Any member may read it. No live TMS
+        is reachable through any provider in v1.3.2.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Provider catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TmsProvider"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tms/integrations:
+    get:
+      tags: [TMS]
+      summary: TMS integrations for the organization
+      description: >
+        Newest first. Any member may list integrations.
+        Credentials are never returned.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: TMS integrations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TmsIntegration"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [TMS]
+      summary: Create a TMS integration
+      description: >
+        Requires manage-tms-integrations. Trimble needs a
+        client id, client secret, and account id; the mock
+        needs no credentials. Credentials are stored
+        encrypted and never returned.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, name]
+              properties:
+                provider: { type: string, enum: [mock, trimble-tmw] }
+                name: { type: string, maxLength: 100 }
+                credentials:
+                  type: object
+                  additionalProperties: { type: string }
+                settings:
+                  type: object
+                  properties:
+                    sync_shipments: { type: boolean }
+                    sync_status: { type: boolean }
+                    sync_appointments: { type: boolean }
+                    sync_documents: { type: boolean }
+                    auto_sync: { type: boolean }
+                    sync_interval_hours: { type: integer, minimum: 1, maximum: 168 }
+      responses:
+        "201":
+          description: Created TMS integration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsIntegration"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /tms/integrations/{integration}:
+    get:
+      tags: [TMS]
+      summary: One TMS integration
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: integration
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: TMS integration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsIntegration"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [TMS]
+      summary: Update a TMS integration
+      description: >
+        Requires manage-tms-integrations. Credentials are
+        only replaced when supplied; settings merge over
+        the stored ones.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: integration
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                status: { type: string, enum: [active, disabled] }
+                credentials:
+                  type: object
+                  additionalProperties: { type: string }
+                settings:
+                  type: object
+                  properties:
+                    sync_shipments: { type: boolean }
+                    sync_status: { type: boolean }
+                    sync_appointments: { type: boolean }
+                    sync_documents: { type: boolean }
+                    auto_sync: { type: boolean }
+                    sync_interval_hours: { type: integer, minimum: 1, maximum: 168 }
+      responses:
+        "200":
+          description: Updated TMS integration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsIntegration"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [TMS]
+      summary: Delete a TMS integration
+      description: >
+        Requires manage-tms-integrations. Its sync runs go
+        with it; shipments and evidence created by syncs
+        stay.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: integration
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: TMS integration deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tms/integrations/{integration}/test:
+    post:
+      tags: [TMS]
+      summary: Test a TMS connection
+      description: >
+        Requires manage-tms-integrations. Authenticates
+        against the provider without syncing. The mock
+        always succeeds; Trimble succeeds when the
+        credentials are well-formed. Both report
+        live_available false: no live TMS is reachable
+        in v1.3.2.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: integration
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsConnectionTest"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tms/integrations/{integration}/sync:
+    post:
+      tags: [TMS]
+      summary: Run a TMS sync now
+      description: >
+        Requires manage-tms-integrations. kind is
+        shipments, status, appointments, documents, or
+        full (the default). A full sync runs only the
+        kinds the integration settings enable. Returns
+        the recorded sync run with its final status and
+        summary. A run over a schema-only provider fails
+        with the live-unavailable message.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: integration
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string, enum: [shipments, status, appointments, documents, full] }
+      responses:
+        "200":
+          description: Recorded sync run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsSyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /tms/sync-runs:
+    get:
+      tags: [TMS]
+      summary: TMS sync runs for the organization
+      description: >
+        Newest first. Filters: tms_integration_id, kind,
+        status. Any member may list sync runs.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: tms_integration_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [shipments, status, appointments, documents, full] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, running, completed, failed] }
+      responses:
+        "200":
+          description: TMS sync runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TmsSyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /tms/sync-runs/{syncRun}:
+    get:
+      tags: [TMS]
+      summary: One TMS sync run
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: syncRun
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: TMS sync run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TmsSyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /billing/webhooks:
     post:
       tags: [Billing]
@@ -7416,6 +7737,74 @@ components:
         finished_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    TmsProvider:
+      type: object
+      properties:
+        name: { type: string, enum: [mock, trimble-tmw] }
+        label: { type: string }
+        live_available: { type: boolean }
+        capabilities:
+          type: object
+          properties:
+            shipments: { type: boolean }
+            status: { type: boolean }
+            appointments: { type: boolean }
+            documents: { type: boolean }
+            webhooks: { type: boolean }
+        credential_fields:
+          type: array
+          items: { type: string }
+        live_note: { type: string }
+    TmsIntegration:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [mock, trimble-tmw] }
+        provider_label: { type: string }
+        live_available: { type: boolean }
+        name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        settings:
+          type: object
+          properties:
+            sync_shipments: { type: boolean }
+            sync_status: { type: boolean }
+            sync_appointments: { type: boolean }
+            sync_documents: { type: boolean }
+            auto_sync: { type: boolean }
+            sync_interval_hours: { type: integer }
+        has_credentials: { type: boolean }
+        credential_fields_present:
+          type: array
+          items: { type: string }
+        last_sync_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TmsSyncRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tms_integration_id: { type: string, format: uuid }
+        kind: { type: string, enum: [shipments, status, appointments, documents, full] }
+        status: { type: string, enum: [pending, running, completed, failed] }
+        summary:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TmsConnectionTest:
+      type: object
+      properties:
+        ok: { type: boolean }
+        live_available: { type: boolean }
+        message: { type: string }
+        token: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
     MonitoringCheck:
       type: object
       properties:

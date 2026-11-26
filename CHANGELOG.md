@@ -3,6 +3,80 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.3.2] - 2026-11-26
+
+Phase 4, TMS Integrations: a generic TMS provider adapter
+with a mock provider and Trimble TMW.Suite modelled
+schema-only. No live TMS is contacted: the mock syncs
+three fixed dummy loads, and the Trimble provider fails
+every fetch with a live-unavailable message. App version
+bumped to 1.3.2; OpenAPI at 155 paths (148 + 7 new paths,
+207 operations).
+
+### Added
+
+- TMS provider adapter: `App\Tms\TmsProvider` contract
+  (name, label, live availability, capabilities,
+  credential validation, shipment, status, appointment,
+  and document fetch, request descriptors) with a
+  registry that resolves driver names. The mock provider
+  implements it against deterministic dummy data (three
+  loads: one in transit with a proof of delivery and a
+  bill of lading, one delivered with a rate confirmation,
+  one planned with no documents). The Trimble provider
+  models the public TMW.Suite surface from the published
+  docs (OAuth 2.0 client credentials, token URL, scope
+  `sas_token`, OData, CloudHub, and OrderCreate
+  endpoints) and never performs a live call.
+- TMS integrations: `GET /tms/providers` (provider
+  catalogue with live availability and credential
+  fields), `GET/POST /tms/integrations`, `GET/PUT/DELETE
+  /tms/integrations/{integration}`. Credentials are
+  stored encrypted and never returned; Trimble needs a
+  client id, client secret, and account id. Settings
+  select which kinds sync, whether auto-sync runs, and
+  the interval. Managing integrations needs the new
+  `manage-tms-integrations` permission (owner, admin,
+  operations manager, dispatcher); any member may list
+  and read.
+- Connection test: `POST
+  /tms/integrations/{integration}/test` authenticates
+  without syncing. The mock always succeeds; Trimble
+  succeeds when the credentials are well-formed. Both
+  report `live_available: false` with a plain-language
+  explanation.
+- Syncs: `POST /tms/integrations/{integration}/sync`
+  with kind `shipments`, `status`, `appointments`,
+  `documents`, or `full`. Shipments are created or
+  updated by external reference (then internal
+  reference); statuses follow the forward-only
+  transition rule; appointments fill appointment and
+  actual times; documents are stored as evidence files
+  with duplicate filenames skipped. Re-running a full
+  mock sync creates nothing new.
+- Sync monitoring: `GET /tms/sync-runs` (filters
+  `tms_integration_id`, `kind`, `status`), `GET
+  /tms/sync-runs/{syncRun}`. Every run records its kind,
+  status, per-outcome summary, and failure reason, and
+  members who can manage integrations are notified
+  (`tms.sync_completed`, `tms.sync_failed`). A run over
+  a schema-only provider fails with the live-unavailable
+  message, recorded on the integration as `last_error`.
+- Auto-sync and CLI: `tms:run-due` runs due auto-syncs
+  daily at 05:00; `tms:sync` runs one integration on
+  demand; `tms:list` lists integrations across
+  organizations.
+- Frontend: `/tms` (provider catalogue, connect form,
+  integration list) and `/tms/[id]` (settings,
+  connection test, sync controls, run history), with a
+  TMS Integrations entry in the sidebar.
+- Docs: `docs/TMS-INTEGRATIONS.md` documents the
+  adapter, the mock provider, the Trimble schema model
+  and its gating, the priority list with the follow-up
+  providers, and the honest limits (no live test, no
+  other provider built, pilot beachhead unaffected,
+  submission channel still missing).
+
 ## [1.3.1] - 2026-11-26
 
 Phase 4, Advanced Imports: saved CSV mappings, import

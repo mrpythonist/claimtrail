@@ -280,6 +280,21 @@ export function canManageImports(role: OrganizationRole | null | undefined): boo
   return isOneOf(role, IMPORT_MANAGERS);
 }
 
+// Owner, Admin, Operations Manager, and Dispatcher. They manage
+// TMS provider connections, connection tests, sync runs, and
+// integration settings. Every member may list integrations and
+// read sync runs.
+const TMS_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageTmsIntegrations(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, TMS_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit
