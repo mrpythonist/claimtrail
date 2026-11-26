@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
+import { TrialBanner } from "@/components/onboarding/TrialBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch, ApiRequestError } from "@/lib/api";
@@ -115,6 +116,7 @@ function OnboardingContent({ org }: { org: Organization }) {
   return (
     <div className="space-y-6">
       {error && <Alert tone="error">{error}</Alert>}
+      <TrialBanner orgId={org.id} />
       <Card>
         <CardHeader
           title="First steps"

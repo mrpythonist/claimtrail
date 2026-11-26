@@ -2790,6 +2790,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /plans:
+    get:
+      tags: [Marketing]
+      summary: Public plan catalog (no authentication)
+      description: >
+        The listed plans from config/billing.php, the same v0.5.0
+        section 8 tiers the pricing page shows, plus the trial
+        offer (30 days on Growth, no card). The unlisted Success
+        Fee plan is not returned. Rate limit: 30 requests per
+        minute.
+      security: []
+      responses:
+        "200":
+          description: Listed plans and the trial offer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      plans:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/BillingPlan"
+                      trial:
+                        type: object
+                        properties:
+                          plan: { type: string, example: growth }
+                          days: { type: integer, example: 30 }
+                          requires_card: { type: boolean, example: false }
+  /leads:
+    post:
+      tags: [Marketing]
+      summary: Submit a demo request (no authentication)
+      description: >
+        Captures a lead from a marketing form. Idempotent by email
+        and source: a second submission from the same email within
+        90 days updates the existing lead instead of creating a
+        duplicate, and returns it with 200. No IP address or user
+        agent is stored. Rate limit: 5 requests per minute.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name: { type: string, maxLength: 255 }
+                email: { type: string, format: email, maxLength: 255 }
+                company: { type: string, maxLength: 255, nullable: true }
+                fleet_size: { type: string, maxLength: 50, nullable: true }
+                message: { type: string, maxLength: 2000, nullable: true }
+                source:
+                  type: string
+                  enum: [demo_request, pricing, getting_started]
+                  default: demo_request
+      responses:
+        "201":
+          description: Lead created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Lead"
+        "200":
+          description: Existing lead updated (same email and source within 90 days)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Lead"
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /analytics/events:
+    post:
+      tags: [Marketing]
+      summary: Record an anonymous marketing event (no authentication)
+      description: >
+        Accepts one page-view or conversion event from the
+        marketing tracker. Always answers 202: recording is
+        best-effort and must never break the page. Events are
+        anonymous (event name, path, optional referrer) and go to
+        the driver in config/analytics.php: the log by default, or
+        nowhere when the driver is "none". Rate limit: 60 requests
+        per minute.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event, path]
+              properties:
+                event:
+                  type: string
+                  enum: [page_view, demo_request_submitted, trial_started, pricing_viewed]
+                path: { type: string, maxLength: 500 }
+                referrer: { type: string, maxLength: 500, nullable: true }
+      responses:
+        "202":
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accepted: { type: boolean, example: true }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /ops/health:
     get:
       tags: [Operations]
@@ -5640,6 +5759,19 @@ components:
           additionalProperties: true
         description: { type: string, nullable: true }
         listed: { type: boolean, description: The Success Fee plan is unlisted }
+    Lead:
+      type: object
+      description: A lead captured by a marketing form (v1.2.2). Not tenant-scoped.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        company: { type: string, nullable: true }
+        fleet_size: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+        source: { type: string, enum: [demo_request, pricing, getting_started] }
+        status: { type: string, enum: [new, contacted, qualified, converted, closed] }
+        created_at: { type: string, format: date-time }
     BillingSubscription:
       type: object
       properties:

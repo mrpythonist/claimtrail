@@ -466,17 +466,17 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.2.2 — Marketing and Acquisition
 
-- [ ] Marketing website.
-- [ ] Product overview page.
-- [ ] Feature pages.
-- [ ] Pricing page.
+- [x] Marketing website.
+- [x] Product overview page.
+- [x] Feature pages.
+- [x] Pricing page.
 - [ ] Product screenshots.
-- [ ] Product demonstration.
-- [ ] Demo request form.
-- [ ] Lead capture.
-- [ ] SEO optimization.
-- [ ] Analytics integration.
-- [ ] Customer onboarding.
+- [x] Product demonstration.
+- [x] Demo request form.
+- [x] Lead capture.
+- [x] SEO optimization.
+- [x] Analytics integration.
+- [x] Customer onboarding.
 
 ### v1.2.3 — Production Launch
 

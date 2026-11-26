@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AnalyticsEventController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Api\V1\EvidenceRequirementController;
 use App\Http\Controllers\Api\V1\EvidenceTemplateController;
 use App\Http\Controllers\Api\V1\ExportTemplateController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
 use App\Http\Controllers\Api\V1\OnboardingController;
@@ -28,6 +30,7 @@ use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\PublicPlanController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RetentionController;
 use App\Http\Controllers\Api\V1\SavedViewController;
@@ -44,12 +47,25 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
     // Reports only whether the app and its dependencies are up.
     Route::get('/health', [HealthController::class, 'show']);
 
+    // Public marketing endpoints (v1.2.2). The plan catalog feeds
+    // the pricing page, the lead endpoint captures demo requests,
+    // and the analytics endpoint accepts anonymous page-view and
+    // conversion events from the marketing tracker. Tight rate
+    // limits apply because these are unauthenticated entry points.
+    // Each route carries its own throttle prefix: Laravel's guest
+    // throttle key is domain + IP only, so without a prefix all
+    // three routes (and the auth routes) would share one bucket
+    // and a pricing-page load could block a demo request.
+    Route::get('/plans', [PublicPlanController::class, 'index'])->middleware('throttle:30,1,plans');
+    Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1,leads');
+    Route::post('/analytics/events', [AnalyticsEventController::class, 'store'])->middleware('throttle:60,1,analytics');
+
     // Public authentication endpoints. Tight rate limits apply because
     // these are the unauthenticated entry points.
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
-    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    Route::post('/auth/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:5,1');
-    Route::post('/auth/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1');
+    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1,leads');
+    Route::post('/auth/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:5,1,leads');
+    Route::post('/auth/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1,leads');
 
     // Email verification link from the verification email. The signed
     // middleware guarantees the link has not been tampered with, and

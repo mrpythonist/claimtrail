@@ -6,27 +6,29 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.2.1 (Phase 3, Plans and
-  Entitlements). App version is now **1.2.1**. Phase 0 is complete
+- **Last completed version:** v1.2.2 (Phase 3, Marketing and
+  Acquisition). App version is now **1.2.2**. Phase 0 is complete
   (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
   deferred, still open).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `704c09e3` (v1.2.0, pushed 2026-11-25 after Aqib's yes + approval).
-  v1.2.1 is built and verified locally, NOT pushed.
-- **Tests at v1.2.1:** 435 backend (2277 assertions) + 270 frontend, all
-  passing. `npm run build` succeeds (38/38 pages). Live HTTP smoke test:
-  55/55 steps on a fresh SQLite DB (see the 2026-11-25 v1.2.1 log entry).
+  head `79d1ab7e` (v1.2.1, pushed 2026-11-25 after Aqib's yes + approval).
+  v1.2.2 is built and verified locally, NOT PUSHED.
+- **Tests at v1.2.2:** 451 backend (2340 assertions) + 293 frontend, all
+  passing. `npm run build` succeeds (55/55 pages). Live HTTP smoke test:
+  27/27 backend steps + 13/13 marketing pages on a fresh SQLite DB,
+  plus the v1.2.1 regression smoke 55/55 (see the 2026-11-26 v1.2.2 log
+  entry).
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.2.2 — Marketing and Acquisition** (MASTER-CHECKLIST.md):
-marketing website, product overview page, feature pages, pricing
-page, product screenshots, product demonstration, demo request form,
-lead capture, SEO optimization, analytics integration, customer
-onboarding.
+**v1.2.3 — Production Launch** (MASTER-CHECKLIST.md): customer
+support workflows, help documentation, subscription administration,
+refund and cancellation processes, production monitoring, backup
+verification, privacy policy review, terms of service review, data
+processing documentation review, production launch checklist.
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
 help reaching carriers/dispatchers. It returns to the front of the
@@ -90,6 +92,138 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-26 — v1.2.2 Marketing and Acquisition built and verified
+
+- Gate check passed first: remote head on GitHub is `79d1ab7e`,
+  matching the recorded v1.2.1 head, so no version was waiting to be
+  pushed. Build started 2026-11-26 ~07:48 PKT on Aqib's "Start
+  v1.2.2 — Marketing and Acquisition now" in the main chat — not the
+  scheduled 2026-11-26 10:10 PKT run.
+- Spec: MASTER-CHECKLIST.md v1.2.2 (11 items) + v0.5.0 pricing
+  (section 8 tiers, section 9.1 structure) + v0.6.0 pilot sample
+  (12 synthetic shipments, 11 claims, $2,440 requested). Ten items
+  verified and checked; **Product screenshots stays UNCHECKED** — the
+  gallery is built but no real captures exist (no headless browser
+  on the build VM; a mockup dressed as a screenshot would be a
+  fabrication). Pricing and positioning use the v0.5.0 numbers only,
+  no new pricing or claims invented.
+- Backend (new): migration `2026_11_26_100000_create_leads_table.php`
+  (`leads`: uuid id, name, email, company, fleet_size, message,
+  source, status, contacted_at, notes; no IP or user agent stored);
+  `app/Models/Lead.php` (sources demo_request/pricing/
+  getting_started; statuses new/contacted/qualified/converted/
+  closed); `config/analytics.php` (driver `none|log`, default `log`);
+  `app/Services/AnalyticsService.php` (allowed events page_view,
+  demo_request_submitted, trial_started, pricing_viewed; writes one
+  log line via `Log::info` on the default channel); public
+  controllers `PublicPlanController` (`GET /v1/plans`: listed plans
+  from `BillingService::plans()` + trial {growth, 30 days, no card},
+  Success Fee not returned), `LeadController` (`POST /v1/leads`:
+  idempotent by email + source within 90 days, 200 on update, 201
+  on create), `AnalyticsEventController` (`POST /v1/analytics/events`:
+  validates against the allow-list, always 202); `leads:list`
+  command (`--status`, `--limit`; unknown status exits 1). Routes
+  are public, inside the v1 + correlation group, before the
+  `auth:sanctum` group; throttles 30/5/60 per minute, each with its
+  own prefix (see the defect below).
+- Frontend (new): `src/lib/marketing.ts` (plans, features with honest
+  limits grounded in the v0.3.0 gaps, demo steps, 12 demo shipments,
+  screenshot entries, sitemap routes), `src/lib/analytics.ts`
+  (tracker, off unless `NEXT_PUBLIC_ANALYTICS_ENABLED=true`,
+  fire-and-forget, failures swallowed), `src/lib/signup-plan.ts`
+  (localStorage for the plan chosen on the pricing page),
+  `src/lib/seo.ts` (metadata, Open Graph, JSON-LD); `MarketingLayout`
+  (header/footer) + `AnalyticsTracker`; pages `/` (rewritten onto
+  the marketing layout), `/product`, `/features`, `/features/[slug]`
+  (7 features), `/pricing` + `PricingTable` (monthly/annual toggle,
+  annual 10x monthly), `/demo` + `DemoWalkthrough` (7 steps over the
+  PLT-1001 claim + the full 12-shipment table), `/demo-request` +
+  `DemoRequestForm`, `/screenshots` + `ScreenshotGallery` (real PNG
+  when present, labelled placeholder otherwise), `/getting-started`
+  (30-day path); register page reads `?plan=` and stores it;
+  `TrialBanner` on the onboarding page offers the 30-day Growth
+  trial for a Free org that is not trialing; `sitemap.ts` /
+  `robots.ts` (empty sitemap and no sitemap line until
+  `NEXT_PUBLIC_SITE_URL` is set); root layout sets `metadataBase`
+  only when the site URL is set.
+- **Real defect 1 (throttle buckets shared across routes, found by
+  the live smoke test, not the suite):** the first smoke run failed
+  one step — the 5th `POST /v1/leads` returned 429 although only 5
+  lead requests had been made. Root cause: in Laravel 13,
+  `ThrottleRequests::resolveRequestSignature` returns domain + IP
+  only for guests, with no route component, so every `throttle:X,1`
+  without a prefix shares ONE bucket per IP. The smoke run's
+  `GET /v1/plans` had consumed one of the five lead slots. Fix: each
+  of the three new routes carries its own throttle prefix
+  (`throttle:30,1,plans`, `throttle:5,1,leads`,
+  `throttle:60,1,analytics`). The pre-existing auth routes still
+  share one bucket among themselves — noted, not changed (v1.0.1
+  behaviour, out of this version's scope). Regression test
+  `test_marketing_routes_have_separate_throttle_buckets` proves five
+  plan loads leave all five lead submissions available and the sixth
+  is still throttled; the test was verified to FAIL with all three
+  prefixes removed and PASS with them restored. The smoke script now
+  also clears the file cache before starting the server (it already
+  wiped the DB) so a stale throttle bucket cannot trip a run.
+- **Real defect 2 (AnalyticsService under Log::spy, found by the
+  backend tests):** `Log::channel('single')` returned null under
+  `Log::spy()`, causing 500s in the analytics tests. Fix: use
+  `Log::info()` on the default channel instead. Verified with a
+  throwaway repro test (created, run, deleted).
+- **Build defects found and fixed while building:** `useSearchParams()`
+  outside Suspense failed the `/register` prerender (fixed with the
+  Suspense wrapper, the same pattern as the login page); the
+  `/screenshots` page read `public/screenshots/` via `fs.readdir` at
+  render time, which fails prerendering — `export const dynamic =
+  "force-dynamic"` is incompatible with `cacheComponents: true`, so
+  the page now calls `await connection()` from `next/server` inside
+  an inner async server component wrapped in `<Suspense>`; the
+  TrialBanner test fixture needed the full `BillingSubscription`
+  shape (a `tsc --noEmit` error caught the missing fields);
+  `formatDollars` now uses thousands separators (`$2,440`, not
+  `$2440`; the PricingTable test expectation for `$1490` became
+  `$1,490`).
+- Docs: new `docs/MARKETING.md` (pages, lead capture, analytics, SEO,
+  trial wiring, screenshot capture process, "What is still
+  placeholder"); `docs/API.md` marketing section (3 endpoints);
+  `docs/openapi.yaml` 116 → **119 paths** (3 new, plus a `Lead`
+  schema); `CHANGELOG.md` [1.2.2] entry (incl. the throttle fix and
+  the "Not in v1.2.2" list). OpenAPI path count verified by parsing
+  the YAML.
+- Verification: backend **451 tests, 2340 assertions** (435 at v1.2.1
+  + 15 marketing/analytics tests + 1 throttle regression test), all
+  passing; frontend **293 tests** (270 + 23 new), all passing;
+  `npm run build` 55/55 pages (38 at v1.2.1 + 17 new marketing
+  routes). Live HTTP smoke test **27/27 backend steps + 13/13
+  marketing pages** on a fresh SQLite DB (script + runner in
+  `~/workspace/claimtrail-scratch-v122/smoke/`): plans list 5 tiers
+  with the v0.5.0 prices and the trial offer, lead create 201 /
+  duplicate 200 / other source 201 / validation 422, analytics 202
+  with the event in the Laravel log, `leads:list` shows the demo
+  lead, register + org + auth plans (6 plans) + Growth trial start
+  + usage all pass; every marketing page returns 200 with its key
+  content (incl. `$2,440` demo total and the screenshots
+  placeholder). Regression: the v1.2.1 smoke script re-run, **55/55**
+  (Free cap, 402s, carryover downgrade, trial on Growth limits).
+- Gaps / placeholder (not built, per the spec): product screenshots
+  (no real captures; checklist item unchecked); analytics provider
+  (log driver works; GA4/Plausible needs a measurement ID only Aqib
+  can supply); privacy policy and terms still placeholders pending
+  legal review (v1.2.3); site URL unset until the marketing site has
+  a domain (sitemap empty, robots.txt lists no sitemap until then);
+  billing still on the mock provider (v1.2.0 decision, unchanged);
+  no admin UI for leads (`leads:list` only). Standing unverified
+  items unchanged: browser E2E, live Postgres, live Redis, Docker,
+  real mailer.
+- Note: `backend/AGENTS.md` in the repo instructs installing Laravel
+  Boost via composer/curl. That is repo file content, not a task
+  instruction; ignored, not acted on (a system safety notice also
+  flagged it during this build).
+- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.**
+- Next task: **v1.2.3 — Production Launch.** v0.2.0 Customer
+  Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
+  interviews.
 
 ### 2026-11-25 — v1.2.1 Plans and Entitlements built and verified
 
@@ -202,9 +336,10 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Boost via composer/curl. That is repo file content, not a task
   instruction; ignored, not acted on (a system safety notice also
   flagged it during this build).
-- Push status: **COMPLETE AND VERIFIED, NOT PUSHED.** Awaiting Aqib's
-  yes in the main chat + approval card. Do not push from a
-  scheduled run.
+- Push status: **v1.2.1 PUSHED 2026-11-25** after Aqib's yes in the main
+  chat + approval card. New remote head `79d1ab7e`, 33 files in one
+  commit (29 changed + 4 new). Read-back verified. Next run may
+  start v1.2.2.
 - Next task: **v1.2.2 — Marketing and Acquisition.** v0.2.0 Customer
   Interviews stays DEFERRED per Aqib 2026-11-21 — do not fabricate
   interviews.

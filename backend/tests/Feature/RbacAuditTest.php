@@ -130,6 +130,13 @@ class RbacAuditTest extends TestCase
             ['POST', 'api/v1/auth/forgot-password'],
             ['POST', 'api/v1/auth/reset-password'],
             ['GET', 'api/v1/email/verify/{id}/{hash}'],
+            // Marketing (v1.2.2): the plan catalog feeds the public
+            // pricing page, the lead endpoint captures demo
+            // requests, and the analytics endpoint accepts anonymous
+            // events. All three are rate-limited instead.
+            ['GET', 'api/v1/plans'],
+            ['POST', 'api/v1/leads'],
+            ['POST', 'api/v1/analytics/events'],
             // Billing webhook: the provider cannot hold a Sanctum
             // token; authenticity is verified by HMAC signature.
             ['POST', 'api/v1/billing/webhooks'],

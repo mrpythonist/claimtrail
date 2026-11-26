@@ -568,6 +568,17 @@ billing code. Failed renewals go past due; `billing:dunning` retries
 (+3 days, then +7 days) and downgrades to Free after 14 days past
 due, never deleting data. See docs/BILLING.md.
 
+### Marketing (public, v1.2.2)
+
+Public endpoints for the marketing site (see docs/MARKETING.md).
+No authentication; each is rate-limited per IP.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/plans` | Public (30/min) | The listed plans from config/billing.php (Free, Starter $19, Growth $49, Fleet $99, Agency $149 base + $12 per extra carrier), plus the trial offer (30 days on Growth, no card). The unlisted Success Fee plan is not returned. |
+| POST | `/leads` | Public (5/min) | Capture a lead from a marketing form. Body: `name` (required), `email` (required), `company`, `fleet_size`, `message`, `source` (`demo_request`, `pricing`, `getting_started`, default `demo_request`). Idempotent by email and source: a second submission within 90 days updates the existing lead and returns 200; otherwise 201. No IP address or user agent is stored. |
+| POST | `/analytics/events` | Public (60/min) | Accept one anonymous marketing event. Body: `event` (`page_view`, `demo_request_submitted`, `trial_started`, `pricing_viewed`), `path`, `referrer`. Always 202: recording is best-effort. Events go to the driver in config/analytics.php (the Laravel log by default, or nowhere when the driver is `none`). |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

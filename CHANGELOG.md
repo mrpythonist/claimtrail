@@ -3,6 +3,90 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.2.2] - 2026-11-26
+
+Phase 3, Marketing and Acquisition — the public marketing site, lead
+capture, SEO, analytics, and the trial wiring from the pricing page
+into signup. App version bumped to 1.2.2; OpenAPI at 119 paths
+(116 + 3 public marketing paths).
+
+### Added
+
+- Marketing website: a shared marketing layout (header, footer,
+  analytics tracker) and public pages at `/` (landing, refactored
+  onto the shared layout), `/product` (overview), `/features` and
+  `/features/[slug]` (seven features, each with its honest limits),
+  `/pricing`, `/demo`, `/demo-request`, `/screenshots`, and
+  `/getting-started`. Shared content lives in
+  `frontend/src/lib/marketing.ts`.
+- Pricing page: the five listed tiers from v0.5.0 section 8 (Free
+  $0, Starter $19, Growth $49, Fleet $99, Agency $149 base + $12
+  per extra carrier), monthly/annual toggle (annual is 10x monthly,
+  two months free), the 30-day no-card Growth trial, and an FAQ.
+  Prices are labelled hypotheses being tested, not prices set in
+  stone. The success-fee plan is described as offered at trial
+  exit, not listed as a default.
+- Product demonstration: an interactive seven-step walkthrough of
+  the PLT-1001 detention claim, plus the full demo set (twelve
+  synthetic shipments, eleven claims, $2,440 requested) from the
+  v0.6.0 pilot sample. All demo data is synthetic and labelled so.
+- Demo request form and lead capture: `POST /v1/leads` (public,
+  5/min) stores a lead (`leads` table, new migration); idempotent
+  by email and source within 90 days (updates instead of
+  duplicating, returns 200). No IP address or user agent is stored.
+  The operator reviews leads with `php artisan leads:list`
+  (`--status`, `--limit`); there is no admin UI yet.
+- Public plan catalog: `GET /v1/plans` (public, 30/min) returns the
+  listed plans from config/billing.php plus the trial offer, so the
+  pricing page and the billing system cannot drift apart. The
+  unlisted Success Fee plan is not returned.
+- Analytics integration: the marketing tracker posts page-view and
+  conversion events to `POST /v1/analytics/events` (public, 60/min,
+  always 202). Events are anonymous (event, path, optional
+  referrer) and go to the driver in `config/analytics.php`: the
+  Laravel log by default, or nowhere when the driver is `none`.
+  The tracker is off unless `NEXT_PUBLIC_ANALYTICS_ENABLED` is
+  `"true"`, and sending never blocks the page.
+- SEO: per-page metadata (title, description, canonical, Open
+  Graph, Twitter card) via `frontend/src/lib/seo.ts`, JSON-LD
+  `SoftwareApplication` on the home and pricing pages, and
+  `sitemap.ts` / `robots.ts`. Absolute URLs need
+  `NEXT_PUBLIC_SITE_URL`; until the site has a real domain the
+  sitemap is empty and robots.txt lists no sitemap.
+- Customer onboarding wiring: the pricing page links to
+  `/register?plan=<key>`; the register page remembers the choice
+  and the in-app onboarding page offers the matching trial through
+  the existing `POST /billing/trials` endpoint (30 days on Growth,
+  no card). The banner only shows for a Free organization that is
+  not already trialing. Plus a public `/getting-started` page: the
+  30-day path and the seven first steps.
+
+### Fixed
+
+- Throttle buckets for the public marketing endpoints: Laravel's
+  guest throttle key is domain + IP only, so without a prefix the
+  plan catalog, lead capture, and analytics endpoints shared one
+  bucket with each other (and with the auth routes), and five
+  pricing-page loads would block a demo request for a minute. Each
+  of the three new routes now carries its own throttle prefix
+  (`plans`, `leads`, `analytics`). Caught by the live smoke test,
+  not the suite; a regression test proves five plan loads leave all
+  five lead submissions available and the sixth is still throttled.
+
+### Not in v1.2.2
+
+- Product screenshots: the gallery is built (`/screenshots`,
+  renders a real PNG from `public/screenshots/` when one exists),
+  but no real captures exist yet: there is no headless browser on
+  the build VM, and a mockup dressed up as a screenshot would be a
+  fabrication. The frames are labelled placeholders, the capture
+  process is in docs/MARKETING.md, and the checklist item stays
+  unchecked until real captures land.
+- Analytics provider: the log driver works; GA4 or Plausible needs
+  a measurement ID that only Aqib can supply.
+- Privacy policy and terms are still placeholders pending legal
+  review (v1.2.3).
+
 ## [1.2.1] - 2026-11-25
 
 Phase 3, Plans and Entitlements — the plan limits from v0.5.0

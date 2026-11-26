@@ -14,6 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: process.env.NEXT_PUBLIC_SITE_URL
+    ? new URL(process.env.NEXT_PUBLIC_SITE_URL)
+    : undefined,
   title: "ClaimTrail - Every shipment. Every entitlement. Every dollar accounted for.",
   description:
     "ClaimTrail helps trucking companies track additional shipment charges, keep the evidence together, and follow each claim through to payment.",
