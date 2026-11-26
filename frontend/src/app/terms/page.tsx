@@ -7,7 +7,7 @@ export default function TermsPage() {
         Back to ClaimTrail
       </Link>
       <h1 className="mt-4 text-3xl font-semibold text-slate-900">Terms of Service</h1>
-      <p className="mt-2 text-sm text-slate-500">Last reviewed internally: 26 November 2026 (ClaimTrail v1.3.0).</p>
+      <p className="mt-2 text-sm text-slate-500">Last reviewed internally: 26 November 2026 (ClaimTrail v1.3.1).</p>
       <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Reviewed internally against how the app actually works. This
         is not legal advice, and these terms have not been reviewed

@@ -5,6 +5,7 @@ import {
   canManageBilling,
   canManageCustomization,
   canManageEmailIntake,
+  canManageImports,
   canViewAuditLogs,
   canViewOperations,
   canViewReports,
@@ -179,5 +180,23 @@ describe("canManageEmailIntake", () => {
     expect(canManageEmailIntake("viewer")).toBe(false);
     expect(canManageEmailIntake(null)).toBe(false);
     expect(canManageEmailIntake(undefined)).toBe(false);
+  });
+});
+
+describe("canManageImports", () => {
+  it("allows owner, admin, operations manager, and dispatcher", () => {
+    expect(ROLES.filter((role) => canManageImports(role))).toEqual([
+      "owner",
+      "admin",
+      "operations_manager",
+      "dispatcher",
+    ]);
+  });
+
+  it("denies billing staff, viewers, and missing roles", () => {
+    expect(canManageImports("billing_staff")).toBe(false);
+    expect(canManageImports("viewer")).toBe(false);
+    expect(canManageImports(null)).toBe(false);
+    expect(canManageImports(undefined)).toBe(false);
   });
 });

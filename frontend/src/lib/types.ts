@@ -144,7 +144,10 @@ export type NotificationEventType =
   | "claim.accepted"
   | "claim.rejected"
   | "payment.recorded"
-  | "organization.invitation";
+  | "organization.invitation"
+  | "support.ticket_reply"
+  | "import.completed"
+  | "import.failed";
 
 export interface AppNotification {
   id: string;
@@ -1053,6 +1056,101 @@ export interface InboundEmail {
   created_at: string;
   updated_at: string;
   attachments: InboundEmailAttachment[];
+}
+
+/** A saved CSV mapping from GET /imports/mappings (v1.3.1). */
+export interface ImportMapping {
+  id: string;
+  name: string;
+  target: "shipments";
+  mapping: Record<string, string>;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ImportRunSource = "upload" | "schedule" | "sync";
+
+export type ImportRunStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "partial"
+  | "failed";
+
+/** One import run from GET /imports/runs (v1.3.1). */
+export interface ImportRun {
+  id: string;
+  source: ImportRunSource;
+  import_mapping_id: string | null;
+  import_schedule_id: string | null;
+  sync_run_id: string | null;
+  filename: string | null;
+  status: ImportRunStatus;
+  total_rows: number;
+  imported_rows: number;
+  skipped_rows: number;
+  duplicate_rows: number;
+  error_rows: number;
+  summary: Record<string, number> | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  rows?: ImportRow[];
+}
+
+export type ImportRowStatus =
+  | "imported"
+  | "skipped"
+  | "duplicate"
+  | "failed"
+  | "corrected";
+
+/** One CSV row of an import run (v1.3.1). */
+export interface ImportRow {
+  id: string;
+  import_run_id: string;
+  row_index: number;
+  data: Record<string, unknown>;
+  status: ImportRowStatus;
+  errors: Record<string, string[]> | null;
+  shipment_id: string | null;
+  corrected_at: string | null;
+  created_at: string;
+}
+
+export type ImportFrequency = "daily" | "weekly" | "manual";
+
+/** A scheduled import from GET /imports/schedules (v1.3.1). */
+export interface ImportSchedule {
+  id: string;
+  name: string;
+  import_mapping_id: string | null;
+  frequency: ImportFrequency;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_import_run_id: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SyncRunStatus = "pending" | "running" | "completed" | "failed";
+
+/** A synchronization workflow from GET /imports/sync-runs (v1.3.1). */
+export interface SyncRun {
+  id: string;
+  name: string;
+  import_mapping_id: string | null;
+  status: SyncRunStatus;
+  import_run_id: string | null;
+  summary: Record<string, number> | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** One monitoring check run from GET /ops/monitoring. */

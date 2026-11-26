@@ -600,6 +600,40 @@ provider is wired yet.
 | POST | `/email-intake/emails/{email}/dismiss` | Yes + org header | Dismiss the email after review. Body: `reason` (required). A matched email cannot be dismissed (422). Requires `manage-email-intake`. |
 | POST | `/email-intake/inbound` | Public, HMAC (120/min) | Inbound email webhook. No Sanctum token: the provider signs the raw body with HMAC-SHA256 (`X-Email-Intake-Signature: sha256=<hex>`) using `EMAIL_INTAKE_WEBHOOK_SECRET`. Body: normalized JSON (`from`, `to`, `subject`, `text_body`, `html_body`, `message_id`, `attachments` as base64 with `filename` and `mime_type`). Unknown `to` returns 422 with a generic message. A repeated `message_id` for the same organization returns the stored email with `duplicate: true`. |
 
+### Advanced Imports (v1.3.1)
+
+Saved CSV mappings, import history with row-level error
+correction, scheduled imports, import notifications, and
+synchronization workflows over stored files. See
+docs/IMPORTS.md for the full runbook (mapping rules,
+duplicate detection, run statuses, schedule and sync
+semantics). No live SFTP, URL, or provider source; no TMS
+integration (that is v1.3.2). The shipment import preview
+and confirm endpoints accept an optional `mapping_id`.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/imports/mappings` | Yes + org header | Saved CSV mappings, defaults first. Any member may list. |
+| POST | `/imports/mappings` | Yes + org header | Save a mapping. Body: `name`, `target` (`shipments`), `mapping` (exact header text to shipment field), `is_default`. Every field must be one a mapping may target; names are unique per organization. A new default unsets the previous default. Requires `manage-imports` (owner, admin, operations manager, dispatcher). |
+| GET | `/imports/mappings/{mapping}` | Yes + org header | One saved mapping. Any member may read. |
+| PUT | `/imports/mappings/{mapping}` | Yes + org header | Update a saved mapping. Requires `manage-imports`. |
+| DELETE | `/imports/mappings/{mapping}` | Yes + org header | Delete a saved mapping. Runs, schedules, and sync workflows keep working with the link nulled. Requires `manage-imports`. |
+| GET | `/imports/runs` | Yes + org header | Import history, newest first. Query: `status` (`pending`, `running`, `completed`, `partial`, `failed`), `source` (`upload`, `schedule`, `sync`), `page`, `per_page`. Any member may list. |
+| GET | `/imports/runs/{run}` | Yes + org header | One import run with its rows. Any member may read. |
+| GET | `/imports/runs/{run}/rows` | Yes + org header | Rows of one run, in file order. Query: `status` (`imported`, `skipped`, `duplicate`, `failed`, `corrected`), `page`, `per_page`. Any member may list. |
+| POST | `/imports/runs/{run}/rows/{row}/correct` | Yes + org header | Correct one failed or duplicate row and retry it. Body: `data` (field values merged over the stored row, re-validated, reference re-checked). A valid row creates the shipment and becomes `corrected`; run counts refresh. An already imported row cannot be corrected (422). Requires `manage-imports`. |
+| GET | `/imports/schedules` | Yes + org header | Scheduled imports, newest first. Any member may list. |
+| POST | `/imports/schedules` | Yes + org header | Create a schedule with its source file (multipart: `name`, optional `import_mapping_id`, `file` CSV/TXT max 5120 KB, `frequency` `daily`/`weekly`/`manual`, optional `next_run_at`, `active`). Daily defaults to tomorrow, weekly to next week. Requires `manage-imports`. |
+| GET | `/imports/schedules/{schedule}` | Yes + org header | One scheduled import. Any member may read. |
+| PUT | `/imports/schedules/{schedule}` | Yes + org header | Update a schedule. A new file replaces the stored one. Setting the frequency to `manual` clears `next_run_at`. Requires `manage-imports`. |
+| DELETE | `/imports/schedules/{schedule}` | Yes + org header | Delete a schedule and its stored file. Runs it produced stay in the history. Requires `manage-imports`. |
+| POST | `/imports/schedules/{schedule}/run` | Yes + org header | Run a schedule now with its stored file and saved mapping. Returns the import run. Requires `manage-imports`. |
+| GET | `/imports/sync-runs` | Yes + org header | Synchronization workflows, newest first. Any member may list. |
+| POST | `/imports/sync-runs` | Yes + org header | Create a sync workflow with its source file (multipart: `name`, optional `import_mapping_id`, `file` CSV/TXT max 5120 KB). Requires `manage-imports`. |
+| GET | `/imports/sync-runs/{syncRun}` | Yes + org header | One synchronization workflow. Any member may read. |
+| POST | `/imports/sync-runs/{syncRun}/run` | Yes + org header | Run a sync workflow now. Moves it through `running` to `completed` or `failed` and returns it with the linked import run. Requires `manage-imports`. |
+| DELETE | `/imports/sync-runs/{syncRun}` | Yes + org header | Delete a sync workflow and its stored file. Runs it produced stay in the history. Requires `manage-imports`. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

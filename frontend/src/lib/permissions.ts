@@ -266,6 +266,20 @@ export function canManageEmailIntake(role: OrganizationRole | null | undefined):
   return isOneOf(role, EMAIL_INTAKE_MANAGERS);
 }
 
+// Owner, Admin, Operations Manager, and Dispatcher. They manage
+// saved CSV mappings, schedules, sync runs, and error
+// correction. Every member may list and read import history.
+const IMPORT_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageImports(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, IMPORT_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

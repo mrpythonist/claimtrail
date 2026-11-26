@@ -6,9 +6,9 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.3.0 (Phase 4, Email Intake).
-  App version is now **1.3.0**. Phase 4 has started with this
-  version. Phase 3 is complete (v1.2.3). Phase 0 is complete
+- **Last completed version:** v1.3.1 (Phase 4, Advanced Imports).
+  App version is now **1.3.1**. Phase 4 continues (v1.3.0 Email
+  Intake done). Phase 3 is complete (v1.2.3). Phase 0 is complete
   (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0
   interviews deferred, still open). What remains before real
   customers is Aqib's launch decision: open signups vs closed
@@ -17,30 +17,31 @@ chat (see "Push rule" below).
   `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
   Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `ab113770` (v1.2.3, pushed 2026-11-26 ~10:00 PKT after Aqib's
-  yes + approval card). **v1.3.0 is NOT pushed yet** — built and
-  verified locally 2026-11-26, waiting for Aqib's yes. 65 files in
-  the v1.2.3 commit, read-back verified (commit file list matches
+  head `aad9fb7c` (v1.3.0, pushed 2026-11-26 ~11:13 PKT after Aqib's
+  yes + approval card). **v1.3.1 is built and verified but NOT pushed:**
+  it waits for Aqib's yes + approval card in the main chat. 41 files
+  in the v1.3.0 commit, read-back verified (commit file list matches
   the manifest exactly).
-- **Tests at v1.3.0:** 497 backend (2576 assertions) + 333 frontend, all
-  passing. `npm run build` succeeds (60/60 pages). Live HTTP smoke test:
-  48/48 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
-  2026-11-26 v1.3.0 log entry). OpenAPI 136 paths, verified to match
-  the 136 live `api/v1` route URIs exactly.
+- **Tests at v1.3.1:** 511 backend (2723 assertions) + 354 frontend, all
+  passing. `npm run build` succeeds (63/63 pages). Live HTTP smoke test:
+  57/57 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
+  2026-11-26 v1.3.1 log entry). OpenAPI 148 paths, verified to match
+  the 148 live `api/v1` route URIs exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.3.0 — Email Intake** (MASTER-CHECKLIST.md, Phase 4): organization-specific
-email addresses, inbound email processing, attachment extraction, shipment
-reference extraction, automatic shipment matching, manual matching interface,
-email processing history. **Status 2026-11-26: v1.3.0 BUILT AND VERIFIED
-LOCALLY, NOT PUSHED — ready pending Aqib's yes.** Next build after the push:
-v1.3.1 Advanced Imports (Phase 4). Before real customers, Aqib still has
-the launch decision: open signups vs closed pilot first (pilot prep ready,
-no pilot customer recruited) and the person-only items in
+**v1.3.2 — TMS Integrations** (MASTER-CHECKLIST.md, Phase 4) is the next
+build. **Status 2026-11-26: v1.3.1 built and verified, NOT pushed; it
+waits for Aqib's yes + approval card.** v1.3.2 needs Aqib's input on
+which TMS platforms to target (per the standing rules, a version
+blocked on input is recorded and reported once; the next unblocked
+version is only started if it does not depend on the blocked one).
+Before real customers, Aqib still has the launch decision: open
+signups vs closed pilot first (pilot prep ready, no pilot customer
+recruited) and the person-only items in
 `docs/PRODUCTION-LAUNCH-CHECKLIST.md`.
 **v0.2.0 Customer Interviews stays DEFERRED, not dropped:** Aqib said
 2026-11-21 to skip what needs him right now, and interviews need his
@@ -105,6 +106,147 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-26 — v1.3.1 Advanced Imports built and verified (Phase 4 continues)
+
+- Gate check passed first: remote head on GitHub is `aad9fb7c`,
+  matching the recorded v1.3.0 head, and no v1.3.1 files were
+  present in the remote tree, so no other writer was active.
+  Build started 2026-11-26 ~15:12 PKT on Aqib's "Start v1.3.1
+  now" in the main chat (subagent).
+- Spec: MASTER-CHECKLIST.md v1.3.1 (7 items). All seven verified
+  and checked.
+- Backend (new): migration
+  `2026_11_26_100500_create_import_tables.php`
+  (`import_mappings`, `import_runs`, `import_rows`,
+  `import_schedules`, `sync_runs`); models `ImportMapping`,
+  `ImportRun`, `ImportRow`, `ImportSchedule`, `SyncRun` (all
+  organization-scoped, UUIDs); new permission `manage-imports`
+  (Admin, Operations Manager, Dispatcher; Owner gets all);
+  new notification types `import.completed` and
+  `import.failed` (11 to 13 total); `ImportService` (mapping
+  CRUD, run recording, count refresh and status computation,
+  stored-file runs, row correction with re-validation and
+  duplicate re-check, schedule runs, sync runs, run
+  notifications to members who can manage imports except
+  the actor); `ShipmentCsvImporter` refactored with shared
+  parse/create-rows helpers plus `runFile()` for stored files,
+  and preview/confirm now accept an optional `mapping_id`;
+  confirm records an import run (source `upload`) and returns
+  `import_run_id`; controllers `ImportMappingController`,
+  `ImportRunController`, `ImportScheduleController`,
+  `SyncRunController`; command `imports:run-scheduled`
+  (`--schedule`, `--organization`, runs as the org owner)
+  plus a daily 04:30 scheduler entry. Stored files live on
+  the private disk under `imports/{org}/schedules` and
+  `imports/{org}/sync`.
+- Run status is computed from the rows: `completed` when
+  every row imported, `partial` when some imported and some
+  did not, `failed` when none imported (including a file
+  whose rows are all duplicates). Rows that fail validation
+  are stored as `skipped`; `failed` is reserved for rows
+  whose correction retry still fails. Corrected rows count
+  as imported, and correcting the last failed row flips the
+  run to `completed`. Duplicate detection is exact match on
+  `internal_reference` / `external_load_reference`, against
+  the database and within the file.
+- Frontend (new): `ImportMapping`, `ImportRun`, `ImportRow`,
+  `ImportSchedule`, `SyncRun` types plus status/source/
+  frequency unions (this also added the `support.ticket_reply`
+  notification type missing since v1.2.3); `src/lib/imports.ts`
+  typed client; `canManageImports` in
+  `src/lib/permissions.ts`; pages `/imports` (history with
+  status/source filters, schedules, sync workflows), `/imports/
+  mappings` (create/list/make-default/delete), `/imports/runs/
+  [id]` (summary, rows, JSON correction form); sidebar nav
+  item; version strings bumped to 1.3.1 (AppShell,
+  MarketingLayout, privacy, terms). Build 63/63 pages (60 at
+  v1.3.0 + 3 new).
+- Docs: new `docs/IMPORTS.md` (mapping rules, duplicate
+  detection, run statuses, schedule and sync semantics, and
+  what is not built: no live SFTP/URL/provider source, no
+  TMS integration, no plan metering, no reprocess endpoint,
+  shipments only); Advanced Imports section in `docs/API.md`;
+  OpenAPI 136 -> **148 paths** (12 new, 20 operations) with
+  the `Imports` tag and `ImportMapping` / `ImportRun` /
+  `ImportRow` / `ImportSchedule` / `SyncRun` schemas;
+  `CHANGELOG.md` [1.3.1] entry.
+- **Real defect found by the new backend tests, fixed during
+  the build:** `ImportRun::isClean()` collided with Eloquent
+  `Model::isClean()`; the method was removed. Two smaller
+  fixes in the same pass: `UploadedFile::get()` replaced with
+  `file_get_contents(getRealPath())` in the schedule/sync
+  controllers, and `organization_id` added to the
+  `import_rows` migration. None of the three changed product
+  behaviour; all three were caught before the suite went
+  green.
+- **Smoke-script lessons, recorded honestly (test-only
+  defects, not product code):** the invitation mail is a
+  queued mailable, so the smoke script runs `queue:work
+  --once` before reading the token from the mail log;
+  `DemoSeeder` seeds its own org's shipments, so shipment
+  counts in smoke are org-scoped; a header like "Load Ref"
+  is not a built-in alias, so schedule and sync runs in
+  smoke pass the saved `mapping_id`; correcting the last
+  failed row flips a run from `partial` to `completed`, so
+  the history filter check expects zero partial runs after
+  correction. The same pass caught three OpenAPI schema
+  drifts before the route diff: the run field is
+  `error_rows` (not `failed_rows`), there is no
+  `corrected_rows` column, and the sync payload carries
+  `summary` / `error_message` / `started_at` /
+  `finished_at` (not `last_error` / `last_run_at`).
+- Verification (all run by the builder): backend **511
+  passed (2723 assertions)**, frontend **354 passed**
+  across 42 files, `npm run build` succeeds (63/63 pages),
+  `tsc --noEmit` clean, lint clean of new findings (the two
+  remaining findings are pre-existing from v1.2.2: a
+  set-state-in-effect error in register/page.tsx and an
+  unused import in PricingTable.tsx). Live HTTP smoke test
+  over the built-in server on a fresh SQLite DB passed
+  **57/57 backend steps + 3/3 CLI checks**: mapping save
+  (unknown field 422, duplicate name 422, exactly one
+  default), preview with the saved mapping, confirm imports
+  two, duplicate re-import imports zero with a failed run,
+  bad-file partial run with one error row, row correction
+  with count refresh and status flip, schedule create plus
+  manual run, sync workflow pending to completed, dispatcher
+  notified with `import.completed`, history filters,
+  cross-tenant 404s, `imports:run-scheduled` running a due
+  daily schedule and reporting nothing due on a second run.
+  OpenAPI 148 paths, verified to match the 148 live `api/v1`
+  route URIs exactly.
+- Still unverified (standing blockers, unchanged): browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+  v1.3.1-specific notes: no live import source is wired
+  (schedules and sync workflows re-import stored files
+  only); no TMS integration (v1.3.2); the webhook
+  storage-cap 402 branch from v1.3.0 remains unexercised
+  live; no reprocess endpoint.
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build).
+- Push status: **v1.3.1 NOT pushed.** Built and verified
+  2026-11-26; waits for Aqib's yes in the main chat +
+  approval card. Remote head is still `aad9fb7c` (v1.3.0).
+  Next run may start v1.3.2 only after the v1.3.1 push, per
+  the standing rule.
+- Independent verification by the main agent (2026-11-26
+  ~15:45 PKT): backend suite re-run 511 tests / 2723
+  assertions, frontend 354 tests, build 63/63 pages, live
+  smoke re-run 57/57 + 3/3 CLI with OpenAPI 197 = 197 — all
+  matching the builder's counts. Push delta recomputed by
+  hand: the unauthenticated GitHub API rate limit was
+  exhausted (reset 16:07 PKT), so the tree API could not be
+  used; the delta was rebuilt from file mtimes (44 files
+  touched 15:12-15:43 PKT) with each file's git blob SHA
+  compared against its raw content at `aad9fb7c` — 23 changed
+  + 21 new, 858,630 bytes, matching the builder's manifest
+  exactly. Manifest rewritten at
+  `~/workspace/claimtrail-v131-paths.txt`.
+- Next task: v1.3.2 — TMS Integrations.
 
 ### 2026-11-26 — v1.3.0 Email Intake built and verified (Phase 4 started)
 
@@ -244,8 +386,9 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   after the fix: 497 tests / 2576 assertions, all passing.
   Frontend tests (333), build (60/60), and live smoke (48/48 +
   3/3 CLI) re-run by the main agent with the same results.
-- Push status: **NOT pushed — ready pending Aqib's yes.**
-  Next run may start v1.3.1 after the push.
+- Push status: **PUSHED 2026-11-26 ~11:13 PKT, head `aad9fb7c`**
+  (41 files, read-back verified: branch head, commit message, file
+  list, and two files read from GitHub). Next run may start v1.3.1.
 - Next task: **v1.3.1 — Advanced Imports (Phase 4).** v0.2.0
   Customer Interviews stays DEFERRED per Aqib 2026-11-21 — do
   not fabricate interviews.

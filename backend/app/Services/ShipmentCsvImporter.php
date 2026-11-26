@@ -14,13 +14,18 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Two-step CSV import for shipments.
+ * Two-step CSV import for shipments, plus stored-file runs.
  *
  * Preview parses and validates the file without creating anything and
  * stores the parsed rows server-side under a token. Confirm reads the
  * stored rows back, so the client can never smuggle in rows that were
  * not previewed. Only valid, non-duplicate rows are created, and the
  * summary reports exactly what happened to every selected row.
+ *
+ * Scheduled imports and sync runs use runFile instead: the same
+ * parsing and creation, straight from a file the organization
+ * already uploaded, with the full per-row result returned so the
+ * caller can record the import run and its rows.
  */
 class ShipmentCsvImporter
 {
@@ -119,75 +124,28 @@ class ShipmentCsvImporter
         }
 
         try {
-            $headers = $this->readRow($handle);
-
-            if ($headers === null || $this->rowIsEmpty($headers)) {
-                throw ValidationException::withMessages(['file' => ['The file has no header row.']]);
-            }
-
-            $headers = array_map(fn ($header) => $this->stripBom(trim((string) $header)), $headers);
-            $columnMap = $this->buildColumnMap($headers, $mappingOverrides);
-
-            if (! in_array('internal_reference', $columnMap, true)
-                || ! in_array('broker_or_customer_name', $columnMap, true)
-            ) {
-                throw ValidationException::withMessages(['file' => [
-                    'The file must have columns for the internal reference and the broker or customer name.',
-                ]]);
-            }
-
-            $existingReferences = Shipment::forOrganization($organizationId)
-                ->pluck('internal_reference')
-                ->map(fn ($reference) => mb_strtolower((string) $reference))
-                ->all();
-            $existingReferences = array_flip($existingReferences);
-            $seenReferences = [];
-            $rows = [];
-            $index = 0;
-
-            while (($rawRow = $this->readRow($handle)) !== null) {
-                if ($this->rowIsEmpty($rawRow)) {
-                    continue;
-                }
-
-                $index++;
-
-                if ($index > self::MAX_ROWS) {
-                    throw ValidationException::withMessages(['file' => [
-                        'The file has more than '.self::MAX_ROWS.' rows. Split it into smaller files.',
-                    ]]);
-                }
-
-                $rows[] = $this->parseRow($rawRow, $columnMap, $organizationId, $existingReferences, $seenReferences, $index);
-            }
+            $parsed = $this->parseStream($handle, $organizationId, $mappingOverrides);
         } finally {
             fclose($handle);
         }
-
-        if ($rows === []) {
-            throw ValidationException::withMessages(['file' => ['The file has no data rows.']]);
-        }
-
-        $summary = [
-            'total' => count($rows),
-            'valid' => count(array_filter($rows, fn ($row) => $row['valid'])),
-            'invalid' => count(array_filter($rows, fn ($row) => ! $row['valid'] && ! $row['is_duplicate'])),
-            'duplicate' => count(array_filter($rows, fn ($row) => $row['is_duplicate'])),
-        ];
 
         $token = Str::random(40);
 
         Cache::put(
             'shipment_import:'.$token,
-            ['organization_id' => $organizationId, 'rows' => $rows],
+            [
+                'organization_id' => $organizationId,
+                'filename' => $file->getClientOriginalName(),
+                'rows' => $parsed['rows'],
+            ],
             self::PREVIEW_TTL_SECONDS
         );
 
         return [
             'preview_token' => $token,
-            'summary' => $summary,
-            'columns' => $headers,
-            'rows' => $rows,
+            'summary' => $parsed['summary'],
+            'columns' => $parsed['headers'],
+            'rows' => $parsed['rows'],
         ];
     }
 
@@ -197,10 +155,13 @@ class ShipmentCsvImporter
      * Rows come from the server-side preview payload, never from the
      * client. Only valid, non-duplicate rows are created. Creation
      * runs in one transaction: an unexpected failure rolls every row
-     * back and the summary reports nothing imported.
+     * back and the summary reports nothing imported. The returned
+     * rows carry the outcome of every selected row, with the created
+     * shipment id where one was made, so the caller can record the
+     * import run.
      *
      * @param  array<int, int>|null  $rowIndexes  1-based row indexes to import, or null for all valid rows.
-     * @return array{imported: int, skipped: int, skipped_rows: array<int, array{index: int, reason: string, is_duplicate: bool, errors: array<string, array<int, string>>}>}
+     * @return array{imported: int, skipped: int, skipped_rows: array<int, array{index: int, reason: string, is_duplicate: bool, errors: array<string, array<int, string>>}>, rows: array<int, array{index: int, data: array<string, mixed>, errors: array<string, array<int, string>>, is_duplicate: bool, status: string, shipment_id: string|null}>, filename: string|null}
      */
     public function confirm(string $token, string $organizationId, ?array $rowIndexes, int $userId): array
     {
@@ -224,33 +185,171 @@ class ShipmentCsvImporter
                 fn ($row) => in_array($row['index'], $rowIndexes, true)
             ));
 
-        $skipped = [];
-        $toCreate = [];
+        $created = $this->createRows($selected, $organizationId, $userId);
 
-        foreach ($selected as $row) {
-            if (! $row['valid']) {
-                // The per-field errors ride along so the client can
-                // show exactly what was wrong with each skipped row,
-                // not just that it failed.
-                $skipped[] = [
-                    'index' => $row['index'],
-                    'reason' => $row['is_duplicate']
-                        ? 'Duplicate internal reference.'
-                        : 'Row failed validation.',
-                    'is_duplicate' => $row['is_duplicate'],
-                    'errors' => $row['errors'],
-                ];
+        Cache::forget('shipment_import:'.$token);
+
+        return [
+            'imported' => $created['imported'],
+            'skipped' => count($created['skipped_rows']),
+            'skipped_rows' => $created['skipped_rows'],
+            'rows' => $created['rows'],
+            'filename' => $preview['filename'] ?? null,
+        ];
+    }
+
+    /**
+     * Import a file already stored on disk, in one pass.
+     *
+     * Used by scheduled imports and sync runs: the file is one the
+     * organization uploaded when the schedule or sync workflow was
+     * created. Parsing, validation, and duplicate detection are the
+     * same as the preview path; creation is the same as confirm.
+     * The result has the confirm shape, plus the summary, so the
+     * caller can record the import run and its rows.
+     *
+     * @param  array<string, string>  $mappingOverrides  Exact header text to field name.
+     * @return array{imported: int, skipped: int, skipped_rows: array<int, array{index: int, reason: string, is_duplicate: bool, errors: array<string, array<int, string>>}>, rows: array<int, array{index: int, data: array<string, mixed>, errors: array<string, array<int, string>>, is_duplicate: bool, status: string, shipment_id: string|null}>, summary: array{total: int, valid: int, invalid: int, duplicate: int}, filename: string|null}
+     */
+    public function runFile(string $path, string $organizationId, array $mappingOverrides, int $userId, ?string $filename = null): array
+    {
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            throw ValidationException::withMessages(['file' => ['The stored file could not be read.']]);
+        }
+
+        try {
+            $parsed = $this->parseStream($handle, $organizationId, $mappingOverrides);
+        } finally {
+            fclose($handle);
+        }
+
+        $created = $this->createRows($parsed['rows'], $organizationId, $userId);
+
+        return [
+            'imported' => $created['imported'],
+            'skipped' => count($created['skipped_rows']),
+            'skipped_rows' => $created['skipped_rows'],
+            'rows' => $created['rows'],
+            'summary' => $parsed['summary'],
+            'filename' => $filename,
+        ];
+    }
+
+    /**
+     * Parse and validate every data row of an open CSV stream.
+     *
+     * Shared by preview and runFile. No shipment is created here.
+     *
+     * @param  resource  $handle
+     * @param  array<string, string>  $mappingOverrides
+     * @return array{headers: array<int, string>, rows: array<int, array{index: int, data: array<string, mixed>, errors: array<string, array<int, string>>, is_duplicate: bool, valid: bool}>, summary: array{total: int, valid: int, invalid: int, duplicate: int}}
+     */
+    protected function parseStream($handle, string $organizationId, array $mappingOverrides): array
+    {
+        $headers = $this->readRow($handle);
+
+        if ($headers === null || $this->rowIsEmpty($headers)) {
+            throw ValidationException::withMessages(['file' => ['The file has no header row.']]);
+        }
+
+        $headers = array_map(fn ($header) => $this->stripBom(trim((string) $header)), $headers);
+        $columnMap = $this->buildColumnMap($headers, $mappingOverrides);
+
+        if (! in_array('internal_reference', $columnMap, true)
+            || ! in_array('broker_or_customer_name', $columnMap, true)
+        ) {
+            throw ValidationException::withMessages(['file' => [
+                'The file must have columns for the internal reference and the broker or customer name.',
+            ]]);
+        }
+
+        $existingReferences = Shipment::forOrganization($organizationId)
+            ->pluck('internal_reference')
+            ->map(fn ($reference) => mb_strtolower((string) $reference))
+            ->all();
+        $existingReferences = array_flip($existingReferences);
+        $seenReferences = [];
+        $rows = [];
+        $index = 0;
+
+        while (($rawRow = $this->readRow($handle)) !== null) {
+            if ($this->rowIsEmpty($rawRow)) {
                 continue;
             }
 
-            $toCreate[] = $row;
+            $index++;
+
+            if ($index > self::MAX_ROWS) {
+                throw ValidationException::withMessages(['file' => [
+                    'The file has more than '.self::MAX_ROWS.' rows. Split it into smaller files.',
+                ]]);
+            }
+
+            $rows[] = $this->parseRow($rawRow, $columnMap, $organizationId, $existingReferences, $seenReferences, $index);
         }
 
+        if ($rows === []) {
+            throw ValidationException::withMessages(['file' => ['The file has no data rows.']]);
+        }
+
+        $summary = [
+            'total' => count($rows),
+            'valid' => count(array_filter($rows, fn ($row) => $row['valid'])),
+            'invalid' => count(array_filter($rows, fn ($row) => ! $row['valid'] && ! $row['is_duplicate'])),
+            'duplicate' => count(array_filter($rows, fn ($row) => $row['is_duplicate'])),
+        ];
+
+        return [
+            'headers' => $headers,
+            'rows' => $rows,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * Create the valid, non-duplicate rows in one transaction.
+     *
+     * Shared by confirm and runFile. An unexpected failure rolls
+     * every row back. Each returned row carries its outcome and,
+     * where one was created, the shipment id.
+     *
+     * @param  array<int, array{index: int, data: array<string, mixed>, errors: array<string, array<int, string>>, is_duplicate: bool, valid: bool}>  $rows
+     * @return array{imported: int, skipped_rows: array<int, array{index: int, reason: string, is_duplicate: bool, errors: array<string, array<int, string>>}>, rows: array<int, array{index: int, data: array<string, mixed>, errors: array<string, array<int, string>>, is_duplicate: bool, status: string, shipment_id: string|null}>}
+     */
+    protected function createRows(array $rows, string $organizationId, int $userId): array
+    {
+        $skipped = [];
+        $results = [];
         $created = 0;
 
         try {
-            DB::transaction(function () use ($toCreate, $organizationId, $userId, &$created, &$skipped) {
-                foreach ($toCreate as $row) {
+            DB::transaction(function () use ($rows, $organizationId, $userId, &$skipped, &$results, &$created) {
+                foreach ($rows as $row) {
+                    if (! $row['valid']) {
+                        // The per-field errors ride along so the client can
+                        // show exactly what was wrong with each skipped row,
+                        // not just that it failed.
+                        $skipped[] = [
+                            'index' => $row['index'],
+                            'reason' => $row['is_duplicate']
+                                ? 'Duplicate internal reference.'
+                                : 'Row failed validation.',
+                            'is_duplicate' => $row['is_duplicate'],
+                            'errors' => $row['errors'],
+                        ];
+                        $results[] = [
+                            'index' => $row['index'],
+                            'data' => $row['data'],
+                            'errors' => $row['errors'],
+                            'is_duplicate' => $row['is_duplicate'],
+                            'status' => $row['is_duplicate'] ? 'duplicate' : 'skipped',
+                            'shipment_id' => null,
+                        ];
+                        continue;
+                    }
+
                     $data = $row['data'];
 
                     // Re-check at write time: another import may have
@@ -265,6 +364,14 @@ class ShipmentCsvImporter
                             'reason' => 'Duplicate internal reference.',
                             'is_duplicate' => true,
                             'errors' => ['internal_reference' => ['A shipment with this reference already exists.']],
+                        ];
+                        $results[] = [
+                            'index' => $row['index'],
+                            'data' => $row['data'],
+                            'errors' => ['internal_reference' => ['A shipment with this reference already exists.']],
+                            'is_duplicate' => true,
+                            'status' => 'duplicate',
+                            'shipment_id' => null,
                         ];
                         continue;
                     }
@@ -281,6 +388,14 @@ class ShipmentCsvImporter
                                 'is_duplicate' => false,
                                 'errors' => ['carrier' => ['The carrier no longer exists.']],
                             ];
+                            $results[] = [
+                                'index' => $row['index'],
+                                'data' => $row['data'],
+                                'errors' => ['carrier' => ['The carrier no longer exists.']],
+                                'is_duplicate' => false,
+                                'status' => 'skipped',
+                                'shipment_id' => null,
+                            ];
                             continue;
                         }
                     }
@@ -289,8 +404,17 @@ class ShipmentCsvImporter
                     $data['created_by'] = $userId;
                     $data['status'] = $data['status'] ?? ShipmentStatus::Draft->value;
 
-                    Shipment::create($data);
+                    $shipment = Shipment::create($data);
                     $created++;
+
+                    $results[] = [
+                        'index' => $row['index'],
+                        'data' => $row['data'],
+                        'errors' => [],
+                        'is_duplicate' => false,
+                        'status' => 'imported',
+                        'shipment_id' => (string) $shipment->getKey(),
+                    ];
                 }
             });
         } catch (\Throwable $exception) {
@@ -301,12 +425,10 @@ class ShipmentCsvImporter
             ]]);
         }
 
-        Cache::forget('shipment_import:'.$token);
-
         return [
             'imported' => $created,
-            'skipped' => count($skipped),
             'skipped_rows' => $skipped,
+            'rows' => $results,
         ];
     }
 
@@ -340,6 +462,19 @@ class ShipmentCsvImporter
         }
 
         return $map;
+    }
+
+    /**
+     * The shipment fields a mapping may target.
+     *
+     * @return array<int, string>
+     */
+    public static function allowedFields(): array
+    {
+        return array_values(array_unique(array_merge(
+            array_values(self::headerAliases()),
+            ['carrier_id']
+        )));
     }
 
     /**

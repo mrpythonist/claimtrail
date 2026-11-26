@@ -22,6 +22,9 @@ use App\Http\Controllers\Api\V1\EvidenceRequirementController;
 use App\Http\Controllers\Api\V1\EvidenceTemplateController;
 use App\Http\Controllers\Api\V1\ExportTemplateController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\ImportMappingController;
+use App\Http\Controllers\Api\V1\ImportRunController;
+use App\Http\Controllers\Api\V1\ImportScheduleController;
 use App\Http\Controllers\Api\V1\InboundEmailAddressController;
 use App\Http\Controllers\Api\V1\InboundEmailController;
 use App\Http\Controllers\Api\V1\LeadController;
@@ -42,6 +45,7 @@ use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
 use App\Http\Controllers\Api\V1\SupportTicketController;
+use App\Http\Controllers\Api\V1\SyncRunController;
 use Illuminate\Support\Facades\Route;
 
 // Every API request gets a correlation id, echoed back on the
@@ -324,6 +328,35 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/email-intake/emails/{email}/match', [InboundEmailController::class, 'match']);
             Route::post('/email-intake/emails/{email}/unmatch', [InboundEmailController::class, 'unmatch']);
             Route::post('/email-intake/emails/{email}/dismiss', [InboundEmailController::class, 'dismiss']);
+
+            // Advanced imports (v1.3.1): saved CSV mappings,
+            // import history with row-level error correction,
+            // scheduled imports, and synchronization workflows.
+            // Any member may list and read; creating, updating,
+            // deleting, running, and correcting need
+            // manage-imports (owner, admin, operations manager,
+            // dispatcher). The two-step shipment CSV upload
+            // (preview/confirm) still needs import-shipments.
+            Route::get('/imports/mappings', [ImportMappingController::class, 'index']);
+            Route::post('/imports/mappings', [ImportMappingController::class, 'store']);
+            Route::get('/imports/mappings/{mapping}', [ImportMappingController::class, 'show']);
+            Route::put('/imports/mappings/{mapping}', [ImportMappingController::class, 'update']);
+            Route::delete('/imports/mappings/{mapping}', [ImportMappingController::class, 'destroy']);
+            Route::get('/imports/runs', [ImportRunController::class, 'index']);
+            Route::get('/imports/runs/{run}', [ImportRunController::class, 'show']);
+            Route::get('/imports/runs/{run}/rows', [ImportRunController::class, 'rows']);
+            Route::post('/imports/runs/{run}/rows/{row}/correct', [ImportRunController::class, 'correctRow']);
+            Route::get('/imports/schedules', [ImportScheduleController::class, 'index']);
+            Route::post('/imports/schedules', [ImportScheduleController::class, 'store']);
+            Route::get('/imports/schedules/{schedule}', [ImportScheduleController::class, 'show']);
+            Route::put('/imports/schedules/{schedule}', [ImportScheduleController::class, 'update']);
+            Route::delete('/imports/schedules/{schedule}', [ImportScheduleController::class, 'destroy']);
+            Route::post('/imports/schedules/{schedule}/run', [ImportScheduleController::class, 'run']);
+            Route::get('/imports/sync-runs', [SyncRunController::class, 'index']);
+            Route::post('/imports/sync-runs', [SyncRunController::class, 'store']);
+            Route::get('/imports/sync-runs/{syncRun}', [SyncRunController::class, 'show']);
+            Route::post('/imports/sync-runs/{syncRun}/run', [SyncRunController::class, 'run']);
+            Route::delete('/imports/sync-runs/{syncRun}', [SyncRunController::class, 'destroy']);
         });
     });
 

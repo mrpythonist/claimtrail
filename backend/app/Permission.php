@@ -95,6 +95,13 @@ enum Permission: string
     // dispatcher. Any member may list and read inbound emails.
     case ManageEmailIntake = 'manage-email-intake';
 
+    // Advanced imports (enforced from v1.3.1): saved CSV
+    // mappings, schedules, sync runs, and error correction.
+    // Owner, admin, operations manager, and dispatcher. Any
+    // member may list and read import history. Uploading and
+    // confirming a shipment CSV still needs import-shipments.
+    case ManageImports = 'manage-imports';
+
     /**
      * Every permission value, for validation and documentation.
      *

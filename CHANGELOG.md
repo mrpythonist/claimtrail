@@ -3,6 +3,117 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.3.1] - 2026-11-26
+
+Phase 4, Advanced Imports: saved CSV mappings, import
+history with row-level error correction, scheduled imports,
+import notifications, and synchronization workflows over
+stored files. App version bumped to 1.3.1; OpenAPI at 148
+paths (136 + 12 new paths, 20 operations).
+
+### Added
+
+- Saved CSV mappings: `GET/POST /imports/mappings`,
+  `GET/PUT/DELETE /imports/mappings/{mapping}`. A mapping
+  names exact CSV header text and the shipment field each
+  header fills; every field must be one a mapping may target
+  (the importer's header-alias fields plus `carrier_id`),
+  names are unique per organization, and one mapping per
+  target is the default (a new default unsets the previous
+  one). Preview and confirm accept an optional `mapping_id`;
+  without one the built-in header aliases apply, which only
+  cover the standard header spellings. Deleting a mapping
+  nulls the link on runs, schedules, and sync workflows.
+  Managing mappings needs the new `manage-imports`
+  permission (owner, admin, operations manager, dispatcher);
+  any member may list or read.
+- Import history: `GET /imports/runs` (filters `status` and
+  `source`), `GET /imports/runs/{run}` (run with rows),
+  `GET /imports/runs/{run}/rows` (filter by row status).
+  Run status is computed from the rows: `completed` when
+  every row imported, `partial` when some imported and some
+  did not, `failed` when none imported (including a file
+  whose rows are all duplicates, and a file that never
+  parsed, which records `total_rows: 0` and the reason in
+  `error_message`). Counts are `total_rows`,
+  `imported_rows`, `skipped_rows`, `duplicate_rows`, and
+  `error_rows`; corrected rows count as imported.
+- Duplicate detection: a row is a duplicate when its
+  `internal_reference` or `external_load_reference` already
+  exists in the organization, in the database or earlier in
+  the same file. Duplicate rows are recorded with status
+  `duplicate` and no shipment is created; re-importing the
+  same file imports nothing. Exact match only, no fuzzy
+  matching.
+- Error correction: `POST
+  /imports/runs/{run}/rows/{row}/correct` merges `data`
+  over the stored row, re-validates with the importer's
+  rules, and re-checks the reference. A valid row creates
+  the shipment, becomes `corrected`, and the run counts
+  refresh (a run whose last failed row was corrected flips
+  to `completed`). A correction that still fails stores the
+  new values and errors and returns 422. An already imported
+  or already corrected row cannot be corrected again (422).
+  Rows that fail validation are stored as `skipped`;
+  `failed` is reserved for rows whose correction retry still
+  fails. Requires `manage-imports`.
+- Scheduled imports: `GET/POST /imports/schedules`,
+  `GET/PUT/DELETE /imports/schedules/{schedule}`, `POST
+  /imports/schedules/{schedule}/run`. A schedule is a named
+  stored file (CSV/TXT, max 5120 KB, on the private disk
+  under `imports/{organization}/schedules/`) plus an optional
+  saved mapping and a frequency (`daily`, `weekly`,
+  `manual`). Daily advances `next_run_at` by one day after
+  each run, weekly by one week; manual has no next run and
+  only runs on demand. The artisan command
+  `imports:run-scheduled` runs due schedules (flags
+  `--schedule`, `--organization`) and is scheduled daily at
+  04:30; it runs as the organization's owner. Deleting a
+  schedule deletes its stored file; runs it produced stay in
+  the history. Requires `manage-imports`.
+- Import notifications: when a run finishes, every member
+  who can manage imports except the actor gets an in-app
+  notification, `import.completed` or `import.failed`,
+  naming the file and the counts. A single-member
+  organization has no one else to notify, so no
+  notification is created for its own runs.
+- Synchronization workflows: `GET/POST
+  /imports/sync-runs`, `GET/DELETE
+  /imports/sync-runs/{syncRun}`, `POST
+  /imports/sync-runs/{syncRun}/run`. A workflow is a named
+  stored file plus an optional saved mapping; running it
+  moves it through `running` to `completed` or `failed`
+  and links the import run that did the work. Deleting a
+  workflow deletes its stored file; runs it produced stay in
+  the history. Requires `manage-imports`.
+
+### Changed
+
+- The shipment CSV import preview and confirm endpoints
+  accept an optional `mapping_id`, and confirm records an
+  import run (source `upload`) and returns `import_run_id`
+  alongside the imported/skipped counts. The preview and
+  confirm response shapes are otherwise unchanged.
+- Notification types grew from 11 to 13 with
+  `import.completed` and `import.failed`.
+
+### Limitations
+
+- No live source for schedules or sync workflows: no SFTP,
+  no URL fetch, no email-attachment pickup, no provider API.
+  A schedule re-imports a file the organization already
+  uploaded.
+- No TMS integration: a sync workflow re-imports a stored
+  file with a saved mapping and workflow states; it is not a
+  live connection to another system. TMS integrations are
+  v1.3.2.
+- No per-mapping or per-schedule plan limits; imports are
+  not metered against any plan.
+- No reprocess endpoint for a failed run: correct the rows,
+  or re-upload the file.
+- Imports target shipments only: no claims, carriers, or
+  evidence import.
+
 ## [1.3.0] - 2026-11-26
 
 Phase 4, Email Intake: organization-specific inbound email

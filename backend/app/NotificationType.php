@@ -23,6 +23,8 @@ enum NotificationType: string
     case PaymentRecorded = 'payment.recorded';
     case OrganizationInvitation = 'organization.invitation';
     case SupportTicketReply = 'support.ticket_reply';
+    case ImportCompleted = 'import.completed';
+    case ImportFailed = 'import.failed';
 
     public function label(): string
     {
@@ -38,6 +40,8 @@ enum NotificationType: string
             self::PaymentRecorded => 'Payment recorded',
             self::OrganizationInvitation => 'Organization invitation',
             self::SupportTicketReply => 'Support ticket reply',
+            self::ImportCompleted => 'Import completed',
+            self::ImportFailed => 'Import failed',
         };
     }
 

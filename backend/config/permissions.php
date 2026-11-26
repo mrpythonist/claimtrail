@@ -68,6 +68,7 @@ return [
         Permission::ManageBilling->value,
         Permission::ManageSupport->value,
         Permission::ManageEmailIntake->value,
+        Permission::ManageImports->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -102,6 +103,7 @@ return [
         Permission::ViewAuditLogs->value,
         Permission::ManageCustomization->value,
         Permission::ManageEmailIntake->value,
+        Permission::ManageImports->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -118,6 +120,7 @@ return [
         Permission::ViewClaims->value,
         Permission::ViewDeadlines->value,
         Permission::ManageEmailIntake->value,
+        Permission::ManageImports->value,
     ],
 
     OrganizationRole::BillingStaff->value => [

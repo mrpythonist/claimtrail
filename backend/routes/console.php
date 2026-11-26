@@ -50,3 +50,9 @@ Schedule::command('monitoring:check')->hourly();
 // weekly on Sunday at 04:00, so a silently rotting backup is
 // caught before it is needed. A failure writes to the log.
 Schedule::command('backup:verify')->weeklyOn(0, '04:00');
+
+// Due scheduled imports run daily at 04:30: active daily and
+// weekly schedules whose next run is due import their stored
+// file with the saved mapping. Manual schedules never run
+// here; they run on demand from the API.
+Schedule::command('imports:run-scheduled')->dailyAt('04:30');

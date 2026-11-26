@@ -11,7 +11,7 @@ import type { NotificationPreference, Organization } from "@/lib/types";
 /**
  * Per-event-type notification channel toggles for the current
  * organization. Preferences are per member per organization, and the
- * API returns all ten event types with defaults (both channels on)
+ * API returns all thirteen event types with defaults (both channels on)
  * for types the member has never changed. Saving sends the whole
  * list back in one PUT.
  */

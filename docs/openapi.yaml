@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.3.0
+  version: 1.3.1
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -33,7 +33,11 @@ info:
     adds email intake: organization-specific inbound addresses,
     the HMAC-signed inbound webhook, attachment extraction,
     shipment reference extraction, automatic shipment matching,
-    and manual matching with processing history.
+    and manual matching with processing history. Version 1.3.1
+    adds advanced imports: saved CSV mappings, import history
+    with row-level error correction, scheduled imports, import
+    notifications, and synchronization workflows over stored
+    files.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -64,6 +68,7 @@ tags:
   - name: Billing
   - name: Support
   - name: EmailIntake
+  - name: Imports
 paths:
   /auth/register:
     post:
@@ -5137,6 +5142,604 @@ paths:
               schema:
                 $ref: "#/components/schemas/Message"
         "422": { $ref: "#/components/responses/ValidationError" }
+  /imports/mappings:
+    get:
+      tags: [Imports]
+      summary: Saved CSV mappings for the organization
+      description: >
+        Defaults first, then by name. Any member may list
+        mappings.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Saved mappings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportMapping"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Imports]
+      summary: Save a CSV mapping
+      description: >
+        Requires manage-imports (owner, admin, operations
+        manager, dispatcher). mapping is exact header text to
+        shipment field name; every field must be one a mapping
+        may target. Names are unique per organization. A new
+        default unsets the previous default for the target.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, mapping]
+              properties:
+                name: { type: string, maxLength: 100 }
+                target: { type: string, enum: [shipments], default: shipments }
+                mapping:
+                  type: object
+                  additionalProperties: { type: string }
+                is_default: { type: boolean, default: false }
+      responses:
+        "201":
+          description: Saved mapping
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportMapping"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /imports/mappings/{mapping}:
+    get:
+      tags: [Imports]
+      summary: One saved mapping
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: mapping
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Saved mapping
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportMapping"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Imports]
+      summary: Update a saved mapping
+      description: >
+        Requires manage-imports. A new default unsets the
+        previous default for the target.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: mapping
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                target: { type: string, enum: [shipments] }
+                mapping:
+                  type: object
+                  additionalProperties: { type: string }
+                is_default: { type: boolean }
+      responses:
+        "200":
+          description: Updated mapping
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportMapping"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Imports]
+      summary: Delete a saved mapping
+      description: >
+        Requires manage-imports. Runs, schedules, and sync runs
+        keep working: their mapping link is nulled.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: mapping
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Mapping deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/runs:
+    get:
+      tags: [Imports]
+      summary: Import history for the organization, newest first
+      description: >
+        Filter by status or source. Any member may list runs.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, running, completed, partial, failed] }
+        - name: source
+          in: query
+          schema: { type: string, enum: [upload, schedule, sync] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Import runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportRun"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/runs/{run}:
+    get:
+      tags: [Imports]
+      summary: One import run with its rows
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: run
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Import run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/ImportRun"
+                      - type: object
+                        properties:
+                          rows:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ImportRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/runs/{run}/rows:
+    get:
+      tags: [Imports]
+      summary: Rows of one import run, in file order
+      description: >
+        Filter by row status. Any member may list rows.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: run
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [imported, skipped, duplicate, failed, corrected] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Import rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportRow"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/runs/{run}/rows/{row}/correct:
+    post:
+      tags: [Imports]
+      summary: Correct one failed or duplicate row and retry it
+      description: >
+        Requires manage-imports. data is field values merged
+        over the stored row data, re-validated with the
+        importer's rules, with the reference re-checked against
+        the database. A valid row creates the shipment and
+        becomes corrected; the run counts refresh. A row that
+        already imported cannot be corrected (422). A
+        correction that still fails validation stores the new
+        values and errors (422).
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: run
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: row
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Corrected row
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /imports/schedules:
+    get:
+      tags: [Imports]
+      summary: Scheduled imports for the organization
+      description: >
+        Newest first. Any member may list schedules.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Imports]
+      summary: Create a scheduled import with its source file
+      description: >
+        Requires manage-imports. The file is stored on the
+        private disk and re-run with the saved mapping. No
+        live SFTP, URL, or provider source is involved.
+        Daily and weekly schedules advance next_run_at after
+        each run; manual schedules only run on demand. When
+        next_run_at is omitted, daily defaults to tomorrow
+        and weekly to next week.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, file]
+              properties:
+                name: { type: string, maxLength: 100 }
+                import_mapping_id: { type: string, format: uuid, nullable: true }
+                file: { type: string, format: binary }
+                frequency: { type: string, enum: [daily, weekly, manual], default: manual }
+                next_run_at: { type: string, format: date-time, nullable: true }
+                active: { type: boolean, default: true }
+      responses:
+        "201":
+          description: Created schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /imports/schedules/{schedule}:
+    get:
+      tags: [Imports]
+      summary: One scheduled import
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: schedule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Imports]
+      summary: Update a scheduled import
+      description: >
+        Requires manage-imports. A new source file replaces
+        the stored one. Setting the frequency to manual clears
+        next_run_at.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: schedule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                import_mapping_id: { type: string, format: uuid, nullable: true }
+                file: { type: string, format: binary }
+                frequency: { type: string, enum: [daily, weekly, manual] }
+                next_run_at: { type: string, format: date-time, nullable: true }
+                active: { type: boolean }
+      responses:
+        "200":
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Imports]
+      summary: Delete a scheduled import
+      description: >
+        Requires manage-imports. Deletes the stored source
+        file. Import runs the schedule produced stay in the
+        history.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: schedule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Schedule deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/schedules/{schedule}/run:
+    post:
+      tags: [Imports]
+      summary: Run a scheduled import now
+      description: >
+        Requires manage-imports. Runs the stored file with the
+        saved mapping and returns the import run. The schedule
+        advances its next run time and records the run.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: schedule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Import run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ImportRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/sync-runs:
+    get:
+      tags: [Imports]
+      summary: Synchronization workflows for the organization
+      description: >
+        Newest first. Any member may list sync workflows.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Sync workflows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Imports]
+      summary: Create a synchronization workflow with its source file
+      description: >
+        Requires manage-imports. The file is stored on the
+        private disk and imported with the saved mapping when
+        the workflow runs. No TMS or other external system is
+        involved; TMS integrations are v1.3.2.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, file]
+              properties:
+                name: { type: string, maxLength: 100 }
+                import_mapping_id: { type: string, format: uuid, nullable: true }
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Created sync workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /imports/sync-runs/{syncRun}:
+    get:
+      tags: [Imports]
+      summary: One synchronization workflow
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: syncRun
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Sync workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Imports]
+      summary: Delete a synchronization workflow
+      description: >
+        Requires manage-imports. Deletes the stored source
+        file. Import runs it produced stay in the history.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: syncRun
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Sync workflow deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/sync-runs/{syncRun}/run:
+    post:
+      tags: [Imports]
+      summary: Run a synchronization workflow now
+      description: >
+        Requires manage-imports. Moves the workflow through
+        running to completed or failed, and returns it with
+        the linked import run.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: syncRun
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Sync workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SyncRun"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /billing/webhooks:
     post:
       tags: [Billing]
@@ -6729,6 +7332,90 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InboundEmailAttachment"
+    ImportMapping:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        target: { type: string, enum: [shipments] }
+        mapping:
+          type: object
+          additionalProperties: { type: string }
+        is_default: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ImportRow:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        import_run_id: { type: string, format: uuid }
+        row_number: { type: integer }
+        status: { type: string, enum: [imported, skipped, duplicate, failed, corrected] }
+        data:
+          type: object
+          additionalProperties: true
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          nullable: true
+        shipment_id: { type: string, format: uuid, nullable: true }
+        corrected_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    ImportRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source: { type: string, enum: [upload, schedule, sync] }
+        status: { type: string, enum: [pending, running, completed, partial, failed] }
+        filename: { type: string, nullable: true }
+        import_mapping_id: { type: string, format: uuid, nullable: true }
+        import_schedule_id: { type: string, format: uuid, nullable: true }
+        sync_run_id: { type: string, format: uuid, nullable: true }
+        total_rows: { type: integer }
+        imported_rows: { type: integer }
+        skipped_rows: { type: integer }
+        duplicate_rows: { type: integer }
+        error_rows: { type: integer }
+        summary:
+          type: object
+          additionalProperties: { type: integer }
+          nullable: true
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    ImportSchedule:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        import_mapping_id: { type: string, format: uuid, nullable: true }
+        frequency: { type: string, enum: [daily, weekly, manual] }
+        next_run_at: { type: string, format: date-time, nullable: true }
+        last_run_at: { type: string, format: date-time, nullable: true }
+        last_import_run_id: { type: string, format: uuid, nullable: true }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SyncRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        import_mapping_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [pending, running, completed, failed] }
+        import_run_id: { type: string, format: uuid, nullable: true }
+        summary:
+          type: object
+          additionalProperties: { type: integer }
+          nullable: true
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     MonitoringCheck:
       type: object
       properties:

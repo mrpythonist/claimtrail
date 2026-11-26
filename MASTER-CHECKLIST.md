@@ -509,13 +509,15 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.3.1 — Advanced Imports
 
-- [ ] Saved CSV mappings.
-- [ ] Scheduled imports.
-- [ ] Duplicate detection.
-- [ ] Import history.
-- [ ] Error correction.
-- [ ] Import notifications.
-- [ ] Synchronization workflows.
+> Verified 2026-11-26 (daily build run): backend 511 passed (2723 assertions), frontend 354 passed, `npm run build` succeeds (63/63 pages, incl. /imports, /imports/mappings, /imports/runs/[id]), `tsc --noEmit` clean, lint clean of new findings (the two remaining findings are pre-existing from v1.2.2), fresh-DB `migrate:fresh` passes (1 new migration, 5 new tables), live HTTP smoke test over the built-in server passed 57/57 backend steps + 3/3 CLI checks on a fresh SQLite DB (mapping save/apply with a saved mapping, duplicate detection on re-import, history filters, row-level error correction with run-count refresh and status flip to completed, schedule definition plus manual run, CLI `imports:run-scheduled` picking up a due daily schedule, sync workflow states, import notifications to a second member, cross-tenant 404s, plus a regression pass of plans, register, org, ops health version 1.3.1, trial start, and invitation accept). OpenAPI 148 paths, verified to match the 148 live `api/v1` route URIs exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live import source is wired (schedules and sync workflows re-import stored files only; see docs/IMPORTS.md).
+
+- [x] Saved CSV mappings.
+- [x] Scheduled imports.
+- [x] Duplicate detection.
+- [x] Import history.
+- [x] Error correction.
+- [x] Import notifications.
+- [x] Synchronization workflows.
 
 ### v1.3.2 — TMS Integrations
 
