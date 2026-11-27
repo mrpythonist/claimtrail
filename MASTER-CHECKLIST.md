@@ -564,15 +564,17 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.5.1 — Advanced Analytics
 
-- [ ] Recovery rate analytics.
-- [ ] Rejection rate analytics.
-- [ ] Average submission time.
-- [ ] Average payment time.
-- [ ] Broker performance.
-- [ ] Carrier performance.
-- [ ] Event-type performance.
-- [ ] Monthly/yearly comparisons.
-- [ ] Advanced charts and exports.
+> Verified 2026-11-27 (daily build run): backend 617 passed (3460 assertions; 604 warnings are the standing phpdotenv missing-.env noise, 13 passed cleanly), frontend 420 passed (57 files), `npm run build` succeeds (75/75 pages, incl. /analytics, /analytics/brokers, /analytics/carriers, and /analytics/event-types), live HTTP smoke test over the built-in server passed 99/99 backend steps + 2/2 CLI checks on a fresh SQLite DB (plans, register, org, ops health version 1.5.1, Free-plan analytics refused 402, trial, dispatcher + viewer invites, carrier + 5 shipments across Alpha Brokers / Beta Freight, 5 claims: detention paid 300 on requested 400 approved 300, layover rejected on requested 100, tonu accepted 200 unpaid, lumper draft 50, detention paid 100 last month; overview counts 5 claims 4 submitted 2 paid 1 rejected 1 accepted with recovery 50 vs requested and 66.67 vs approved, rejection 25, money requested 800 approved 600 paid 400 outstanding 200, averages submission 1.75 days (n=4) and payment 3.5 days (n=2); month overview with period comparison against the previous window, change claims +3 submitted +2 paid 0 rejected +1, requested +600 paid +200, recovery -57.14pp rejection +33.33pp; broker table Alpha 3 claims recovery 66.67 and Beta 2 claims recovery 0; carrier table Acme Carriers matching Alpha and No carrier assigned matching Beta; event-type table all 7 categories with detention recovery 80, layover rejection 100, lumper draft-only with null rates, and zero rows for additional_stop / additional_miles / other; monthly series 1 point for the month and 13 points by default with the previous month at recovery 100 and an empty month at null; yearly series 3 years with the current year at recovery 50; viewer and dispatcher can read, viewer cannot export 403; validation refusals for a bad date, to before from, and an unknown export type; missing organization header refused 400; brokers/overview/monthly CSV exports with the right headers and rows; cross-tenant isolation with the other org seeing only its own empty analytics and the owner refused 404 under an org they do not belong to; CLI `reconciliation:run` regression generating the month report then skipping on a second run). The smoke caught one real defect and it was fixed before verification: `ClaimAnalyticsService::ratePercent` truncated repeating decimals at four places (400/600 read 66.66), now rounds at six-decimal precision (66.67), with a unit test pinning the corrected rounding. OpenAPI 181 paths / 240 operations, verified to match the 240 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live payment verification is possible — analytics only compute from the organization's own recorded claims, payments, and reconciliation data; billing runs on a mock provider.
+
+- [x] Recovery rate analytics.
+- [x] Rejection rate analytics.
+- [x] Average submission time.
+- [x] Average payment time.
+- [x] Broker performance.
+- [x] Carrier performance.
+- [x] Event-type performance.
+- [x] Monthly/yearly comparisons.
+- [x] Advanced charts and exports.
 
 ### v1.5.2 — Operational Intelligence
 

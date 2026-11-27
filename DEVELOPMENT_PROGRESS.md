@@ -6,37 +6,34 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.3.3 (Phase 4, Communication
-  Integrations). App version is now **1.3.3**. Phase 4 is complete
-  (v1.3.0 Email Intake, v1.3.1 Advanced Imports, v1.3.2 TMS
-  Integrations, v1.3.3 Communication Integrations). Phase 3 is
-  complete (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0,
-  v0.5.0, v0.6.0 done; v0.2.0 interviews deferred, still open).
-  Phase 5 starts next (v1.5.0 Financial Reconciliation). What
-  remains before real customers is Aqib's launch decision: open
-  signups vs closed pilot first (pilot prep is ready, no pilot
-  customer recruited), plus the person-only items in
-  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
-  Stripe, real mailer, hosting, domain).
+- **Last completed version:** v1.5.0 (Phase 5, Financial
+  Reconciliation). App version is now **1.5.0**. Phase 5 is underway
+  (v1.5.0 done; v1.5.1 Advanced Analytics and v1.5.2 Operational
+  Intelligence next). Phase 4 is complete (v1.3.0, v1.3.1, v1.3.2,
+  v1.3.3). Phase 3 is complete (v1.2.3). Phase 0 is complete
+  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
+  deferred, still open). What remains before real customers is
+  Aqib's launch decision: open signups vs closed pilot first
+  (pilot prep is ready, no pilot customer recruited), plus the
+  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
+  (lawyer review, real Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `e97591f2` (v1.3.3, pushed 2026-11-27 ~14:42 PKT after Aqib's
-  yes + approval card). 52 files in the v1.3.3 commit, read-back verified
+  head `01dc5698` (v1.5.0, pushed 2026-11-27 ~15:52 PKT after Aqib's
+  yes + approval card). 36 files in the v1.5.0 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.3.3:** 579 backend (3138 assertions) + 386 frontend, all
-  passing. `npm run build` succeeds (68/68 pages). Live HTTP smoke test:
-  90/90 backend steps + 6/6 CLI checks on a fresh SQLite DB (see the
-  2026-11-27 v1.3.3 log entry; the builder's report said 7/7 CLI
-  checks, but the smoke script has 6 CLI checks and all 6 passed).
-  OpenAPI 167 paths, verified to match the 224 live `api/v1` route
-  operations exactly.
+- **Tests at v1.5.0:** 596 backend (3336 assertions) + 404 frontend, all
+  passing. `npm run build` succeeds (71/71 pages). Live HTTP smoke test:
+  78/78 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
+  2026-11-27 v1.5.0 log entry). OpenAPI 174 paths, verified to match
+  the 233 live `api/v1` route operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.5.0 — Financial Reconciliation** (MASTER-CHECKLIST.md, Phase 5) is
-the next build. **Status 2026-11-27: v1.3.3 PUSHED, head `e97591f2`.**
+**v1.5.1 — Advanced Analytics** (MASTER-CHECKLIST.md, Phase 5) is
+the next build. **Status 2026-11-27: v1.5.0 PUSHED, head `01dc5698`.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -108,6 +105,172 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v1.5.1 Advanced Analytics built and verified (Phase 5 continues)
+
+- Gate check passed first: remote head on GitHub is `01dc5698`,
+  matching the recorded v1.5.0 head, and no other builder was
+  running. Build started 2026-11-27 ~15:54 PKT on Aqib's "Start
+  now v1.5.1" in the main chat (subagent). Phase 5 continues.
+- Spec: MASTER-CHECKLIST.md v1.5.1 (9 items). All nine verified
+  and checked.
+- Backend (new): `app/Services/ClaimAnalyticsService.php`
+  (overview, brokers, carriers, eventTypes, monthly, yearly,
+  periodComparison, exportRows; the submitted population is
+  claims whose current status is submitted, accepted,
+  partially accepted, rejected, or paid; money summed as
+  recorded with no currency conversion, exact decimal math
+  with bcadd/bcsub/bccomp; rates null on a zero denominator;
+  averages carry their sample size; monthly buckets cover
+  every month in the range, yearly defaults to the last three
+  years; CSV export rows per type, with the overview export
+  carrying the summary metrics then the monthly series);
+  `app/Http/Controllers/Api/V1/AnalyticsController.php`
+  (overview, brokers, carriers, eventTypes, monthly, yearly,
+  export as a streamed CSV download; reads need
+  `view-analytics` plus the reports plan gate, exports need
+  `export-reports`; `from`/`to` validated as dates with `to`
+  on or after `from`). No new migration, no new console
+  command, no new notification types: analytics reads what
+  the app already recorded.
+- Backend edits: `Permission::ViewAnalytics`
+  ('view-analytics'); `config/permissions.php` adds it to
+  Admin, OperationsManager, Dispatcher, BillingStaff, Viewer
+  (5 places; Owner gets all); `config/app.php` version
+  1.5.1; `routes/api.php` 7 new routes under `/analytics/*`
+  (GET overview, brokers, carriers, event-types, monthly,
+  yearly, export). Gates are auto-defined per permission
+  case in AppServiceProvider, so no extra wiring was needed.
+  Pre-existing tests updated for the version bump:
+  HealthCheckTest version 1.5.0 to 1.5.1.
+- **Real defects found by verification, fixed during the
+  build:** the live smoke caught one real product defect —
+  `ClaimAnalyticsService::ratePercent` divided at four
+  decimal places with `bcdiv`, which truncates, so 400/600
+  read 66.66% instead of 66.67% and 300/700 read 42.85%
+  instead of 42.86%. The division now runs at six decimals
+  so the final round to two is a real round, and a unit test
+  pins the corrected rounding (400/600 is 66.67, 300/700 is
+  42.86). Two doc corrections during the build: the
+  `ClaimCategory` enum is detention, layover, tonu, lumper,
+  additional_stop, additional_miles, other — the
+  ADVANCED-ANALYTICS.md draft and the OpenAPI enum had
+  listed accessorial and fuel_surcharge, which do not exist,
+  and were corrected; and the average payment time is
+  `paid_at` minus `approved_at` where one exists, otherwise
+  `paid_at` minus `submitted_at` — the doc draft had said
+  `submitted_at` only, and was corrected to match the
+  service. The frontend overview page had one unused import
+  removed and a comparison label corrected (it named the
+  current window instead of the preceding one); three page
+  tests were fixed to use regex/getAllByText matchers where
+  the same text appears twice on the page. None of these
+  were product-behaviour changes except the rounding fix.
+- Frontend (new): `AnalyticsOverview` / `AnalyticsBrokerRow`
+  / `AnalyticsCarrierRow` / `AnalyticsEventTypeRow` /
+  `AnalyticsMonthlyPoint` / `AnalyticsYearlyPoint` /
+  `AnalyticsAverage` / `AnalyticsComparison` /
+  `AnalyticsPeriodTotals` types; `src/lib/claim-analytics.ts`
+  typed client (getAnalyticsOverview, listBrokerPerformance,
+  listCarrierPerformance, listEventTypePerformance,
+  getMonthlySeries, getYearlySeries, exportAnalytics with a
+  dated CSV filename, formatAnalyticsRate,
+  formatAnalyticsAverage, analyticsRangeQuery);
+  `canViewAnalytics` in `src/lib/permissions.ts`
+  (owner/admin/operations_manager/dispatcher/billing_staff/
+  viewer); pages `/analytics` (recovery and rejection rates,
+  money, averages with sample sizes, period comparison,
+  monthly bars and table, yearly bars, overview and monthly
+  CSV exports), `/analytics/brokers`, `/analytics/carriers`,
+  and `/analytics/event-types` (performance tables with CSV
+  export); AppShell nav entry "Analytics" in the Insights
+  section; version strings bumped to 1.5.1 (AppShell,
+  MarketingLayout). Charts reuse the existing `CountBar` CSS
+  bar component; no chart library was added. Build 75/75
+  pages (71 at v1.5.0 + 4 new).
+- Docs: new `docs/ADVANCED-ANALYTICS.md` (metric
+  definitions, the submitted population, the honest limits:
+  no external benchmark, no industry data, no live payment
+  verification, money summed as recorded with no currency
+  conversion, averages labelled with their sample size, the
+  submission and payment clocks use the recorded timestamps);
+  Advanced Analytics section in `docs/API.md`; OpenAPI 174
+  -> **181 paths / 240 operations** (7 new paths) with the
+  `Analytics` tag and `AnalyticsOverview` /
+  `AnalyticsBrokerRow` / `AnalyticsCarrierRow` /
+  `AnalyticsEventTypeRow` / `AnalyticsMonthlyPoint` /
+  `AnalyticsYearlyPoint` / `AnalyticsAverage` /
+  `AnalyticsComparison` / `AnalyticsPeriodTotals` /
+  `AnalyticsMoneyByCurrency` / `AnalyticsPerformanceRow`
+  schemas (the info version was also bumped 1.3.3 to 1.5.1
+  and the description now covers 1.3.3, 1.5.0, and 1.5.1,
+  which earlier versions had left behind);
+  `CHANGELOG.md` [1.5.1] entry.
+- Verification (all run by the builder): backend **617
+  passed (3460 assertions)** (596 at v1.5.0 + 14 new feature
+  + 7 new unit), frontend **420 passed** across 57 files
+  (404 + 16 new), `npm run build` succeeds (75/75 pages).
+  Live HTTP smoke test over the built-in server on a fresh
+  SQLite DB passed **99/99 backend steps + 2/2 CLI checks**:
+  plans, register, org, ops health version 1.5.1, Free-plan
+  analytics refused 402, trial, dispatcher + viewer invites,
+  carrier + 5 shipments across Alpha Brokers / Beta Freight,
+  5 claims (detention paid 300 on requested 400 approved
+  300, layover rejected on requested 100, tonu accepted 200
+  unpaid, lumper draft 50, detention paid 100 last month),
+  overview counts 5 claims 4 submitted 2 paid 1 rejected 1
+  accepted with recovery 50 vs requested and 66.67 vs
+  approved, rejection 25, money requested 800 approved 600
+  paid 400 outstanding 200, averages submission 1.75 days
+  (n=4) and payment 3.5 days (n=2), money by currency one
+  USD row, month overview with the period comparison against
+  the previous window (one claim paid in full), change claims
+  +3 submitted +2 paid 0 rejected +1, requested +600 paid
+  +200, recovery -57.14pp rejection +33.33pp, broker table
+  Alpha 3 claims recovery 66.67 and Beta 2 claims recovery 0
+  with submitted-only money, carrier table Acme Carriers
+  matching Alpha and No carrier assigned matching Beta,
+  event-type table all 7 categories with detention recovery
+  80, layover rejection 100, lumper draft-only with null
+  rates, and zero rows for additional_stop / additional_miles
+  / other, monthly series 1 point for the month and 13
+  points by default with the previous month at recovery 100
+  and an empty month at null, yearly series 3 years with the
+  current year at recovery 50, viewer and dispatcher can
+  read, viewer cannot export 403, validation refusals for a
+  bad date, to before from, and an unknown export type,
+  missing organization header refused 400, brokers/overview/
+  monthly CSV exports with the right headers and rows,
+  cross-tenant isolation with the other org seeing only its
+  own empty analytics and the owner refused 404 under an org
+  they do not belong to, CLI `reconciliation:run` regression
+  generating the month report then skipping on a second run.
+  OpenAPI 181 paths / 240 operations, verified to match the
+  240 live `api/v1` route operations exactly.
+- Still unverified (standing blockers, unchanged): browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+  v1.5.1-specific notes: **no live payment verification
+  was possible** — analytics only compute from the
+  organization's own recorded claims, payments, and
+  reconciliation data; billing runs on a mock provider and
+  no payment is verified against a bank, Stripe, or any
+  processor. The submission channel (sending a claim
+  package to a broker) is still missing.
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build). The `frontend/AGENTS.md` notice about Next.js
+  agent rules was read; the new pages follow the existing
+  v1.5.0 page patterns in the same codebase, which build
+  cleanly under this Next.js version.
+- Delta computed against remote head `01dc5698`: 14 changed +
+  15 new = 29 files, 920,513 bytes. Manifest at
+  `~/workspace/claimtrail-v151-paths.txt`. Smoke scripts at
+  `~/workspace/claimtrail-scratch-v151/smoke/` (smoke-v151.py,
+  run-smoke.sh, diff-routes.py); delta script at
+  `~/workspace/claimtrail-scratch-v151/compute-delta.py`.
+- Push status: for the main agent (not pushed by this build).
 
 ### 2026-11-27 — v1.5.0 Financial Reconciliation built and verified (Phase 5 begins)
 
@@ -257,13 +420,23 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   v1.3.3 page patterns in the same codebase, which build
   cleanly under this Next.js version.
 - Delta computed against remote head `e97591f2`: 18 changed +
-  18 new = 36 files, 892,550 bytes. Manifest at
+  18 new = 36 files, 903,048 bytes (the builder's entry said
+  892,550; that figure predated the final log-entry and checklist
+  edits, and the main agent's recomputation plus the push-time
+  read-back both give 903,048). Manifest at
   `~/workspace/claimtrail-v150-paths.txt`. Smoke scripts at
   `~/workspace/claimtrail-scratch-v150/smoke/` (smoke-v150.py,
   run-smoke.sh, diff-routes.py); delta script at
   `~/workspace/claimtrail-scratch-v150/compute-delta.py`.
-  (Push status and the checkpoint header are for the main
-  agent: not pushed yet.)
+- Push status: **PUSHED 2026-11-27 ~15:52 PKT, head `01dc5698`**
+  (36 files, read-back verified: branch head, commit message, file
+  list, and all 36 blob SHAs match the manifest exactly; 18
+  changed + 18 new vs the old head, remote tree 647 to 665 files).
+  Delta recomputed by the main agent before the push and identical
+  to the builder's manifest. This push also brings the remote
+  `DEVELOPMENT_PROGRESS.md` and `MASTER-CHECKLIST.md` current
+  with the v1.3.3 post-push updates (checkpoint header, push
+  status, 6/6 CLI correction).
 
 ### 2026-11-27 — v1.3.3 Communication Integrations built and verified (Phase 4 continues)
 

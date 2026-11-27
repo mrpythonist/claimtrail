@@ -1526,3 +1526,147 @@ export interface ReconciliationReport {
   generated_at: string;
   created_at: string;
 }
+
+/** An average in days with its sample size (v1.5.1). A null days value means there was nothing to average. */
+export interface AnalyticsAverage {
+  days: number | null;
+  sample_size: number;
+}
+
+/** Rates for a set of claims (v1.5.1). A null rate means its denominator was zero. */
+export interface AnalyticsRates {
+  recovery_rate_vs_requested: number | null;
+  recovery_rate_vs_approved: number | null;
+  rejection_rate: number | null;
+}
+
+/** Money totals as recorded, with no currency conversion (v1.5.1). */
+export interface AnalyticsMoney {
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+}
+
+/** Totals and rates for one window, for the period comparison (v1.5.1). */
+export interface AnalyticsWindow {
+  claims: number;
+  submitted: number;
+  paid: number;
+  rejected: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  recovery_rate_vs_requested: number | null;
+  recovery_rate_vs_approved: number | null;
+  rejection_rate: number | null;
+}
+
+/** The requested range against the preceding equal-length window (v1.5.1). Rate changes are in percentage points. */
+export interface AnalyticsComparison {
+  from: string;
+  to: string;
+  previous_from: string;
+  previous_to: string;
+  current: AnalyticsWindow;
+  previous: AnalyticsWindow;
+  change: {
+    claims: number;
+    submitted: number;
+    paid: number;
+    rejected: number;
+    requested_amount: string;
+    paid_amount: string;
+    recovery_rate_vs_requested_pp: number | null;
+    rejection_rate_pp: number | null;
+  };
+}
+
+/** The analytics overview from GET /analytics/overview (v1.5.1). */
+export interface AnalyticsOverview {
+  organization_id: string;
+  from: string;
+  to: string;
+  currencies: string[];
+  counts: {
+    claims: number;
+    submitted: number;
+    paid: number;
+    rejected: number;
+    accepted: number;
+  };
+  rates: AnalyticsRates;
+  money: AnalyticsMoney;
+  money_by_currency: (AnalyticsMoney & { currency: string })[];
+  average_submission_days: AnalyticsAverage;
+  average_payment_days: AnalyticsAverage;
+  comparison: AnalyticsComparison;
+}
+
+/** One row of group performance (v1.5.1). */
+export interface AnalyticsPerformanceRow {
+  claims: number;
+  submitted: number;
+  paid: number;
+  rejected: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  currencies: string[];
+  recovery_rate_vs_requested: number | null;
+  rejection_rate: number | null;
+  average_payment_days: AnalyticsAverage;
+}
+
+/** One broker row from GET /analytics/brokers (v1.5.1). */
+export interface AnalyticsBrokerRow extends AnalyticsPerformanceRow {
+  broker: string;
+}
+
+/** One carrier row from GET /analytics/carriers (v1.5.1). */
+export interface AnalyticsCarrierRow extends AnalyticsPerformanceRow {
+  carrier_id: string | null;
+  carrier: string;
+}
+
+/** One event-type row from GET /analytics/event-types (v1.5.1). */
+export interface AnalyticsEventTypeRow extends AnalyticsPerformanceRow {
+  category: string;
+  category_label: string;
+}
+
+/** One monthly series point from GET /analytics/monthly (v1.5.1). */
+export interface AnalyticsMonthlyPoint {
+  month: string;
+  claims_created: number;
+  submitted: number;
+  paid: number;
+  rejected: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  recovery_rate_vs_requested: number | null;
+}
+
+/** One yearly series point from GET /analytics/yearly (v1.5.1). */
+export interface AnalyticsYearlyPoint {
+  year: string;
+  claims_created: number;
+  submitted: number;
+  paid: number;
+  rejected: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  recovery_rate_vs_requested: number | null;
+}
+
+/** Export types for GET /analytics/export (v1.5.1). */
+export type AnalyticsExportType =
+  | "overview"
+  | "brokers"
+  | "carriers"
+  | "event-types"
+  | "monthly";

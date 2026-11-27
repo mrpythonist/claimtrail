@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.3.3
+  version: 1.5.1
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -40,7 +40,15 @@ info:
     files. Version 1.3.2 adds TMS integrations: a generic
     provider adapter with a mock provider and Trimble
     TMW.Suite modelled schema-only, integration settings,
-    connection tests, syncs, and sync monitoring.
+    connection tests, syncs, and sync monitoring. Version 1.3.3
+    adds communication integrations: Slack and Teams channels,
+    driver evidence submission links, and email workflows.
+    Version 1.5.0 adds financial reconciliation: the claim
+    payment ledger, outstanding balances, and reconciliation
+    reports. Version 1.5.1 adds advanced analytics: recovery
+    and rejection rates, average submission and payment times,
+    broker, carrier, and event-type performance, monthly and
+    yearly comparisons, and CSV exports.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -75,6 +83,7 @@ tags:
   - name: TMS
   - name: Communications
   - name: Reconciliation
+  - name: Analytics
 paths:
   /auth/register:
     post:
@@ -6910,6 +6919,230 @@ paths:
                   data:
                     $ref: "#/components/schemas/ReconciliationReport"
         "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: Analytics overview
+      description: >-
+        Totals, recovery and rejection rates, average
+        submission and payment times, and a comparison with
+        the preceding window of the same length, over claims
+        created in the range. Rates use the submitted
+        population; claims still being prepared never enter a
+        denominator. Query: from, to (dates, default last 12
+        months). Requires view-analytics; Free plan refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AnalyticsOverview"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/brokers:
+    get:
+      tags: [Analytics]
+      summary: Broker performance
+      description: >-
+        One row per broker or customer name on the claims'
+        shipments, most claims first, with counts, money,
+        rates, and average payment time. Shipments with no
+        broker name group under "Unknown broker". Query:
+        from, to (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Broker performance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalyticsBrokerRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/carriers:
+    get:
+      tags: [Analytics]
+      summary: Carrier performance
+      description: >-
+        One row per carrier on the claims' shipments, most
+        claims first, same columns as broker performance.
+        Shipments with no carrier group under "No carrier
+        assigned". Query: from, to (dates, default last 12
+        months). Requires view-analytics; Free plan refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Carrier performance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalyticsCarrierRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/event-types:
+    get:
+      tags: [Analytics]
+      summary: Event-type performance
+      description: >-
+        One row per claim category, including categories with
+        no claims in the range, same columns as broker
+        performance. Query: from, to (dates, default last 12
+        months). Requires view-analytics; Free plan refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Event-type performance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalyticsEventTypeRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/monthly:
+    get:
+      tags: [Analytics]
+      summary: Monthly series
+      description: >-
+        One point per calendar month in the range, with
+        counts, money, and the recovery rate vs requested.
+        Months are keyed by the claim's created_at. Query:
+        from, to (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Monthly series
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalyticsMonthlyPoint"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/yearly:
+    get:
+      tags: [Analytics]
+      summary: Yearly series
+      description: >-
+        One point per calendar year in the range, same fields
+        as the monthly series. Query: from, to (dates,
+        default last 12 months). Requires view-analytics;
+        Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Yearly series
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnalyticsYearlyPoint"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/export:
+    get:
+      tags: [Analytics]
+      summary: Export analytics CSV
+      description: >-
+        CSV download of the overview, a performance table, or
+        the monthly series. Query: type (overview, brokers,
+        carriers, event-types, monthly), from, to (dates,
+        default last 12 months). Requires export-reports;
+        Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: type
+          in: query
+          required: true
+          schema: { type: string, enum: [overview, brokers, carriers, event-types, monthly] }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Analytics CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -8767,6 +9000,160 @@ components:
         generated_by: { type: string, format: uuid, nullable: true }
         generated_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
+    AnalyticsAverage:
+      type: object
+      properties:
+        days: { type: number, nullable: true, description: Mean days, two decimals; null when the sample is empty. }
+        sample_size: { type: integer, description: Number of claims the average was computed over. }
+    AnalyticsMoneyByCurrency:
+      type: object
+      properties:
+        currency: { type: string }
+        requested_amount: { type: string, description: Decimal string, two places. }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+    AnalyticsPeriodTotals:
+      type: object
+      properties:
+        claims: { type: integer }
+        submitted: { type: integer }
+        paid: { type: integer }
+        rejected: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+        recovery_rate_vs_requested: { type: number, nullable: true, description: Percent, two decimals; null when the submitted population is empty. }
+        recovery_rate_vs_approved: { type: number, nullable: true }
+        rejection_rate: { type: number, nullable: true }
+    AnalyticsComparison:
+      type: object
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        previous_from: { type: string, format: date }
+        previous_to: { type: string, format: date }
+        current:
+          $ref: "#/components/schemas/AnalyticsPeriodTotals"
+        previous:
+          $ref: "#/components/schemas/AnalyticsPeriodTotals"
+        change:
+          type: object
+          properties:
+            claims: { type: integer }
+            submitted: { type: integer }
+            paid: { type: integer }
+            rejected: { type: integer }
+            requested_amount: { type: string }
+            paid_amount: { type: string }
+            recovery_rate_vs_requested_pp: { type: number, nullable: true, description: Change in percentage points; null when either side has no submitted claims. }
+            rejection_rate_pp: { type: number, nullable: true }
+    AnalyticsOverview:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        currencies:
+          type: array
+          items: { type: string }
+        counts:
+          type: object
+          properties:
+            claims: { type: integer }
+            submitted: { type: integer }
+            paid: { type: integer }
+            rejected: { type: integer }
+            accepted: { type: integer }
+        rates:
+          type: object
+          properties:
+            recovery_rate_vs_requested: { type: number, nullable: true }
+            recovery_rate_vs_approved: { type: number, nullable: true }
+            rejection_rate: { type: number, nullable: true }
+        money:
+          type: object
+          properties:
+            requested_amount: { type: string }
+            approved_amount: { type: string }
+            paid_amount: { type: string }
+            outstanding_amount: { type: string }
+        money_by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsMoneyByCurrency"
+        average_submission_days:
+          $ref: "#/components/schemas/AnalyticsAverage"
+        average_payment_days:
+          $ref: "#/components/schemas/AnalyticsAverage"
+        comparison:
+          $ref: "#/components/schemas/AnalyticsComparison"
+    AnalyticsPerformanceRow:
+      type: object
+      properties:
+        claims: { type: integer }
+        submitted: { type: integer }
+        paid: { type: integer }
+        rejected: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+        currencies:
+          type: array
+          items: { type: string }
+        recovery_rate_vs_requested: { type: number, nullable: true }
+        rejection_rate: { type: number, nullable: true }
+        average_payment_days:
+          $ref: "#/components/schemas/AnalyticsAverage"
+    AnalyticsBrokerRow:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/AnalyticsPerformanceRow"
+        - type: object
+          properties:
+            broker: { type: string }
+    AnalyticsCarrierRow:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/AnalyticsPerformanceRow"
+        - type: object
+          properties:
+            carrier_id: { type: string, format: uuid, nullable: true }
+            carrier: { type: string }
+    AnalyticsEventTypeRow:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/AnalyticsPerformanceRow"
+        - type: object
+          properties:
+            category: { type: string, enum: [detention, layover, tonu, lumper, additional_stop, additional_miles, other] }
+            category_label: { type: string }
+    AnalyticsMonthlyPoint:
+      type: object
+      properties:
+        month: { type: string, description: "YYYY-MM, keyed by the claim's created_at." }
+        claims_created: { type: integer }
+        submitted: { type: integer }
+        paid: { type: integer }
+        rejected: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        recovery_rate_vs_requested: { type: number, nullable: true }
+    AnalyticsYearlyPoint:
+      type: object
+      properties:
+        year: { type: string, description: "YYYY, keyed by the claim's created_at." }
+        claims_created: { type: integer }
+        submitted: { type: integer }
+        paid: { type: integer }
+        rejected: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        recovery_rate_vs_requested: { type: number, nullable: true }
     MonitoringCheck:
       type: object
       properties:

@@ -60,6 +60,7 @@ return [
         Permission::ManageDeadlines->value,
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
+        Permission::ViewAnalytics->value,
         Permission::ExportReports->value,
         Permission::ViewAuditLogs->value,
         Permission::ViewOperations->value,
@@ -102,6 +103,7 @@ return [
         Permission::ManageDeadlines->value,
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
+        Permission::ViewAnalytics->value,
         Permission::ExportReports->value,
         Permission::ViewAuditLogs->value,
         Permission::ManageCustomization->value,
@@ -130,6 +132,7 @@ return [
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
+        Permission::ViewAnalytics->value,
     ],
 
     OrganizationRole::BillingStaff->value => [
@@ -151,6 +154,7 @@ return [
         Permission::ManageDeadlines->value,
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
+        Permission::ViewAnalytics->value,
         Permission::ExportReports->value,
         Permission::ManageBilling->value,
     ],
@@ -163,5 +167,6 @@ return [
         Permission::ViewClaims->value,
         Permission::ViewDeadlines->value,
         Permission::ViewReports->value,
+        Permission::ViewAnalytics->value,
     ],
 ];

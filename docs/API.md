@@ -689,7 +689,6 @@ record a well-formed payload without sending it.
 | POST | `/driver-evidence/{token}/submit` | Public, token in URL | Submit evidence through a link (multipart: `document_category`, `file` max 20 MB, optional `driver_name`, `notes`). The file is verified by checksum and size before it is accepted. A single-use link stops working after this submit. Throttled. |
 
 ### Financial Reconciliation (v1.5.0)
-
 The claim payment ledger: what the organization says it
 received, per claim, with outstanding balances and
 reconciliation reports. See docs/FINANCIAL-RECONCILIATION.md
@@ -711,6 +710,34 @@ due.
 | GET | `/reconciliation/reports` | Yes + org header | Generated reports, newest first. Any member may list. |
 | POST | `/reconciliation/reports` | Yes + org header | Generate a report for a period (both dates default to the current month). Requires `manage-reconciliation`. |
 | GET | `/reconciliation/reports/{report}` | Yes + org header | One generated report. Any member may read. |
+
+### Advanced Analytics (v1.5.1)
+
+Read-only analytics computed from the organization's own
+recorded claims, shipments, and payments. See
+docs/ADVANCED-ANALYTICS.md for the metric definitions and
+the honest limits (no external benchmark, no live payment
+verification, money summed as recorded with no currency
+conversion, averages labelled with their sample size).
+Rates use the submitted population: claims whose current
+status reached submission (`submitted`, `accepted`,
+`partially_accepted`, `rejected`, `paid`); claims still
+being prepared never enter a denominator. All endpoints take
+optional `from` and `to` dates (`YYYY-MM-DD`); without them
+the range is the last 12 months. Reading needs
+`view-analytics` (owner, admin, operations manager,
+dispatcher, billing staff, viewer); Free-plan organizations
+are refused with 402. CSV exports need `export-reports`.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/analytics/overview` | Yes + org header | Totals, recovery and rejection rates, average submission and payment times, and a comparison with the preceding window of the same length. Requires `view-analytics`. |
+| GET | `/analytics/brokers` | Yes + org header | One row per broker or customer name on the claims' shipments, most claims first, with counts, money, rates, and average payment time. Requires `view-analytics`. |
+| GET | `/analytics/carriers` | Yes + org header | One row per carrier, most claims first, same columns as brokers. Shipments with no carrier group under "No carrier assigned". Requires `view-analytics`. |
+| GET | `/analytics/event-types` | Yes + org header | One row per claim category, including categories with no claims in the range, same columns as brokers. Requires `view-analytics`. |
+| GET | `/analytics/monthly` | Yes + org header | One point per calendar month in the range, with counts, money, and the recovery rate vs requested. Requires `view-analytics`. |
+| GET | `/analytics/yearly` | Yes + org header | One point per calendar year, same fields as monthly. Requires `view-analytics`. |
+| GET | `/analytics/export?type=overview\|brokers\|carriers\|event-types\|monthly` | Yes + org header | CSV download of the matching table or series. Requires `export-reports`. |
 
 ## Example: register, create an organization, invite someone
 

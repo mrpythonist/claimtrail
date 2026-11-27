@@ -3,6 +3,69 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.5.1] - 2026-11-27
+
+Phase 5, Advanced Analytics: recovery and rejection rates,
+average submission and payment times, broker, carrier, and
+event-type performance, monthly and yearly comparisons, and
+CSV exports, all computed from the organization's own
+recorded claims, shipments, and payments. There is no
+external benchmark, no industry data, and no live payment
+verification: billing runs on a mock provider, so a paid
+claim means the organization recorded the money as received,
+not that a bank or processor confirmed it. Rates use the
+submitted population only, money is summed as recorded with
+no currency conversion, and every average carries its sample
+size. App version bumped to 1.5.1; OpenAPI at 181 paths
+(174 + 7 new paths, 240 operations).
+
+### Added
+
+- Analytics service `App\\Services\\ClaimAnalyticsService`
+  with one definition per metric, enforced in one place:
+  recovery vs requested is paid over requested across the
+  submitted population, recovery vs approved is paid over
+  approved across the submitted claims that have an accepted
+  amount, rejection is rejected over submitted, average
+  submission time is `submitted_at` minus `created_at`, and
+  average payment time is `paid_at` minus `approved_at`
+  where one exists, otherwise `paid_at` minus
+  `submitted_at`. Rates are null when their denominator is
+  zero, never zero dressed up as a measurement. Rates round
+  to two decimals at six-decimal precision (400/600 is
+  66.67, not 66.66); the live smoke caught the truncation
+  and the service was fixed, with a unit test pinning the
+  corrected rounding.
+- Endpoints `GET /analytics/overview`, `/brokers`,
+  `/carriers`, `/event-types`, `/monthly`, `/yearly`, and
+  `GET /analytics/export?type=overview|brokers|carriers|
+  event-types|monthly` (CSV only, no PDF or Excel). The
+  overview adds a period comparison against the immediately
+  preceding window of equal length, with changes in
+  percentage points. The monthly series covers every month
+  in the range, the yearly series defaults to the last three
+  years, and the event-type table lists all seven categories
+  including empty ones. All take optional `from` and `to`
+  dates and default to the last 12 months.
+- Permission `view-analytics` (owner, admin, operations
+  manager, dispatcher, billing staff, viewer) for reading
+  analytics; exports need the existing `export-reports`.
+  Free-plan organizations are refused with 402, the same as
+  reports. No new notification types and no new console
+  commands: analytics reads what the app already recorded.
+- Frontend: `/analytics` (rates, averages, period
+  comparison, monthly table and bars, yearly bars, CSV
+  exports), `/analytics/brokers`, `/analytics/carriers`,
+  `/analytics/event-types` (performance tables with CSV
+  export), typed client in `src/lib/claim-analytics.ts`,
+  `canViewAnalytics` in `src/lib/permissions.ts`, and an
+  Analytics entry in the AppShell Insights section. Charts
+  reuse the existing `CountBar` CSS bar component; no chart
+  library was added.
+- Docs: `docs/ADVANCED-ANALYTICS.md` (metric definitions
+  and honest limits), a section in `docs/API.md`, and the
+  Analytics tag and schemas in `docs/openapi.yaml`.
+
 ## [1.5.0] - 2026-11-27
 
 Phase 5, Financial Reconciliation: the claim payment ledger,

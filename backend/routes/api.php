@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AnalyticsEventController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -430,6 +431,28 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/reconciliation/reports', [ReconciliationController::class, 'reports']);
             Route::post('/reconciliation/reports', [ReconciliationController::class, 'generateReport']);
             Route::get('/reconciliation/reports/{report}', [ReconciliationController::class, 'showReport']);
+
+            // Advanced analytics (v1.5.1): recovery and
+            // rejection rates, average submission and payment
+            // times, broker, carrier, and event-type
+            // performance, and monthly/yearly comparisons,
+            // with CSV exports. Reading needs view-analytics
+            // (owner, admin, operations manager, dispatcher,
+            // billing staff, viewer); exporting needs
+            // export-reports. Analytics is a full report, so
+            // the Free plan is refused with a 402, the same
+            // as the reports module. Every metric is computed
+            // from the org's own recorded claims, shipments,
+            // and payments; money is summed as recorded, with
+            // no conversion, and every average carries its
+            // sample size.
+            Route::get('/analytics/overview', [AnalyticsController::class, 'overview']);
+            Route::get('/analytics/brokers', [AnalyticsController::class, 'brokers']);
+            Route::get('/analytics/carriers', [AnalyticsController::class, 'carriers']);
+            Route::get('/analytics/event-types', [AnalyticsController::class, 'eventTypes']);
+            Route::get('/analytics/monthly', [AnalyticsController::class, 'monthly']);
+            Route::get('/analytics/yearly', [AnalyticsController::class, 'yearly']);
+            Route::get('/analytics/export', [AnalyticsController::class, 'export']);
         });
     });
 

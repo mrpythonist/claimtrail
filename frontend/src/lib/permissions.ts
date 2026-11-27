@@ -101,6 +101,18 @@ const REPORT_EXPORTERS: OrganizationRole[] = [
   "billing_staff",
 ];
 
+// ViewAnalytics in the backend map: every role that can view
+// claims can view analytics, including dispatchers and viewers.
+// Exporting still needs export-reports.
+const ANALYTICS_VIEWERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+  "billing_staff",
+  "viewer",
+];
+
 const AUDIT_LOG_VIEWERS: OrganizationRole[] = [
   "owner",
   "admin",
@@ -223,6 +235,10 @@ export function canViewReports(role: OrganizationRole | null | undefined): boole
 
 export function canExportReports(role: OrganizationRole | null | undefined): boolean {
   return isOneOf(role, REPORT_EXPORTERS);
+}
+
+export function canViewAnalytics(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, ANALYTICS_VIEWERS);
 }
 
 export function canViewAuditLogs(role: OrganizationRole | null | undefined): boolean {

@@ -128,6 +128,16 @@ enum Permission: string
     // this permission. Nothing here moves real money.
     case ManageReconciliation = 'manage-reconciliation';
 
+    // Advanced analytics (enforced from v1.5.1): recovery
+    // and rejection rates, average submission and payment
+    // times, broker, carrier, and event-type performance,
+    // and monthly/yearly comparisons, with CSV exports.
+    // Owner, admin, operations manager, dispatcher, billing
+    // staff, and viewer may read analytics. Exporting needs
+    // export-reports. Analytics is a full report, so the
+    // Free plan is refused with a 402, the same as reports.
+    case ViewAnalytics = 'view-analytics';
+
     /**
      * Every permission value, for validation and documentation.
      *
