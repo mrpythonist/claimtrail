@@ -3,6 +3,7 @@ import {
   canExportClaims,
   canExportReports,
   canManageBilling,
+  canManageCommunications,
   canManageCustomization,
   canManageEmailIntake,
   canManageImports,
@@ -198,5 +199,23 @@ describe("canManageImports", () => {
     expect(canManageImports("viewer")).toBe(false);
     expect(canManageImports(null)).toBe(false);
     expect(canManageImports(undefined)).toBe(false);
+  });
+});
+
+describe("canManageCommunications", () => {
+  it("allows owner, admin, operations manager, and dispatcher", () => {
+    expect(ROLES.filter((role) => canManageCommunications(role))).toEqual([
+      "owner",
+      "admin",
+      "operations_manager",
+      "dispatcher",
+    ]);
+  });
+
+  it("denies billing staff, viewers, and missing roles", () => {
+    expect(canManageCommunications("billing_staff")).toBe(false);
+    expect(canManageCommunications("viewer")).toBe(false);
+    expect(canManageCommunications(null)).toBe(false);
+    expect(canManageCommunications(undefined)).toBe(false);
   });
 });

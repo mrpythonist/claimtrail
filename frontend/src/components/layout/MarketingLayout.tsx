@@ -143,7 +143,7 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <p className="mt-8 text-sm text-slate-500">
-            ClaimTrail v1.3.2. Transportation revenue recovery, done carefully.
+            ClaimTrail v1.3.3. Transportation revenue recovery, done carefully.
             ClaimTrail tracks potential charges and the evidence behind them.
             It never guarantees that a charge is recoverable.
           </p>

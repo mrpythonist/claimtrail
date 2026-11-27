@@ -521,24 +521,28 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.3.2 — TMS Integrations
 
-- [ ] Research customer-used TMS platforms.
-- [ ] Select integration targets.
-- [ ] Implement authentication.
-- [ ] Shipment synchronization.
-- [ ] Status synchronization.
-- [ ] Appointment synchronization.
-- [ ] Document synchronization.
-- [ ] Integration settings.
-- [ ] Sync monitoring and error handling.
+> Verified 2026-11-26 (daily build run): backend 548 passed (2943 assertions), frontend 360 passed (44 files), `npm run build` succeeds (65/65 pages, incl. /tms and /tms/[id]), `tsc --noEmit` clean, lint clean of new findings (the two remaining findings are pre-existing from v1.2.2), fresh-DB `migrate:fresh` passes (1 new migration, 2 new tables), live HTTP smoke test over the built-in server passed 52/52 backend steps + 7/7 CLI checks on a fresh SQLite DB (provider catalogue, mock + Trimble integration create with credential validation and duplicate-name 422, connection tests, per-kind syncs for status/appointments/documents/shipments, full sync with 3 documents stored as evidence, dedupe re-run with zero created, Trimble sync failing honestly with live-unavailable, disabled sync failing fast, sync-run history filters, tms.sync_completed/failed notifications to a second member, cross-tenant 404s, CLI `tms:list`, `tms:sync`, and `tms:run-due` picking up a due auto-sync plus nothing-due on a second run, plus a regression pass of plans, register, org, ops health version 1.3.2, trial start, and invitation accept). OpenAPI 155 paths / 207 operations, verified to match the 207 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live TMS test was possible — the Trimble provider is schema-only against the published OAuth 2.0/OData/CloudHub/OrderCreate endpoints until a TMW customer, a Trimble representative, and an on-prem Cloud Hub Connector exist; all sync verification ran through the mock provider. McLeod, AscendTMS, TruckMate, and Rose Rocket are not built (partner-gated follow-ups; see docs/TMS-INTEGRATIONS.md).
+
+- [x] Research customer-used TMS platforms.
+- [x] Select integration targets.
+- [x] Implement authentication.
+- [x] Shipment synchronization.
+- [x] Status synchronization.
+- [x] Appointment synchronization.
+- [x] Document synchronization.
+- [x] Integration settings.
+- [x] Sync monitoring and error handling.
 
 ### v1.3.3 — Communication Integrations
 
-- [ ] Slack integration.
-- [ ] Microsoft Teams integration.
-- [ ] Driver evidence submission links.
-- [ ] Email workflows.
-- [ ] Communication notifications.
-- [ ] Secure access and expiration controls.
+> Verified 2026-11-27 (daily build run): backend 579 passed (3138 assertions), frontend 386 passed (48 files), `npm run build` succeeds (68/68 pages, incl. /communications, /communications/[id], and /driver-evidence/[token]), fresh-DB `migrate:fresh` passes (1 new migration, 4 new tables), live HTTP smoke test over the built-in server passed 90/90 backend steps + 7/7 CLI checks on a fresh SQLite DB (provider catalogue, channel create with webhook validation and duplicate-name 422, viewer 403, connection tests for mock/Slack/Teams all ok-but-not-live with delivery ids, delivery history and channel filter, disabled channel test refused 422, shipment + claim creation, driver-link validation for missing scope / mismatched shipment-claim / archived shipment, link create with token-once and mail-log check, public page, single-use submit with evidence file stored and verified, unknown-token 404 with the same message on page and submit, two-use claim link with third submit 404, resend rotation killing the old token, revoke, forced expiry for the CLI check, comms notifications to a second member, cross-tenant 404s, CLI `comms:list`, `comms:test`, and `comms:expire-links` expiring one link and notifying twice (owner + dispatcher; viewer excluded) plus nothing-expired on a second run, plus a regression pass of plans, register, org, ops health version 1.3.3, trial start, and invitation accept). OpenAPI 167 paths / 224 operations, verified to match the 224 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live Slack/Teams delivery was possible — the mock records locally and Slack/Teams record a well-formed payload without sending it, until a real workspace, tenant, and mailer exist; all delivery verification ran through the mock provider.
+
+- [x] Slack integration.
+- [x] Microsoft Teams integration.
+- [x] Driver evidence submission links.
+- [x] Email workflows.
+- [x] Communication notifications.
+- [x] Secure access and expiration controls.
 
 ---
 

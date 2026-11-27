@@ -27,6 +27,13 @@ enum NotificationType: string
     case ImportFailed = 'import.failed';
     case TmsSyncCompleted = 'tms.sync_completed';
     case TmsSyncFailed = 'tms.sync_failed';
+    case CommunicationChannelConnected = 'comms.channel_connected';
+    case CommunicationChannelTested = 'comms.channel_tested';
+    case DriverLinkCreated = 'comms.driver_link_created';
+    case DriverLinkUsed = 'comms.driver_link_used';
+    case DriverLinkExpired = 'comms.driver_link_expired';
+    case CommunicationEmailSent = 'comms.email_sent';
+    case CommunicationEmailFailed = 'comms.email_failed';
 
     public function label(): string
     {
@@ -46,6 +53,13 @@ enum NotificationType: string
             self::ImportFailed => 'Import failed',
             self::TmsSyncCompleted => 'TMS sync completed',
             self::TmsSyncFailed => 'TMS sync failed',
+            self::CommunicationChannelConnected => 'Communication channel connected',
+            self::CommunicationChannelTested => 'Communication channel tested',
+            self::DriverLinkCreated => 'Driver evidence link created',
+            self::DriverLinkUsed => 'Driver evidence link used',
+            self::DriverLinkExpired => 'Driver evidence link expired',
+            self::CommunicationEmailSent => 'Communication email sent',
+            self::CommunicationEmailFailed => 'Communication email failed',
         };
     }
 

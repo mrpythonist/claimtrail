@@ -110,6 +110,15 @@ enum Permission: string
     // never returned by the API.
     case ManageTmsIntegrations = 'manage-tms-integrations';
 
+    // Communication integrations (enforced from v1.3.3):
+    // Slack and Teams channel connections, channel tests
+    // and delivery history, driver evidence submission
+    // links, and email workflows. Owner, admin, operations
+    // manager, and dispatcher. Any member may list
+    // channels, links, and deliveries. Webhook URLs are
+    // stored encrypted and never returned by the API.
+    case ManageCommunications = 'manage-communications';
+
     /**
      * Every permission value, for validation and documentation.
      *

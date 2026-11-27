@@ -70,6 +70,7 @@ return [
         Permission::ManageEmailIntake->value,
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
+        Permission::ManageCommunications->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -106,6 +107,7 @@ return [
         Permission::ManageEmailIntake->value,
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
+        Permission::ManageCommunications->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -124,6 +126,7 @@ return [
         Permission::ManageEmailIntake->value,
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
+        Permission::ManageCommunications->value,
     ],
 
     OrganizationRole::BillingStaff->value => [

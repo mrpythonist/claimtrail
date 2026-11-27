@@ -62,3 +62,9 @@ Schedule::command('imports:run-scheduled')->dailyAt('04:30');
 // interval run a full sync. Integrations with auto-sync off
 // never run here; they sync on demand from the API.
 Schedule::command('tms:run-due')->dailyAt('05:00');
+
+// Expired driver evidence links are notified daily at 05:30:
+// links past their expiry without an expiry notice yet get
+// one notification to the members who can manage
+// communications. Revoked links are skipped.
+Schedule::command('comms:expire-links')->dailyAt('05:30');

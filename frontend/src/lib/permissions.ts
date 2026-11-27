@@ -295,6 +295,21 @@ export function canManageTmsIntegrations(role: OrganizationRole | null | undefin
   return isOneOf(role, TMS_MANAGERS);
 }
 
+// Owner, Admin, Operations Manager, and Dispatcher. They manage
+// Slack and Teams channels, channel tests, driver evidence
+// links, and resends. Every member may list channels,
+// deliveries, and links.
+const COMMUNICATION_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageCommunications(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, COMMUNICATION_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

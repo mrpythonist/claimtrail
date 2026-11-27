@@ -11,9 +11,13 @@ use App\Http\Controllers\Api\V1\ClaimController;
 use App\Http\Controllers\Api\V1\ClaimDeadlineController;
 use App\Http\Controllers\Api\V1\ClaimPackageController;
 use App\Http\Controllers\Api\V1\ClaimReviewNoteController;
+use App\Http\Controllers\Api\V1\CommunicationChannelController;
+use App\Http\Controllers\Api\V1\CommunicationDeliveryController;
 use App\Http\Controllers\Api\V1\CustomFieldController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DeadlineSettingController;
+use App\Http\Controllers\Api\V1\DriverEvidenceLinkController;
+use App\Http\Controllers\Api\V1\DriverEvidenceSubmissionController;
 use App\Http\Controllers\Api\V1\EmailIntakeWebhookController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
@@ -378,6 +382,32 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/tms/integrations/{integration}/sync', [TmsIntegrationController::class, 'sync']);
             Route::get('/tms/sync-runs', [TmsSyncRunController::class, 'index']);
             Route::get('/tms/sync-runs/{syncRun}', [TmsSyncRunController::class, 'show']);
+
+            // Communication integrations (v1.3.3): Slack,
+            // Teams, and mock channels behind a provider
+            // adapter, delivery history, and driver evidence
+            // submission links. Any member may list channels,
+            // links, and deliveries; creating, updating,
+            // deleting, testing, resending, and revoking need
+            // manage-communications (owner, admin, operations
+            // manager, dispatcher). Webhook URLs are stored
+            // encrypted and never returned by the API. No live
+            // delivery exists: every send is logged, never sent.
+            Route::get('/comms/providers', [CommunicationChannelController::class, 'providers']);
+            Route::get('/comms/channels', [CommunicationChannelController::class, 'index']);
+            Route::post('/comms/channels', [CommunicationChannelController::class, 'store']);
+            Route::get('/comms/channels/{channel}', [CommunicationChannelController::class, 'show']);
+            Route::put('/comms/channels/{channel}', [CommunicationChannelController::class, 'update']);
+            Route::delete('/comms/channels/{channel}', [CommunicationChannelController::class, 'destroy']);
+            Route::post('/comms/channels/{channel}/test', [CommunicationChannelController::class, 'test']);
+            Route::get('/comms/deliveries', [CommunicationDeliveryController::class, 'index']);
+            Route::get('/comms/deliveries/{delivery}', [CommunicationDeliveryController::class, 'show']);
+            Route::get('/comms/driver-links', [DriverEvidenceLinkController::class, 'index']);
+            Route::post('/comms/driver-links', [DriverEvidenceLinkController::class, 'store']);
+            Route::get('/comms/driver-links/{link}', [DriverEvidenceLinkController::class, 'show']);
+            Route::delete('/comms/driver-links/{link}', [DriverEvidenceLinkController::class, 'destroy']);
+            Route::post('/comms/driver-links/{link}/resend', [DriverEvidenceLinkController::class, 'resend']);
+            Route::get('/comms/driver-links/{link}/submissions', [DriverEvidenceLinkController::class, 'submissions']);
         });
     });
 
@@ -395,4 +425,15 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
     // cannot share a bucket with the marketing endpoints.
     Route::post('/email-intake/inbound', [EmailIntakeWebhookController::class, 'inbound'])
         ->middleware('throttle:120,1,email-intake');
+
+    // Driver evidence submission (v1.3.3): public, the token
+    // in the URL is the credential, exactly like the billing
+    // portal token. The link is scoped to one shipment or
+    // claim, expires, and is single-use by default. Tight
+    // rate limit with its own prefix, so a driver upload
+    // cannot share a bucket with the marketing endpoints.
+    Route::get('/driver-evidence/{token}', [DriverEvidenceSubmissionController::class, 'show'])
+        ->middleware('throttle:30,1,driver-evidence');
+    Route::post('/driver-evidence/{token}/submit', [DriverEvidenceSubmissionController::class, 'submit'])
+        ->middleware('throttle:10,1,driver-evidence-submit');
 });

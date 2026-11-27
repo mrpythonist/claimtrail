@@ -657,6 +657,37 @@ with a live-unavailable message.
 | GET | `/tms/sync-runs` | Yes + org header | TMS sync runs, newest first. Query: `tms_integration_id`, `kind`, `status`. Any member may list. |
 | GET | `/tms/sync-runs/{syncRun}` | Yes + org header | One TMS sync run. Any member may read. |
 
+### Communication Integrations (v1.3.3)
+
+Slack and Microsoft Teams channels per organization, plus
+driver evidence submission links and the email workflows
+around them. See docs/COMMUNICATION-INTEGRATIONS.md for
+the full runbook (provider catalogue, webhook handling,
+link security model, mock/log delivery). No live Slack
+workspace, Teams tenant, or real mailer is contacted:
+the mock records deliveries locally, and Slack and Teams
+record a well-formed payload without sending it.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/comms/providers` | Yes + org header | Provider catalogue: label, live availability, webhook URL requirement and hint. Any member may read. |
+| GET | `/comms/channels` | Yes + org header | Communication channels, newest first. Any member may list. Webhook URLs are never returned. |
+| POST | `/comms/channels` | Yes + org header | Create a channel. Body: `provider` (`mock`, `slack`, `teams`), `name` (max 100), optional `webhook_url`, optional `settings` (one boolean per event; unset events default to on). Slack and Teams need a well-formed webhook URL. Requires `manage-communications` (owner, admin, operations manager, dispatcher). |
+| GET | `/comms/channels/{channel}` | Yes + org header | One communication channel. Any member may read. |
+| PUT | `/comms/channels/{channel}` | Yes + org header | Update a channel. Webhook URL is only replaced when supplied; settings merge over the stored ones. Requires `manage-communications`. |
+| DELETE | `/comms/channels/{channel}` | Yes + org header | Delete a channel. Its deliveries go with it. Requires `manage-communications`. |
+| POST | `/comms/channels/{channel}/test` | Yes + org header | Test the channel without sending live. Records a test delivery and returns `ok`, `live_available: false`, `message`, `delivery_id`. A disabled channel is refused with 422. Requires `manage-communications`. |
+| GET | `/comms/deliveries` | Yes + org header | Communication deliveries, newest first. Query: `communication_channel_id`, `event`, `status`. Any member may list. |
+| GET | `/comms/deliveries/{delivery}` | Yes + org header | One communication delivery. Any member may read. |
+| GET | `/comms/driver-links` | Yes + org header | Driver evidence links, newest first. Query: `shipment_id`, `claim_id`, `state`. Any member may list. The token is never returned. |
+| POST | `/comms/driver-links` | Yes + org header | Create a driver link. Body: `shipment_id` and/or `claim_id` (at least one, both must belong to the org), optional `driver_name`, `driver_email`, `ttl_hours` 1-720 (default 72), `max_uses` 1-10 (default 1). Returns the link plus `token` and `submit_url` once. Requires `manage-communications`. |
+| GET | `/comms/driver-links/{driverLink}` | Yes + org header | One driver evidence link. Any member may read. |
+| DELETE | `/comms/driver-links/{driverLink}` | Yes + org header | Revoke a driver link immediately and permanently. Requires `manage-communications`. |
+| POST | `/comms/driver-links/{driverLink}/resend` | Yes + org header | Resend a driver link. Rotates the token: the old URL dies, a fresh one is returned once. The link must be usable and have a driver email address, or the resend is refused with 422. Requires `manage-communications`. |
+| GET | `/comms/driver-links/{driverLink}/submissions` | Yes + org header | Submissions for a driver link, newest first. Any member may list. |
+| GET | `/driver-evidence/{token}` | Public, token in URL | Driver evidence page for a link token. Shows only the scoped shipment/claim, expiry, and use count. Unknown, expired, used-up, or revoked tokens all return 404 with the same message. Throttled. |
+| POST | `/driver-evidence/{token}/submit` | Public, token in URL | Submit evidence through a link (multipart: `document_category`, `file` max 20 MB, optional `driver_name`, `notes`). The file is verified by checksum and size before it is accepted. A single-use link stops working after this submit. Throttled. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

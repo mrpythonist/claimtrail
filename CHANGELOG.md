@@ -77,6 +77,114 @@ bumped to 1.3.2; OpenAPI at 155 paths (148 + 7 new paths,
   other provider built, pilot beachhead unaffected,
   submission channel still missing).
 
+## [1.3.3] - 2026-11-27
+
+Phase 4, Communication Integrations: Slack and
+Microsoft Teams channels per organization, driver
+evidence submission links, and the email workflows
+around them. No live Slack workspace, Teams tenant, or
+real mailer is contacted: the mock provider records
+deliveries locally, and Slack and Teams record a
+well-formed payload without sending it anywhere. App
+version bumped to 1.3.3; OpenAPI at 167 paths (155 +
+12 new paths, 224 operations).
+
+### Added
+
+- Channel providers: `App\Comms\ChannelProvider`
+  contract (name, label, live availability, webhook
+  URL requirement and validation, payload shape) with
+  a registry that resolves driver names. The mock
+  provider needs no webhook URL and records every
+  delivery locally. The Slack provider validates
+  `https://hooks.slack.com/services/...` URLs and
+  builds a Block Kit payload; the Teams provider
+  validates Office 365 connector webhook URLs and
+  builds a MessageCard payload. Neither performs a live
+  call, and every provider reports `live_available:
+  false`.
+- Communication channels: `GET /comms/providers`
+  (provider catalogue), `GET/POST /comms/channels`,
+  `GET/PUT/DELETE /comms/channels/{channel}`.
+  Webhook URLs are stored encrypted and never returned
+  by the API. Channels subscribe to five events
+  (`claim_created`, `evidence_received`,
+  `driver_link_used`, `sync_completed`,
+  `delivery_failed`). Managing channels needs the new
+  `manage-communications` permission (owner, admin,
+  operations manager, dispatcher); any member may list
+  and read.
+- Channel dispatcher and deliveries: one dispatcher
+  fans events out to the active channels that want
+  them and records every delivery (`logged`, `sent`,
+  `failed`) with its payload and error message.
+  `GET /comms/deliveries` (filters `channel_id`,
+  `event`, `status`), `GET
+  /comms/deliveries/{delivery}`. A send failure updates
+  the channel's `last_error` and notifies the
+  organization.
+- Connection test: `POST
+  /comms/channels/{channel}/test` checks the webhook
+  shape and records a test delivery. The mock always
+  succeeds; Slack and Teams succeed when the URL is
+  well-formed. All report `live_available: false` with
+  a plain-language explanation. A malformed stored URL
+  records a failed delivery instead of sending.
+- Driver evidence links: `GET/POST
+  /comms/driver-links`, `GET/DELETE
+  /comms/driver-links/{driverLink}`, `POST
+  /comms/driver-links/{driverLink}/resend`, `GET
+  /comms/driver-links/{driverLink}/submissions`. A link
+  is scoped to one shipment, one claim, or both (which
+  must match), expires after `ttl_hours` (1-720,
+  default 72), is single-use by default (`max_uses`
+  1-10), and can be revoked immediately. Only the
+  SHA-256 hash is stored; the raw token is returned
+  once, at creation or resend, and a resend rotates it.
+  Evidence from a claim-only link is filed against the
+  claim's shipment.
+- Public driver evidence page: `GET
+  /driver-evidence/{token}` and `POST
+  /driver-evidence/{token}/submit` (multipart, file
+  max 20 MB, verified by checksum and size before
+  acceptance, stored on the evidence disk). No account
+  is needed. Unknown, expired, used-up, or revoked
+  tokens all return the same 404 with the same message.
+  Both endpoints are throttled.
+- Email workflows: driver-link emails on create and
+  resend (`DriverEvidenceLinkMail`, queued). A failed
+  send is caught, logged, and notified; the link stays
+  usable. Evidence received through a link notifies the
+  organization in-app and fires the `evidence_received`
+  channel event.
+- Communication notifications: seven new types
+  (`comms.channel_connected`,
+  `comms.channel_tested`, `comms.driver_link_created`,
+  `comms.driver_link_used`,
+  `comms.driver_link_expired`, `comms.email_sent`,
+  `comms.email_failed`). Preferences now list 22 types.
+  Channel tests and email sends use per-run unique
+  dedupe keys so repeats notify again.
+- Expiry command: `comms:expire-links` notifies once
+  per expired link (links expired more than 30 days ago
+  are skipped), scheduled daily at 05:30. CLI:
+  `comms:list` lists channels across organizations;
+  `comms:test {channel}` tests one channel.
+- Frontend: `/communications` (provider catalogue,
+  connect form, channels, create-a-driver-link form
+  showing the token once, driver links, recent
+  deliveries), `/communications/[id]` (test,
+  enable/disable, delete, event subscriptions,
+  delivery history), and the public
+  `/driver-evidence/[token]` submit page, with a
+  Communications entry in the sidebar.
+- Docs: `docs/COMMUNICATION-INTEGRATIONS.md` documents
+  the providers, the mock/log delivery, the signed-link
+  security model, the email workflows, and the honest
+  limits (no live Slack/Teams delivery, no real mailer,
+  no OAuth app or bot, no per-driver identity, no
+  delivery retry).
+
 ## [1.3.1] - 2026-11-26
 
 Phase 4, Advanced Imports: saved CSV mappings, import

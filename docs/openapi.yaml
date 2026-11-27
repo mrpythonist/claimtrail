@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.3.2
+  version: 1.3.3
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -6140,6 +6140,512 @@ paths:
                           $ref: "#/components/schemas/BillingInvoice"
                       portal_session_expires_at: { type: string, format: date-time }
         "404": { $ref: "#/components/responses/NotFound" }
+  /comms/providers:
+    get:
+      tags: [Communications]
+      summary: Communication provider catalogue
+      description: >-
+        Every registered channel provider driver with its
+        label, live availability, and whether it needs a
+        webhook URL. Any member may read it. No provider in
+        v1.3.3 is live: the mock records deliveries locally
+        and Slack and Teams only validate the webhook shape.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Provider catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CommunicationProvider"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/channels:
+    get:
+      tags: [Communications]
+      summary: List communication channels
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Communication channels, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CommunicationChannel"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Communications]
+      summary: Create a communication channel
+      description: >-
+        The webhook URL is stored encrypted and never
+        returned. Slack and Teams need a well-formed
+        webhook URL; the mock needs none. Requires the
+        manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, name]
+              properties:
+                provider: { type: string, enum: [mock, slack, teams] }
+                name: { type: string, maxLength: 100 }
+                webhook_url: { type: string, nullable: true }
+                settings:
+                  type: object
+                  description: Event subscriptions, one boolean per event. Unset events default to true.
+                  properties:
+                    claim_created: { type: boolean }
+                    evidence_received: { type: boolean }
+                    driver_link_used: { type: boolean }
+                    sync_completed: { type: boolean }
+                    delivery_failed: { type: boolean }
+      responses:
+        "201":
+          description: Communication channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommunicationChannel"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /comms/channels/{channel}:
+    get:
+      tags: [Communications]
+      summary: One communication channel
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Communication channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommunicationChannel"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Communications]
+      summary: Update a communication channel
+      description: >-
+        The webhook URL is only replaced when supplied.
+        Settings merge over the stored ones. Requires the
+        manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                status: { type: string, enum: [active, disabled] }
+                webhook_url: { type: string, nullable: true }
+                settings:
+                  type: object
+                  description: Event subscriptions, one boolean per event. Merged over the stored settings.
+                  properties:
+                    claim_created: { type: boolean }
+                    evidence_received: { type: boolean }
+                    driver_link_used: { type: boolean }
+                    sync_completed: { type: boolean }
+                    delivery_failed: { type: boolean }
+      responses:
+        "200":
+          description: Communication channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommunicationChannel"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Communications]
+      summary: Delete a communication channel
+      description: >-
+        Its deliveries go with it. Requires the
+        manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/channels/{channel}/test:
+    post:
+      tags: [Communications]
+      summary: Test a communication channel
+      description: >-
+        Checks the webhook shape and records a test
+        delivery. Nothing is sent to a live workspace:
+        the mock records locally and Slack and Teams
+        record a well-formed payload without sending it.
+        A disabled channel is refused with 422.
+        Requires the manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Channel test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommunicationChannelTest"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/deliveries:
+    get:
+      tags: [Communications]
+      summary: List communication deliveries
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: communication_channel_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: event
+          in: query
+          schema:
+            type: string
+            enum: [claim_created, evidence_received, driver_link_used, sync_completed, delivery_failed, test]
+        - name: status
+          in: query
+          schema: { type: string, enum: [logged, sent, failed] }
+      responses:
+        "200":
+          description: Communication deliveries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CommunicationDelivery"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/deliveries/{delivery}:
+    get:
+      tags: [Communications]
+      summary: One communication delivery
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: delivery
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Communication delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommunicationDelivery"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/driver-links:
+    get:
+      tags: [Communications]
+      summary: List driver evidence links
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: shipment_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: claim_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: state
+          in: query
+          schema: { type: string, enum: [usable, used, expired, revoked] }
+      responses:
+        "200":
+          description: Driver evidence links, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DriverEvidenceLink"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Communications]
+      summary: Create a driver evidence link
+      description: >-
+        The link is scoped to one shipment, one claim, or
+        both, and expires after ttl_hours (1-720, default
+        72) or after max_uses (1-10, default 1). The raw
+        token is returned once, in this response only.
+        Requires the manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shipment_id: { type: string, format: uuid, nullable: true }
+                claim_id: { type: string, format: uuid, nullable: true }
+                driver_name: { type: string, maxLength: 255, nullable: true }
+                driver_email: { type: string, format: email, nullable: true }
+                ttl_hours: { type: integer, minimum: 1, maximum: 720 }
+                max_uses: { type: integer, minimum: 1, maximum: 10 }
+      responses:
+        "201":
+          description: Driver evidence link, with the token once
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidenceLinkCreated"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /comms/driver-links/{driverLink}:
+    get:
+      tags: [Communications]
+      summary: One driver evidence link
+      description: >-
+        The token is never returned again; only the link
+        record, its state, and its expiry.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: driverLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Driver evidence link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidenceLink"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Communications]
+      summary: Revoke a driver evidence link
+      description: >-
+        Revocation is immediate and permanent: the old
+        URL stops working. Returns the revoked link.
+        Requires the manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: driverLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Revoked driver evidence link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidenceLink"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /comms/driver-links/{driverLink}/resend:
+    post:
+      tags: [Communications]
+      summary: Resend a driver evidence link
+      description: >-
+        Rotates the token: a fresh URL is returned once
+        and the old URL stops working. The link must be
+        usable and have a driver email address, or the
+        resend is refused with 422. Requires the
+        manage-communications permission.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: driverLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Driver evidence link, with the new token once
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidenceLinkCreated"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /comms/driver-links/{driverLink}/submissions:
+    get:
+      tags: [Communications]
+      summary: List submissions for a driver evidence link
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: driverLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Driver evidence submissions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DriverEvidenceSubmission"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /driver-evidence/{token}:
+    get:
+      tags: [Communications]
+      summary: Driver evidence page for a link token (public)
+      description: >-
+        No Sanctum token: the token in the URL is the
+        credential, like a billing portal token. Unknown,
+        expired, used-up, or revoked tokens all return 404
+        with the same message, so the token alone reveals
+        nothing. Rate-limited.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Driver evidence page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidencePage"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /driver-evidence/{token}/submit:
+    post:
+      tags: [Communications]
+      summary: Submit evidence through a link token (public)
+      description: >-
+        Multipart upload. The file is stored on the
+        evidence disk and verified by checksum and size
+        before it is accepted. A single-use link stops
+        working after this submit. Rate-limited.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document_category, file]
+              properties:
+                document_category:
+                  type: string
+                  enum: [bill_of_lading, proof_of_delivery, rate_confirmation, arrival_departure_record, appointment_confirmation, broker_communication, driver_photo, receipt, lumper_receipt, other]
+                file:
+                  type: string
+                  format: binary
+                  description: PDF, image, Office document, CSV, or text file, max 20480 KB.
+                driver_name: { type: string, maxLength: 255 }
+                notes: { type: string, maxLength: 2000 }
+      responses:
+        "201":
+          description: Driver evidence submission
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEvidenceSubmission"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 components:
   securitySchemes:
     bearerAuth:
@@ -7805,6 +8311,114 @@ components:
         message: { type: string }
         token: { type: string, nullable: true }
         expires_at: { type: string, format: date-time, nullable: true }
+    CommunicationProvider:
+      type: object
+      properties:
+        name: { type: string, enum: [mock, slack, teams] }
+        label: { type: string }
+        live_available: { type: boolean }
+        webhook_url_required: { type: boolean }
+        webhook_url_hint: { type: string }
+    CommunicationChannel:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [mock, slack, teams] }
+        provider_label: { type: string }
+        live_available: { type: boolean }
+        name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        settings:
+          type: object
+          description: Event subscriptions, one boolean per event. Unset events default to true.
+          properties:
+            claim_created: { type: boolean }
+            evidence_received: { type: boolean }
+            driver_link_used: { type: boolean }
+            sync_completed: { type: boolean }
+            delivery_failed: { type: boolean }
+        has_webhook_url: { type: boolean }
+        last_error: { type: string, nullable: true }
+        last_tested_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CommunicationChannelTest:
+      type: object
+      properties:
+        ok: { type: boolean }
+        live_available: { type: boolean }
+        message: { type: string }
+        delivery_id: { type: string, format: uuid, nullable: true }
+    CommunicationDelivery:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        communication_channel_id: { type: string, format: uuid }
+        event:
+          type: string
+          enum: [claim_created, evidence_received, driver_link_used, sync_completed, delivery_failed, test]
+        title: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [logged, sent, failed] }
+        detail: { type: string, nullable: true }
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+        attempted_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DriverEvidenceLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        shipment_id: { type: string, format: uuid, nullable: true }
+        claim_id: { type: string, format: uuid, nullable: true }
+        shipment_reference: { type: string, nullable: true }
+        claim_reference: { type: string, nullable: true }
+        driver_name: { type: string, nullable: true }
+        driver_email: { type: string, nullable: true }
+        state: { type: string, enum: [usable, used, expired, revoked] }
+        expires_at: { type: string, format: date-time }
+        max_uses: { type: integer }
+        used_count: { type: integer }
+        uses_left: { type: integer }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DriverEvidenceLinkCreated:
+      allOf:
+        - $ref: "#/components/schemas/DriverEvidenceLink"
+        - type: object
+          properties:
+            token:
+              type: string
+              description: Raw token, returned once at creation or resend, never again.
+            submit_url:
+              type: string
+              description: Frontend URL the driver opens to submit evidence.
+    DriverEvidenceSubmission:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        driver_evidence_link_id: { type: string, format: uuid }
+        shipment_id: { type: string, format: uuid, nullable: true }
+        claim_id: { type: string, format: uuid, nullable: true }
+        evidence_file_id: { type: string, format: uuid, nullable: true }
+        driver_name: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    DriverEvidencePage:
+      type: object
+      properties:
+        organization_name: { type: string }
+        shipment_reference: { type: string, nullable: true }
+        claim_reference: { type: string, nullable: true }
+        driver_name: { type: string, nullable: true }
+        state: { type: string, enum: [usable, used, expired, revoked] }
+        expires_at: { type: string, format: date-time }
+        uses_left: { type: integer }
     MonitoringCheck:
       type: object
       properties:

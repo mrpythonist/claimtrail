@@ -6,40 +6,37 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.3.1 (Phase 4, Advanced Imports).
-  App version is now **1.3.1**. Phase 4 continues (v1.3.0 Email
-  Intake done). Phase 3 is complete (v1.2.3). Phase 0 is complete
-  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0
-  interviews deferred, still open). What remains before real
-  customers is Aqib's launch decision: open signups vs closed
-  pilot first (pilot prep is ready, no pilot customer
+- **Last completed version:** v1.3.2 (Phase 4, TMS Integrations).
+  App version is now **1.3.2**. Phase 4 continues (v1.3.1 Advanced
+  Imports done, v1.3.0 Email Intake done). Phase 3 is complete
+  (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0,
+  v0.6.0 done; v0.2.0 interviews deferred, still open). What remains
+  before real customers is Aqib's launch decision: open signups vs
+  closed pilot first (pilot prep is ready, no pilot customer
   recruited), plus the person-only items in
   `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
   Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `5711d69b` (v1.3.1, pushed 2026-11-26 ~19:36 PKT after Aqib's
-  yes + approval card). 44 files in the v1.3.1 commit, read-back verified
+  head `e2ad6ff0` (v1.3.2, pushed 2026-11-26 ~21:06 PKT after Aqib's
+  yes + approval card). 40 files in the v1.3.2 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.3.1:** 511 backend (2723 assertions) + 354 frontend, all
-  passing. `npm run build` succeeds (63/63 pages). Live HTTP smoke test:
-  57/57 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
-  2026-11-26 v1.3.1 log entry). OpenAPI 148 paths, verified to match
-  the 148 live `api/v1` route URIs exactly.
+- **Tests at v1.3.2:** 548 backend (2943 assertions) + 360 frontend, all
+  passing. `npm run build` succeeds (65/65 pages). Live HTTP smoke test:
+  52/52 backend steps + 7/7 CLI checks on a fresh SQLite DB (see the
+  2026-11-26 v1.3.2 log entry). OpenAPI 155 paths, verified to match
+  the 207 live `api/v1` route operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.3.2 — TMS Integrations** (MASTER-CHECKLIST.md, Phase 4) is the next
-build. **Status 2026-11-26: v1.3.1 PUSHED, head `5711d69b`.** Aqib gave
-the TMS priority list 2026-11-26 ~19:40 PKT, so v1.3.2 is UNBLOCKED:
-1. Trimble TMW.Suite — strong market presence, documented APIs.
-2. McLeod LoadMaster — strong operational capabilities, integration
-ecosystem. 3. AscendTMS — worth investigating for smaller carriers.
-4. TruckMate — established carrier platform. 5. Rose Rocket — modern
-workflows and collaboration. (Wording is Aqib's; item 5 was cut off
-mid-word in chat, completed as "collaboration".)
+**v1.3.3 — Communication Integrations** (MASTER-CHECKLIST.md, Phase 4) is
+the next build. **Status 2026-11-26: v1.3.2 PUSHED, head `e2ad6ff0`.**
+Before real customers, Aqib still has the launch decision: open
+signups vs closed pilot first (pilot prep ready, no pilot customer
+recruited) and the person-only items in
+`docs/PRODUCTION-LAUNCH-CHECKLIST.md`.
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -107,6 +104,218 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v1.3.3 Communication Integrations built and verified (Phase 4 continues)
+
+- Gate check passed first: remote head on GitHub is `e2ad6ff0`,
+  matching the recorded v1.3.2 head, and no other builder was
+  running. Build started 2026-11-27 ~08:11 PKT on Aqib's "Start
+  v1.3.3 now" in the main chat (subagent).
+- Spec: MASTER-CHECKLIST.md v1.3.3 (6 items). All six verified
+  and checked.
+- Backend (new): `config/comms.php` (providers mock/slack/
+  teams, all live_available false; driver-link defaults ttl
+  72h, max_uses 1; expiry-notice window 30 days); `app/Comms/
+  ChannelProvider.php` (interface), `ChannelProviderRegistry.
+  php` (drivers mock/slack/teams, catalogue),
+  `MockChannelProvider.php` (records locally, no webhook URL),
+  `SlackChannelProvider.php` (validates
+  `https://hooks.slack.com/services/...`, Block Kit payload),
+  `TeamsChannelProvider.php` (validates Office 365 connector
+  webhook URLs, MessageCard payload), `ChannelDispatcher.php`
+  (send fan-out to active channels that want the event, test
+  with a recorded test delivery, every attempt recorded with
+  title/body/detail/payload); models `CommunicationChannel`
+  (provider, name unique per org, status active/disabled,
+  webhook URL `encrypted` cast, settings JSON with
+  effectiveSettings defaulting every event to true,
+  `wantsEvent`), `CommunicationDelivery` (event, title, body,
+  status logged/sent/failed, detail, payload, attempted_at),
+  `DriverEvidenceLink` (token_hash unique SHA-256, shipment/
+  claim nullable, expires_at, max_uses default 1, used_count,
+  revoked_at, expiry_notified_at, `state` usable/used/expired/
+  revoked), `DriverEvidenceSubmission` (link, shipment, claim,
+  evidence file, driver name, notes, submitted_at); migration
+  `2026_11_27_100700_create_communication_tables.php`
+  (`communication_channels`, `communication_deliveries`,
+  `driver_evidence_links`, `driver_evidence_submissions`);
+  `CommunicationService` (providers catalogue, channelPayload
+  with the webhook URL never returned, deliveryPayload,
+  linkPayload with the token only when freshly created or
+  rotated, publicLinkPayload with organization name and
+  uses_left, submissionPayload, channel CRUD/test, sendEvent
+  fan-out, createDriverLink with shipment/claim scope
+  validation, resendDriverLinkEmail with token rotation,
+  revokeDriverLink, expireDueLinks notifying once per link,
+  linkByToken by hash, submitDriverEvidence with the file
+  stored on the evidence disk and verified by checksum and
+  size, sendDriverLinkEmail with failures caught and
+  notified); controllers `CommunicationChannelController`
+  (providers/index/store/show/update/destroy/test),
+  `CommunicationDeliveryController` (index with
+  communication_channel_id/event/status filters, show),
+  `DriverEvidenceLinkController` (index with shipment/claim/
+  state filters, store returning the token once, show,
+  destroy = revoke, resend, submissions),
+  `DriverEvidenceSubmissionController` (public show/submit,
+  unknown/unusable token 404 with the same message as a
+  nonexistent one); console commands `comms:list`,
+  `comms:test`, `comms:expire-links`; mail
+  `DriverEvidenceLinkMail` (queued) + blade view.
+- Backend edits: `Permission::ManageCommunications`
+  ('manage-communications'); `NotificationType` gains 7
+  types (`comms.channel_connected`, `comms.channel_tested`,
+  `comms.driver_link_created`, `comms.driver_link_used`,
+  `comms.driver_link_expired`, `comms.email_sent`,
+  `comms.email_failed`; 15 to 22 types);
+  `config/permissions.php` adds it to Admin, OperationsManager,
+  Dispatcher (3 places; Owner gets all); `config/app.php`
+  version 1.3.3; `routes/api.php` 17 new routes (15
+  authenticated under `/comms/*`, 2 public under
+  `/driver-evidence/{token}` with throttling);
+  `routes/console.php` schedules `comms:expire-links` daily
+  05:30.
+- **Real defects found by verification, fixed during the
+  build:** the channel test result had no `delivery_id`
+  (the dispatcher discarded the recorded delivery; the
+  smoke caught it, the feature test now asserts the id
+  matches the recorded delivery); a disabled channel
+  could be tested with 200 (now refused 422, like a
+  disabled TMS sync failing fast, with no delivery
+  recorded and last_tested_at untouched); the create-link
+  response showed `used_count` null (the fresh model had
+  no DB default yet; now set to 0 at create and cast to
+  int in the payloads); a claim-only link could not
+  submit at all ("does not cover a shipment" — now the
+  shipment resolves through the claim, so the evidence
+  is filed against the claim's shipment); the frontend
+  was built against assumed payload shapes and the smoke
+  proved several wrong — channels carry a `settings`
+  object (event -> boolean), not an `events` array;
+  deliveries filter by `communication_channel_id`, not
+  `channel_id`, and carry title/body/detail/attempted_at,
+  not error_message; the public page carries
+  `organization_name` and `uses_left`, not
+  max_uses/used_count; deletes return 200 (channel with
+  a message, link with the revoked record), not 204;
+  driver submits validate against the app's
+  `EvidenceDocumentCategory` list (proof_of_delivery,
+  not delivery_receipt) and the evidence allowed
+  extensions (no gif/eml, Office docs allowed);
+  resending needs a usable link with a driver email
+  (422 otherwise); the unknown-token 404 message is
+  "This submission link is invalid, expired, revoked,
+  or already used."; the expire command reports
+  "Notified members about N expired driver evidence
+  link(s)." and notifies one notification per eligible
+  member (owner + dispatcher; viewer excluded). All of
+  the above are fixed in the code, the frontend, the
+  OpenAPI spec, the docs, and the smoke script; the
+  backend and frontend tests now assert the real shapes.
+  Pre-existing tests updated: HealthCheckTest version
+  1.3.2 to 1.3.3, NotificationTest preference count 15
+  to 22, RbacAuditTest public list gains the two
+  driver-evidence routes.
+- Frontend (new): `CommunicationProvider` /
+  `CommunicationChannel` / `CommunicationChannelTest` /
+  `CommunicationDelivery` / `DriverEvidenceLink` /
+  `DriverEvidenceLinkCreated` / `DriverEvidenceSubmission`
+  / `DriverEvidencePage` types;
+  `src/lib/comms.ts` typed client (providers, channel
+  CRUD/test, deliveries, driver links CRUD/resend/
+  submissions, public page + multipart submit via
+  apiUpload); `canManageCommunications` in
+  `src/lib/permissions.ts` (owner/admin/operations_
+  manager/dispatcher); pages `/communications`
+  (provider catalogue, connect form with settings
+  checkboxes, channels, create-a-driver-link form
+  showing the token once, driver links, recent
+  deliveries), `/communications/[id]` (test,
+  enable/disable, delete, event settings, delivery
+  history), and the public `/driver-evidence/[token]`
+  submit page (Suspense-wrapped: Next 16 requires
+  `useParams()` inside Suspense, which the build
+  enforced); AppShell nav entry "Communications";
+  version strings bumped to 1.3.3 (AppShell, MarketingLayout).
+  Build 68/68 pages (65 at v1.3.2 + 3 new).
+- Docs: new `docs/COMMUNICATION-INTEGRATIONS.md`
+  (providers, mock/log delivery, signed-link security
+  model, email workflows, notifications, CLI, honest
+  limits); Communication Integrations section in
+  `docs/API.md`; OpenAPI 155 -> **167 paths / 224
+  operations** (12 new paths, 17 operations) with the
+  `Communications` tag and `CommunicationProvider` /
+  `CommunicationChannel` / `CommunicationChannelTest` /
+  `CommunicationDelivery` / `DriverEvidenceLink` /
+  `DriverEvidenceLinkCreated` /
+  `DriverEvidenceSubmission` / `DriverEvidencePage`
+  schemas; `CHANGELOG.md` [1.3.3] entry.
+- **Smoke-script lessons, recorded honestly (test-only
+  defects, not product code):** the mail queue holds
+  notification mails as well as the driver-link mail,
+  so the smoke runs `queue:work --stop-when-empty`
+  instead of `--once` before reading the log; the
+  driver-link mail is checked by matching the exact
+  token from the create response, not just the URL
+  pattern; `queue:work --once` is still used for the
+  invitation mails, where the queue holds one job.
+- Verification (all run by the builder): backend **579
+  passed (3138 assertions)**, frontend **386 passed**
+  across 48 files, `npm run build` succeeds (68/68
+  pages). Live HTTP smoke test over the built-in server
+  on a fresh SQLite DB passed **90/90 backend steps +
+  7/7 CLI checks**: provider catalogue (mock/slack/
+  teams, none live), channel validation (unknown
+  provider, missing/malformed webhook URLs, viewer
+  403), channel creation (mock/Slack/Teams, webhook
+  never returned, duplicate name 422), connection tests
+  (mock/Slack/Teams ok but not live, delivery ids
+  returned), delivery history and channel filter,
+  disabled channel test refused 422, shipment + claim
+  creation, driver-link validation (no scope, mismatched
+  shipment-claim, archived shipment), link create with
+  token-once and the same token in the mail log, public
+  page with uses_left, single-use submit with the
+  evidence file stored and verified, unknown-token 404
+  with the same message on page and submit, two-use
+  claim link with the third submit 404, resend rotation
+  killing the old token, revoke, forced expiry for the
+  CLI check, dispatcher notified with
+  `comms.channel_connected`, `comms.driver_link_created`,
+  and `comms.driver_link_used`, cross-tenant 404s, CLI
+  `comms:list` showing both channels, `comms:test`
+  recording a test delivery, and `comms:expire-links`
+  expiring one link and notifying twice (owner +
+  dispatcher) plus nothing-expired on a second run.
+  OpenAPI 167 paths / 224 operations, verified to match
+  the 224 live `api/v1` route operations exactly.
+- Still unverified (standing blockers, unchanged): browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+  v1.3.3-specific notes: **no live Slack/Teams delivery
+  was possible** — the mock records locally and Slack/
+  Teams record a well-formed payload without sending it,
+  until a real Slack workspace, a real Teams tenant, and
+  a real mailer exist; all delivery verification ran
+  through the mock provider. No Slack OAuth app or Teams
+  bot exists (incoming webhooks only); no per-driver
+  identity (the driver name on a submission is
+  self-reported text); no delivery retry or reprocess
+  endpoint; no plan metering on links or deliveries.
+  The submission channel (sending a claim package to a
+  broker) is still missing.
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build).
+- Delta computed against remote head `e2ad6ff0`: 19 changed +
+  33 new = 52 files, 956,859 bytes. Manifest at
+  `~/workspace/claimtrail-v133-paths.txt`. Smoke scripts at
+  `~/workspace/claimtrail-scratch-v133/smoke/` (smoke-v133.py,
+  run-smoke.sh, diff-routes.py); delta script at
+  `~/workspace/claimtrail-scratch-v133/compute-delta.py`.
+  (Push status and the checkpoint header are for the main
+  agent: not pushed yet.)
 
 ### 2026-11-26 — v1.3.2 TMS Integrations built and verified (Phase 4 continues)
 
@@ -260,9 +469,10 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   not a task instruction; correctly ignored by the builder,
   not acted on (a system safety notice also flagged it during
   this build).
-- Push status: **NOT pushed. Awaiting Aqib's yes + approval
-  card in the main chat.** Delta computed against remote head
-  `5711d69b`: 16 changed + 24 new = 40 files, 808,017 bytes.
+- Push status: **PUSHED 2026-11-26 ~21:06 PKT, head `e2ad6ff0`**
+  (40 files, read-back verified: branch head, commit message, file
+  list, and two files read from GitHub). Delta computed against remote
+  head `5711d69b`: 16 changed + 24 new = 40 files, 808,017 bytes.
   Manifest at `~/workspace/claimtrail-v132-paths.txt` (NUL-
   delimited) with `claimtrail-v132-paths-manifest.json`.
   Smoke scripts at

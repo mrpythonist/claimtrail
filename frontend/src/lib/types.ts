@@ -1325,3 +1325,114 @@ export interface TmsConnectionTest {
   token: string | null;
   expires_at: string | null;
 }
+
+/** One communication provider from GET /comms/providers (v1.3.3). */
+export interface CommunicationProvider {
+  name: string;
+  label: string;
+  live_available: boolean;
+  webhook_url_required: boolean;
+  webhook_url_hint: string;
+}
+
+/** Events a communication channel can subscribe to (v1.3.3). */
+export type CommunicationChannelEvent =
+  | "claim_created"
+  | "evidence_received"
+  | "driver_link_used"
+  | "sync_completed"
+  | "delivery_failed";
+
+/** One communication channel from GET /comms/channels (v1.3.3). */
+export interface CommunicationChannel {
+  id: string;
+  provider: string;
+  provider_label: string;
+  live_available: boolean;
+  name: string;
+  status: "active" | "disabled";
+  settings: Record<CommunicationChannelEvent, boolean>;
+  has_webhook_url: boolean;
+  last_error: string | null;
+  last_tested_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Channel test result from POST /comms/channels/{id}/test (v1.3.3). */
+export interface CommunicationChannelTest {
+  ok: boolean;
+  live_available: boolean;
+  message: string;
+  delivery_id: string | null;
+}
+
+/** Delivery status for a channel message (v1.3.3). */
+export type CommunicationDeliveryStatus = "logged" | "sent" | "failed";
+
+/** One recorded channel delivery from GET /comms/deliveries (v1.3.3). */
+export interface CommunicationDelivery {
+  id: string;
+  communication_channel_id: string;
+  event: CommunicationChannelEvent | "test";
+  title: string;
+  body: string;
+  status: CommunicationDeliveryStatus;
+  detail: string | null;
+  payload: Record<string, unknown> | null;
+  attempted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Driver evidence link state (v1.3.3). */
+export type DriverEvidenceLinkState = "usable" | "used" | "expired" | "revoked";
+
+/** One driver evidence link from GET /comms/driver-links (v1.3.3). */
+export interface DriverEvidenceLink {
+  id: string;
+  shipment_id: string | null;
+  claim_id: string | null;
+  shipment_reference: string | null;
+  claim_reference: string | null;
+  driver_name: string | null;
+  driver_email: string | null;
+  state: DriverEvidenceLinkState;
+  expires_at: string;
+  max_uses: number;
+  used_count: number;
+  uses_left: number;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Create response: the raw token is returned once (v1.3.3). */
+export interface DriverEvidenceLinkCreated extends DriverEvidenceLink {
+  token: string;
+  submit_url: string;
+}
+
+/** One driver evidence submission from GET /comms/driver-links/{id}/submissions (v1.3.3). */
+export interface DriverEvidenceSubmission {
+  id: string;
+  driver_evidence_link_id: string;
+  shipment_id: string | null;
+  claim_id: string | null;
+  evidence_file_id: string | null;
+  driver_name: string | null;
+  notes: string | null;
+  submitted_at: string | null;
+  created_at: string;
+}
+
+/** Public driver evidence page from GET /driver-evidence/{token} (v1.3.3). */
+export interface DriverEvidencePage {
+  organization_name: string;
+  shipment_reference: string | null;
+  claim_reference: string | null;
+  driver_name: string | null;
+  state: DriverEvidenceLinkState;
+  expires_at: string;
+  uses_left: number;
+}

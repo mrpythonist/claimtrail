@@ -146,6 +146,12 @@ class RbacAuditTest extends TestCase
             // Mocked billing portal: the token in the URL is the
             // bearer secret, like the email-verify link above.
             ['GET', 'api/v1/billing/portal/{token}'],
+            // Driver evidence submission (v1.3.3): the token in
+            // the URL is the credential, like the billing portal
+            // token. The link is scoped, expiring, and
+            // single-use by default.
+            ['GET', 'api/v1/driver-evidence/{token}'],
+            ['POST', 'api/v1/driver-evidence/{token}/submit'],
         ];
 
         foreach (Route::getRoutes()->getRoutes() as $route) {
