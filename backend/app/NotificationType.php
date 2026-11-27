@@ -34,6 +34,8 @@ enum NotificationType: string
     case DriverLinkExpired = 'comms.driver_link_expired';
     case CommunicationEmailSent = 'comms.email_sent';
     case CommunicationEmailFailed = 'comms.email_failed';
+    case ReconciliationPaymentRecorded = 'reconciliation.payment_recorded';
+    case ReconciliationCompleted = 'reconciliation.completed';
 
     public function label(): string
     {
@@ -60,6 +62,8 @@ enum NotificationType: string
             self::DriverLinkExpired => 'Driver evidence link expired',
             self::CommunicationEmailSent => 'Communication email sent',
             self::CommunicationEmailFailed => 'Communication email failed',
+            self::ReconciliationPaymentRecorded => 'Reconciliation payment recorded',
+            self::ReconciliationCompleted => 'Reconciliation completed',
         };
     }
 

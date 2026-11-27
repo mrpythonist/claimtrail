@@ -73,6 +73,8 @@ tags:
   - name: EmailIntake
   - name: Imports
   - name: TMS
+  - name: Communications
+  - name: Reconciliation
 paths:
   /auth/register:
     post:
@@ -6646,6 +6648,268 @@ paths:
                     $ref: "#/components/schemas/DriverEvidenceSubmission"
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /reconciliation/summary:
+    get:
+      tags: [Reconciliation]
+      summary: Organization reconciliation totals
+      description: >-
+        Requested, approved, paid, and outstanding totals across
+        every claim with an amount, with counts by balance status.
+        Any member may read it.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Reconciliation summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReconciliationSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reconciliation/ledger:
+    get:
+      tags: [Reconciliation]
+      summary: Payment ledger
+      description: >-
+        Ledger payments, newest first. Query: claim_id,
+        payment_method, from (paid_at), to (paid_at). Any
+        member may list.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: payment_method
+          in: query
+          schema: { type: string, enum: [wire_transfer, ach, cheque, cash, card, other] }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Payment ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClaimPayment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reconciliation/ledger/{payment}:
+    get:
+      tags: [Reconciliation]
+      summary: One ledger payment
+      description: One ledger payment. Any member may read.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: payment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ledger payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimPayment"
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Reconciliation]
+      summary: Void a ledger payment
+      description: >-
+        Remove a ledger payment and take its amount back out of
+        the claim's paid total. A payment on a paid or closed
+        claim cannot be voided. Requires manage-reconciliation.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: payment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Payment voided
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      voided: { type: boolean }
+                      payment_id: { type: string, format: uuid }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reconciliation/claims/{claim}/payments:
+    post:
+      tags: [Reconciliation]
+      summary: Record a ledger payment against a claim
+      description: >-
+        Partial payments are normal: the claim stays accepted
+        until the paid total reaches the amount due, and only
+        then does it move to Paid through the existing
+        record-payment flow. Only accepted and partially
+        accepted claims can receive payments. Requires
+        manage-reconciliation.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, payment_method, paid_at]
+              properties:
+                amount:
+                  type: number
+                  format: decimal
+                  minimum: 0.01
+                  maximum: 9999999999.99
+                payment_method:
+                  type: string
+                  enum: [wire_transfer, ach, cheque, cash, card, other]
+                paid_at:
+                  type: string
+                  format: date
+                  description: Payment date, not in the future.
+                payment_reference: { type: string, maxLength: 255 }
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        "201":
+          description: Ledger payment recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimPayment"
+                  balance:
+                    $ref: "#/components/schemas/ClaimBalance"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reconciliation/claims/{claim}:
+    get:
+      tags: [Reconciliation]
+      summary: One claim balance with payment history
+      description: >-
+        Requested, approved, due, paid, and outstanding for one
+        claim, with its ledger payments. Any member may read.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Claim balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClaimBalance"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /reconciliation/reports:
+    get:
+      tags: [Reconciliation]
+      summary: Generated reconciliation reports
+      description: Generated reports, newest first. Any member may list.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Reconciliation reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReconciliationReport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Reconciliation]
+      summary: Generate a reconciliation report
+      description: >-
+        Generate a report for a period (both dates default to
+        the current calendar month). Generating a report only
+        reads claims and stores the snapshot; it never changes
+        a claim or moves money. Requires manage-reconciliation.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                period_start: { type: string, format: date }
+                period_end: { type: string, format: date }
+      responses:
+        "201":
+          description: Reconciliation report generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReconciliationReport"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /reconciliation/reports/{report}:
+    get:
+      tags: [Reconciliation]
+      summary: One generated reconciliation report
+      description: One generated report. Any member may read.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: report
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Reconciliation report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReconciliationReport"
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -8419,6 +8683,90 @@ components:
         state: { type: string, enum: [usable, used, expired, revoked] }
         expires_at: { type: string, format: date-time }
         uses_left: { type: integer }
+    ClaimPayment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        amount: { type: string, description: Decimal string, two places. }
+        currency: { type: string }
+        payment_method: { type: string, enum: [wire_transfer, ach, cheque, cash, card, other] }
+        payment_method_label: { type: string }
+        payment_reference: { type: string, nullable: true }
+        paid_at: { type: string, format: date }
+        notes: { type: string, nullable: true }
+        recorded_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+    ClaimBalance:
+      type: object
+      properties:
+        claim_id: { type: string, format: uuid }
+        claim_reference: { type: string }
+        status: { type: string, enum: [potential, evidence_required, under_review, ready_to_submit, submitted, accepted, partially_accepted, rejected, paid, closed] }
+        currency: { type: string }
+        requested_amount: { type: string, description: Decimal string, two places. }
+        approved_amount: { type: string, nullable: true, description: The accepted amount; null where no approval is recorded. }
+        due_amount: { type: string, description: Approved amount, or requested amount where no approval is recorded. }
+        paid_amount: { type: string, description: The claim recovered_amount, the authoritative paid total. }
+        outstanding_amount: { type: string, description: max(0, due - paid). }
+        ledger_amount: { type: string, description: Sum of the ledger payments. }
+        legacy_amount: { type: string, description: Paid total recorded before the ledger existed. }
+        balance_status: { type: string, enum: [unpaid, partial, paid, overpaid] }
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimPayment"
+    ReconciliationSummary:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        claims_count: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+        by_balance_status:
+          type: object
+          properties:
+            unpaid: { type: integer }
+            partial: { type: integer }
+            paid: { type: integer }
+            overpaid: { type: integer }
+        currencies:
+          type: array
+          items: { type: string }
+    ReconciliationDiscrepancy:
+      type: object
+      properties:
+        kind: { type: string, enum: [overpaid, legacy_payment, paid_but_outstanding, payments_on_unsubmitted] }
+        claim_id: { type: string, format: uuid }
+        claim_reference: { type: string }
+        detail: { type: string }
+    ReconciliationReport:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        totals:
+          type: object
+          properties:
+            claims_count: { type: integer }
+            payments_count: { type: integer }
+            requested_amount: { type: string }
+            approved_amount: { type: string }
+            paid_amount: { type: string }
+            outstanding_amount: { type: string }
+            discrepancies_count: { type: integer }
+        discrepancies:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReconciliationDiscrepancy"
+        generated_by: { type: string, format: uuid, nullable: true }
+        generated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
     MonitoringCheck:
       type: object
       properties:

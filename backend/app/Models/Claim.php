@@ -111,6 +111,15 @@ class Claim extends Model
     }
 
     /**
+     * Ledger payments recorded against this claim (v1.5.0),
+     * oldest first.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ClaimPayment::class)->orderBy('paid_at')->orderBy('created_at');
+    }
+
+    /**
      * Append-only status history, oldest first.
      */
     public function statusHistories(): HasMany

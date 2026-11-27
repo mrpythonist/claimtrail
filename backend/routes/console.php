@@ -68,3 +68,9 @@ Schedule::command('tms:run-due')->dailyAt('05:00');
 // one notification to the members who can manage
 // communications. Revoked links are skipped.
 Schedule::command('comms:expire-links')->dailyAt('05:30');
+
+// Monthly reconciliation runs daily at 06:00: organizations
+// with ledger payments this month get one report for the
+// month, skipped when one was already generated today, so
+// the daily schedule never spams duplicate reports.
+Schedule::command('reconciliation:run')->dailyAt('06:00');

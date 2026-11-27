@@ -310,6 +310,21 @@ export function canManageCommunications(role: OrganizationRole | null | undefine
   return isOneOf(role, COMMUNICATION_MANAGERS);
 }
 
+// Owner, Admin, Operations Manager, and Dispatcher. They manage
+// the claim payment ledger, claim balances, and reconciliation
+// reports. Every member may read the ledger, balances, summary,
+// and reports. Nothing here moves real money.
+const RECONCILIATION_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageReconciliation(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, RECONCILIATION_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

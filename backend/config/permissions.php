@@ -71,6 +71,7 @@ return [
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
+        Permission::ManageReconciliation->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -108,6 +109,7 @@ return [
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
+        Permission::ManageReconciliation->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -127,6 +129,7 @@ return [
         Permission::ManageImports->value,
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
+        Permission::ManageReconciliation->value,
     ],
 
     OrganizationRole::BillingStaff->value => [

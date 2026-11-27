@@ -535,7 +535,7 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.3.3 — Communication Integrations
 
-> Verified 2026-11-27 (daily build run): backend 579 passed (3138 assertions), frontend 386 passed (48 files), `npm run build` succeeds (68/68 pages, incl. /communications, /communications/[id], and /driver-evidence/[token]), fresh-DB `migrate:fresh` passes (1 new migration, 4 new tables), live HTTP smoke test over the built-in server passed 90/90 backend steps + 7/7 CLI checks on a fresh SQLite DB (provider catalogue, channel create with webhook validation and duplicate-name 422, viewer 403, connection tests for mock/Slack/Teams all ok-but-not-live with delivery ids, delivery history and channel filter, disabled channel test refused 422, shipment + claim creation, driver-link validation for missing scope / mismatched shipment-claim / archived shipment, link create with token-once and mail-log check, public page, single-use submit with evidence file stored and verified, unknown-token 404 with the same message on page and submit, two-use claim link with third submit 404, resend rotation killing the old token, revoke, forced expiry for the CLI check, comms notifications to a second member, cross-tenant 404s, CLI `comms:list`, `comms:test`, and `comms:expire-links` expiring one link and notifying twice (owner + dispatcher; viewer excluded) plus nothing-expired on a second run, plus a regression pass of plans, register, org, ops health version 1.3.3, trial start, and invitation accept). OpenAPI 167 paths / 224 operations, verified to match the 224 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live Slack/Teams delivery was possible — the mock records locally and Slack/Teams record a well-formed payload without sending it, until a real workspace, tenant, and mailer exist; all delivery verification ran through the mock provider.
+> Verified 2026-11-27 (daily build run): backend 579 passed (3138 assertions), frontend 386 passed (48 files), `npm run build` succeeds (68/68 pages, incl. /communications, /communications/[id], and /driver-evidence/[token]), fresh-DB `migrate:fresh` passes (1 new migration, 4 new tables), live HTTP smoke test over the built-in server passed 90/90 backend steps + 6/6 CLI checks on a fresh SQLite DB (provider catalogue, channel create with webhook validation and duplicate-name 422, viewer 403, connection tests for mock/Slack/Teams all ok-but-not-live with delivery ids, delivery history and channel filter, disabled channel test refused 422, shipment + claim creation, driver-link validation for missing scope / mismatched shipment-claim / archived shipment, link create with token-once and mail-log check, public page, single-use submit with evidence file stored and verified, unknown-token 404 with the same message on page and submit, two-use claim link with third submit 404, resend rotation killing the old token, revoke, forced expiry for the CLI check, comms notifications to a second member, cross-tenant 404s, CLI `comms:list`, `comms:test`, and `comms:expire-links` expiring one link and notifying twice (owner + dispatcher; viewer excluded) plus nothing-expired on a second run, plus a regression pass of plans, register, org, ops health version 1.3.3, trial start, and invitation accept). OpenAPI 167 paths / 224 operations, verified to match the 224 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live Slack/Teams delivery was possible — the mock records locally and Slack/Teams record a well-formed payload without sending it, until a real workspace, tenant, and mailer exist; all delivery verification ran through the mock provider.
 
 - [x] Slack integration.
 - [x] Microsoft Teams integration.
@@ -550,15 +550,17 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.5.0 — Financial Reconciliation
 
-- [ ] Payment ledger.
-- [ ] Requested amount tracking.
-- [ ] Approved amount tracking.
-- [ ] Partial payments.
-- [ ] Actual paid amount tracking.
-- [ ] Outstanding balances.
-- [ ] Payment references.
-- [ ] Payment history.
-- [ ] Reconciliation reports.
+> Verified 2026-11-27 (daily build run): backend 596 passed (3336 assertions), frontend 404 passed (52 files), `npm run build` succeeds (71/71 pages, incl. /reconciliation, /reconciliation/claims/[id], and /reconciliation/reports/[id]), fresh-DB `migrate:fresh` passes (1 new migration, 2 new tables), live HTTP smoke test over the built-in server passed 78/78 backend steps + 3/3 CLI checks on a fresh SQLite DB (plans, register, org, ops health version 1.5.0, trial, dispatcher + viewer invites, shipment + claim walked to accepted at 200 on requested 250, summary and balance before any payment, payment refused on a non-accepted claim, partial payment 120 with reference and dispatcher notification, validation refusals for zero amount / bad method / future date, ledger list and filters, viewer 403 on record, second partial 50 then voided back to 80 outstanding, final payment 80 moving the claim to Paid with payment.recorded, void refused on a Paid claim, overpayment 150 on 100 due flagged overpaid, legacy claim paid through the old record-payment endpoint with 250 legacy and no ledger rows, report for the current month totalling requested 650 approved 550 paid 600 outstanding 50 across 4 claims and 3 ledger payments with 2 discrepancies (overpaid + legacy_payment), report list and show, cross-tenant 404s, CLI `reconciliation:run` skipping when a report was generated today, generating after the stored reports were cleared, and skipping again on a second run). OpenAPI 174 paths / 233 operations, verified to match the 233 live `api/v1` route operations exactly. Still unverified: browser E2E (standing blocker), live Postgres/Redis/Docker (standing blockers), real mailer, and no live payment verification is possible — the ledger only records what the organization says it received; billing runs on a mock provider.
+
+- [x] Payment ledger.
+- [x] Requested amount tracking.
+- [x] Approved amount tracking.
+- [x] Partial payments.
+- [x] Actual paid amount tracking.
+- [x] Outstanding balances.
+- [x] Payment references.
+- [x] Payment history.
+- [x] Reconciliation reports.
 
 ### v1.5.1 — Advanced Analytics
 

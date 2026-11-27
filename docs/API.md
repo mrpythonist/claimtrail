@@ -688,6 +688,30 @@ record a well-formed payload without sending it.
 | GET | `/driver-evidence/{token}` | Public, token in URL | Driver evidence page for a link token. Shows only the scoped shipment/claim, expiry, and use count. Unknown, expired, used-up, or revoked tokens all return 404 with the same message. Throttled. |
 | POST | `/driver-evidence/{token}/submit` | Public, token in URL | Submit evidence through a link (multipart: `document_category`, `file` max 20 MB, optional `driver_name`, `notes`). The file is verified by checksum and size before it is accepted. A single-use link stops working after this submit. Throttled. |
 
+### Financial Reconciliation (v1.5.0)
+
+The claim payment ledger: what the organization says it
+received, per claim, with outstanding balances and
+reconciliation reports. See docs/FINANCIAL-RECONCILIATION.md
+for the full runbook (the outstanding rule, discrepancies,
+voiding). Nothing here moves real money: billing runs on a
+mock provider, so a ledger payment is a record, not a
+verified transfer. Partial payments are normal; a claim
+moves to Paid only when the paid total reaches the amount
+due.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/reconciliation/summary` | Yes + org header | Organization totals: requested, approved, paid, outstanding, counts by balance status. Any member may read. |
+| GET | `/reconciliation/ledger` | Yes + org header | Ledger payments, newest first. Query: `claim_id`, `payment_method`, `from`, `to`. Any member may list. |
+| GET | `/reconciliation/ledger/{payment}` | Yes + org header | One ledger payment. Any member may read. |
+| POST | `/reconciliation/claims/{claim}/payments` | Yes + org header | Record a payment. Body: `amount` (min 0.01), `payment_method` (`wire_transfer`, `ach`, `cheque`, `cash`, `card`, `other`), `paid_at` (not in the future), optional `payment_reference`, `notes`. Returns the payment plus the updated balance. Requires `manage-reconciliation` (owner, admin, operations manager, dispatcher). |
+| DELETE | `/reconciliation/ledger/{payment}` | Yes + org header | Void a payment. Refused with 422 on a paid or closed claim. Requires `manage-reconciliation`. |
+| GET | `/reconciliation/claims/{claim}` | Yes + org header | One claim balance with payment history. Any member may read. |
+| GET | `/reconciliation/reports` | Yes + org header | Generated reports, newest first. Any member may list. |
+| POST | `/reconciliation/reports` | Yes + org header | Generate a report for a period (both dates default to the current month). Requires `manage-reconciliation`. |
+| GET | `/reconciliation/reports/{report}` | Yes + org header | One generated report. Any member may read. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

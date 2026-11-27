@@ -1436,3 +1436,93 @@ export interface DriverEvidencePage {
   expires_at: string;
   uses_left: number;
 }
+
+/** Payment method for a ledger payment (v1.5.0). */
+export type ReconciliationPaymentMethod =
+  | "wire_transfer"
+  | "ach"
+  | "cheque"
+  | "cash"
+  | "card"
+  | "other";
+
+/** One ledger payment from GET /reconciliation/ledger (v1.5.0). */
+export interface ClaimPayment {
+  id: string;
+  organization_id: string;
+  claim_id: string;
+  amount: string;
+  currency: string;
+  payment_method: ReconciliationPaymentMethod;
+  payment_method_label: string;
+  payment_reference: string | null;
+  paid_at: string;
+  notes: string | null;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+/** Balance status for a claim (v1.5.0). */
+export type ReconciliationBalanceStatus =
+  | "unpaid"
+  | "partial"
+  | "paid"
+  | "overpaid";
+
+/** One claim balance from GET /reconciliation/claims/{id} (v1.5.0). */
+export interface ClaimBalance {
+  claim_id: string;
+  claim_reference: string;
+  status: ClaimStatus;
+  currency: string;
+  requested_amount: string;
+  approved_amount: string | null;
+  due_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  ledger_amount: string;
+  legacy_amount: string;
+  balance_status: ReconciliationBalanceStatus;
+  payments: ClaimPayment[];
+}
+
+/** Organization-wide reconciliation totals (v1.5.0). */
+export interface ReconciliationSummary {
+  organization_id: string;
+  claims_count: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  by_balance_status: Record<ReconciliationBalanceStatus, number>;
+  currencies: string[];
+}
+
+/** One discrepancy in a reconciliation report (v1.5.0). */
+export interface ReconciliationDiscrepancy {
+  kind: string;
+  claim_id: string;
+  claim_reference: string;
+  detail: string;
+}
+
+/** One generated reconciliation report (v1.5.0). */
+export interface ReconciliationReport {
+  id: string;
+  organization_id: string;
+  period_start: string;
+  period_end: string;
+  totals: {
+    claims_count: number;
+    payments_count: number;
+    requested_amount: string;
+    approved_amount: string;
+    paid_amount: string;
+    outstanding_amount: string;
+    discrepancies_count: number;
+  };
+  discrepancies: ReconciliationDiscrepancy[];
+  generated_by: string | null;
+  generated_at: string;
+  created_at: string;
+}

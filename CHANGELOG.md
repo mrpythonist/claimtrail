@@ -3,6 +3,66 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.5.0] - 2026-11-27
+
+Phase 5, Financial Reconciliation: the claim payment ledger,
+outstanding balances, and reconciliation reports. The ledger
+records what the organization says it received; nothing here
+moves real money and no payment is verified against a bank,
+Stripe, or any processor, because billing runs on a mock
+provider. Partial payments are normal: a claim stays accepted
+until the paid total reaches the amount due. App version
+bumped to 1.5.0; OpenAPI at 174 paths (167 + 7 new paths,
+233 operations).
+
+### Added
+
+- Payment ledger: `App\\Models\\ClaimPayment` (amount,
+  currency, payment method, payment reference, payment date,
+  notes, recorder) with `GET /reconciliation/ledger` (filters:
+  `claim_id`, `payment_method`, `from`, `to`),
+  `GET /reconciliation/ledger/{payment}`,
+  `POST /reconciliation/claims/{claim}/payments`, and
+  `DELETE /reconciliation/ledger/{payment}` (void; refused
+  with 422 on a paid or closed claim).
+- Outstanding rule in one place,
+  `ReconciliationService::balanceFor`: due is the approved
+  amount, or the requested amount where no approval is
+  recorded; paid is the claim `recovered_amount`; outstanding
+  is max(0, due - paid). The claim balance endpoint
+  (`GET /reconciliation/claims/{claim}`) also returns the
+  ledger total, the legacy amount paid before the ledger
+  existed, and the payment history.
+- Reconciliation reports: `GET/POST /reconciliation/reports`
+  and `GET /reconciliation/reports/{report}`. A report
+  snapshots a period (requested, approved, paid, outstanding,
+  counts) and flags discrepancies: overpaid, legacy payments,
+  paid-but-outstanding, and payments on an unsubmitted claim.
+  The `reconciliation:run` command generates the current
+  month's report for organizations with ledger payments that
+  month (daily at 06:00), skipping one already generated
+  today.
+- Organization summary: `GET /reconciliation/summary` with
+  requested, approved, paid, and outstanding totals and
+  counts by balance status.
+- Permission `manage-reconciliation` (owner, admin,
+  operations manager, dispatcher) for recording or voiding
+  a payment and generating a report; any member may read the
+  ledger, balances, summary, and reports. Notification types
+  `reconciliation.payment_recorded` (partial payments) and
+  `reconciliation.completed` (report generated); 24 types in
+  total. The final payment still goes through the existing
+  record-payment flow, so the success-fee metering runs
+  exactly once.
+- Frontend: `/reconciliation` (totals, ledger, reports),
+  `/reconciliation/claims/[id]` (balance, payment history,
+  record and void), `/reconciliation/reports/[id]` (period
+  totals and discrepancies), typed client in
+  `src/lib/reconciliation.ts`, `canManageReconciliation` in
+  `src/lib/permissions.ts`, and a Reconciliation nav entry.
+- Docs: `docs/FINANCIAL-RECONCILIATION.md` and a Financial
+  Reconciliation section in `docs/API.md`.
+
 ## [1.3.2] - 2026-11-26
 
 Phase 4, TMS Integrations: a generic TMS provider adapter

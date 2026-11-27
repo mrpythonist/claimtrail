@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PublicPlanController;
+use App\Http\Controllers\Api\V1\ReconciliationController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RetentionController;
 use App\Http\Controllers\Api\V1\SavedViewController;
@@ -408,6 +409,27 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::delete('/comms/driver-links/{link}', [DriverEvidenceLinkController::class, 'destroy']);
             Route::post('/comms/driver-links/{link}/resend', [DriverEvidenceLinkController::class, 'resend']);
             Route::get('/comms/driver-links/{link}/submissions', [DriverEvidenceLinkController::class, 'submissions']);
+
+            // Financial reconciliation (v1.5.0): the claim
+            // payment ledger, claim balances, org summary, and
+            // reconciliation reports. Any member may read the
+            // ledger, balances, summary, and reports; recording
+            // or voiding a payment and generating a report need
+            // manage-reconciliation (owner, admin, operations
+            // manager, dispatcher). Partial payments are normal:
+            // the claim stays accepted until the paid total
+            // reaches the amount due. Nothing here moves real
+            // money: the ledger only records what the org says
+            // it received.
+            Route::get('/reconciliation/summary', [ReconciliationController::class, 'summary']);
+            Route::get('/reconciliation/ledger', [ReconciliationController::class, 'ledger']);
+            Route::get('/reconciliation/ledger/{payment}', [ReconciliationController::class, 'showPayment']);
+            Route::post('/reconciliation/claims/{claim}/payments', [ReconciliationController::class, 'recordPayment']);
+            Route::delete('/reconciliation/ledger/{payment}', [ReconciliationController::class, 'voidPayment']);
+            Route::get('/reconciliation/claims/{claim}', [ReconciliationController::class, 'claimBalance']);
+            Route::get('/reconciliation/reports', [ReconciliationController::class, 'reports']);
+            Route::post('/reconciliation/reports', [ReconciliationController::class, 'generateReport']);
+            Route::get('/reconciliation/reports/{report}', [ReconciliationController::class, 'showReport']);
         });
     });
 

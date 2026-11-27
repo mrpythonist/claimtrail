@@ -6,33 +6,37 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.3.2 (Phase 4, TMS Integrations).
-  App version is now **1.3.2**. Phase 4 continues (v1.3.1 Advanced
-  Imports done, v1.3.0 Email Intake done). Phase 3 is complete
-  (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0,
-  v0.6.0 done; v0.2.0 interviews deferred, still open). What remains
-  before real customers is Aqib's launch decision: open signups vs
-  closed pilot first (pilot prep is ready, no pilot customer
-  recruited), plus the person-only items in
+- **Last completed version:** v1.3.3 (Phase 4, Communication
+  Integrations). App version is now **1.3.3**. Phase 4 is complete
+  (v1.3.0 Email Intake, v1.3.1 Advanced Imports, v1.3.2 TMS
+  Integrations, v1.3.3 Communication Integrations). Phase 3 is
+  complete (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0,
+  v0.5.0, v0.6.0 done; v0.2.0 interviews deferred, still open).
+  Phase 5 starts next (v1.5.0 Financial Reconciliation). What
+  remains before real customers is Aqib's launch decision: open
+  signups vs closed pilot first (pilot prep is ready, no pilot
+  customer recruited), plus the person-only items in
   `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
   Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `e2ad6ff0` (v1.3.2, pushed 2026-11-26 ~21:06 PKT after Aqib's
-  yes + approval card). 40 files in the v1.3.2 commit, read-back verified
+  head `e97591f2` (v1.3.3, pushed 2026-11-27 ~14:42 PKT after Aqib's
+  yes + approval card). 52 files in the v1.3.3 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.3.2:** 548 backend (2943 assertions) + 360 frontend, all
-  passing. `npm run build` succeeds (65/65 pages). Live HTTP smoke test:
-  52/52 backend steps + 7/7 CLI checks on a fresh SQLite DB (see the
-  2026-11-26 v1.3.2 log entry). OpenAPI 155 paths, verified to match
-  the 207 live `api/v1` route operations exactly.
+- **Tests at v1.3.3:** 579 backend (3138 assertions) + 386 frontend, all
+  passing. `npm run build` succeeds (68/68 pages). Live HTTP smoke test:
+  90/90 backend steps + 6/6 CLI checks on a fresh SQLite DB (see the
+  2026-11-27 v1.3.3 log entry; the builder's report said 7/7 CLI
+  checks, but the smoke script has 6 CLI checks and all 6 passed).
+  OpenAPI 167 paths, verified to match the 224 live `api/v1` route
+  operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.3.3 — Communication Integrations** (MASTER-CHECKLIST.md, Phase 4) is
-the next build. **Status 2026-11-26: v1.3.2 PUSHED, head `e2ad6ff0`.**
+**v1.5.0 — Financial Reconciliation** (MASTER-CHECKLIST.md, Phase 5) is
+the next build. **Status 2026-11-27: v1.3.3 PUSHED, head `e97591f2`.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -104,6 +108,162 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v1.5.0 Financial Reconciliation built and verified (Phase 5 begins)
+
+- Gate check passed first: remote head on GitHub is `e97591f2`,
+  matching the recorded v1.3.3 head, and no other builder was
+  running. Build started 2026-11-27 ~15:03 PKT on Aqib's "Start
+  v1.5.0 now" in the main chat (subagent). Phase 5 begins.
+- Spec: MASTER-CHECKLIST.md v1.5.0 (9 items). All nine verified
+  and checked.
+- Backend (new): `app/PaymentMethod.php` (wire_transfer, ach,
+  cheque, cash, card, other, with labels); models `ClaimPayment`
+  (amount, currency, payment_method, payment_reference, paid_at,
+  notes, recorded_by) and `ReconciliationReport` (period_start,
+  period_end, totals JSON, discrepancies JSON, generated_by,
+  generated_at); migration
+  `2026_11_27_100800_create_reconciliation_tables.php`
+  (`claim_payments`, `reconciliation_reports`); `Claim::payments()`
+  relation (oldest first); `ReconciliationService` (balanceFor is
+  the single place for the outstanding rule: due =
+  accepted_amount ?? requested_amount, paid = recovered_amount,
+  outstanding = max(0, due - paid), exact decimal math with
+  bcadd/bcsub/bccomp; recordPayment with the same Accepted /
+  PartiallyAccepted gate as the record-payment endpoint, ledger
+  row + recovered_amount sync + audit row, delegating to
+  ClaimTransitionService::recordPayment when the paid total
+  reaches due so the claim moves to Paid, the status history is
+  written, and the success fee is metered exactly once, and a
+  `reconciliation.payment_recorded` notification for partial
+  payments; voidPayment, refused with 422 on Paid or Closed
+  claims, taking the amount back out of recovered_amount with an
+  audit row; orgSummary; generateReport with scope claims
+  created, paid, or with a ledger payment in the period, and
+  four discrepancy kinds (overpaid, legacy_payment,
+  paid_but_outstanding, payments_on_unsubmitted), notifying
+  `reconciliation.completed` deduped per org and period;
+  runReconciliation, one report per org with ledger payments
+  this month, skipping one already generated today;
+  paymentPayload / reportPayload / claimBalancePayload);
+  controllers `ReconciliationController` (summary, ledger with
+  claim_id / payment_method / from / to filters, showPayment,
+  recordPayment, voidPayment, claimBalance, reports,
+  showReport, generateReport); console command
+  `reconciliation:run` (--organization, --period YYYY-MM).
+- Backend edits: `Permission::ManageReconciliation`
+  ('manage-reconciliation'); `NotificationType::
+  ReconciliationPaymentRecorded` /
+  `ReconciliationCompleted` (22 to 24 types);
+  `config/permissions.php` adds it to Admin, OperationsManager,
+  Dispatcher (3 places; Owner gets all); `config/app.php`
+  version 1.5.0; `routes/api.php` 9 new routes under
+  `/reconciliation/*` (GET summary, GET ledger, GET/DELETE
+  ledger/{payment}, POST claims/{claim}/payments, GET
+  claims/{claim}, GET/POST reports, GET reports/{report});
+  `routes/console.php` schedules `reconciliation:run` daily
+  06:00. Gates are auto-defined per permission case in
+  AppServiceProvider, so no extra wiring was needed.
+  Pre-existing tests updated for the version bump and new
+  types: HealthCheckTest version 1.3.3 to 1.5.0,
+  NotificationTest preference count 22 to 24.
+- **Real defects found by verification, fixed during the
+  build:** the first reconciliation test run failed one
+  assertion — the `payment.recorded` notification has no
+  recipients when the actor is the only member, because the
+  actor is excluded. That was a test-setup gap, not product
+  code: the test now adds a dispatcher member, matching the
+  partial-payment test. The smoke caught no product defects
+  (unlike v1.3.3). Two doc/shape corrections during the
+  build: the frontend `Input`/`Select` components render
+  their own labels (a required `label` prop) and the `Alert`
+  tones are error/success/info/warning, not danger — the
+  three new pages were fixed to match; and the CHANGELOG
+  first said 176 OpenAPI paths, but the count is distinct
+  URIs (167 + 7 new = 174, 233 operations), corrected.
+- Frontend (new): `ReconciliationPaymentMethod` /
+  `ClaimPayment` / `ReconciliationBalanceStatus` /
+  `ClaimBalance` / `ReconciliationSummary` /
+  `ReconciliationDiscrepancy` / `ReconciliationReport`
+  types; `src/lib/reconciliation.ts` typed client
+  (getReconciliationSummary, listLedgerPayments,
+  getClaimBalance, recordClaimPayment, voidClaimPayment,
+  list/get/generate reports, method and balance labels);
+  `canManageReconciliation` in `src/lib/permissions.ts`
+  (owner/admin/operations_manager/dispatcher); pages
+  `/reconciliation` (totals, ledger, reports with a generate
+  form), `/reconciliation/claims/[id]` (balance card, record
+  form, payment history with void buttons), and
+  `/reconciliation/reports/[id]` (period totals and
+  discrepancies); AppShell nav entry "Reconciliation";
+  version strings bumped to 1.5.0 (AppShell, MarketingLayout).
+  Build 71/71 pages (68 at v1.3.3 + 3 new).
+- Docs: new `docs/FINANCIAL-RECONCILIATION.md` (the ledger,
+  the outstanding rule, discrepancies, voiding, permissions,
+  and the honest limits: no real money moves, no live payment
+  verification, mixed currencies summed as recorded, the
+  ledger does not replace subscription billing); Financial
+  Reconciliation section in `docs/API.md`; OpenAPI 167 ->
+  **174 paths / 233 operations** (7 new paths, 9 operations)
+  with the `Reconciliation` tag and `ClaimPayment` /
+  `ClaimBalance` / `ReconciliationSummary` /
+  `ReconciliationDiscrepancy` / `ReconciliationReport`
+  schemas (the `Communications` tag was also added to the
+  top-level tag list, where v1.3.3 had used it on paths
+  without listing it); `CHANGELOG.md` [1.5.0] entry.
+- Verification (all run by the builder): backend **596
+  passed (3336 assertions)** (579 at v1.3.3 + 13 new feature
+  + 4 new unit), frontend **404 passed** across 52 files
+  (386 + 18 new), `npm run build` succeeds (71/71 pages).
+  Live HTTP smoke test over the built-in server on a fresh
+  SQLite DB passed **78/78 backend steps + 3/3 CLI checks**:
+  plans, register, org, ops health version 1.5.0, trial,
+  dispatcher + viewer invites, shipment + claim walked to
+  accepted at 200 on requested 250, summary and balance
+  before any payment, payment refused on a non-accepted
+  claim, partial payment 120 with reference and dispatcher
+  notification, validation refusals for zero amount / bad
+  method / future date, ledger list and filters, viewer 403
+  on record, second partial 50 then voided back to 80
+  outstanding, final payment 80 moving the claim to Paid
+  with payment.recorded, void refused on a Paid claim,
+  overpayment 150 on 100 due flagged overpaid, legacy claim
+  paid through the old record-payment endpoint with 250
+  legacy and no ledger rows, report for the current month
+  totalling requested 650 approved 550 paid 600 outstanding
+  50 across 4 claims and 3 ledger payments with 2
+  discrepancies (overpaid + legacy_payment), report list
+  and show, cross-tenant 404s, CLI `reconciliation:run`
+  skipping when a report was generated today, generating
+  after the stored reports were cleared, and skipping again
+  on a second run. OpenAPI 174 paths / 233 operations,
+  verified to match the 233 live `api/v1` route operations
+  exactly.
+- Still unverified (standing blockers, unchanged): browser
+  E2E, live Postgres, live Redis, Docker, real mailer.
+  v1.5.0-specific notes: **no live payment verification
+  was possible** — the ledger records what the organization
+  says it received; billing runs on a mock provider and no
+  payment is verified against a bank, Stripe, or any
+  processor. Mixed-currency totals are summed as recorded.
+  The submission channel (sending a claim package to a
+  broker) is still missing.
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build). The `frontend/AGENTS.md` notice about Next.js
+  agent rules was read; the new pages follow the existing
+  v1.3.3 page patterns in the same codebase, which build
+  cleanly under this Next.js version.
+- Delta computed against remote head `e97591f2`: 18 changed +
+  18 new = 36 files, 892,550 bytes. Manifest at
+  `~/workspace/claimtrail-v150-paths.txt`. Smoke scripts at
+  `~/workspace/claimtrail-scratch-v150/smoke/` (smoke-v150.py,
+  run-smoke.sh, diff-routes.py); delta script at
+  `~/workspace/claimtrail-scratch-v150/compute-delta.py`.
+  (Push status and the checkpoint header are for the main
+  agent: not pushed yet.)
 
 ### 2026-11-27 — v1.3.3 Communication Integrations built and verified (Phase 4 continues)
 
@@ -264,7 +424,7 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   across 48 files, `npm run build` succeeds (68/68
   pages). Live HTTP smoke test over the built-in server
   on a fresh SQLite DB passed **90/90 backend steps +
-  7/7 CLI checks**: provider catalogue (mock/slack/
+  6/6 CLI checks**: provider catalogue (mock/slack/
   teams, none live), channel validation (unknown
   provider, missing/malformed webhook URLs, viewer
   403), channel creation (mock/Slack/Teams, webhook
@@ -314,8 +474,20 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   `~/workspace/claimtrail-scratch-v133/smoke/` (smoke-v133.py,
   run-smoke.sh, diff-routes.py); delta script at
   `~/workspace/claimtrail-scratch-v133/compute-delta.py`.
-  (Push status and the checkpoint header are for the main
-  agent: not pushed yet.)
+- Push status: **PUSHED 2026-11-27 ~14:42 PKT, head `e97591f2`**
+  (52 files, read-back verified: branch head, commit message, file
+  list, and all 52 blob SHAs match the manifest exactly). Delta
+  recomputed by the main agent before the push and identical to
+  the builder's manifest. The remote tree grew 614 to 647 files.
+  This push also brings the remote `DEVELOPMENT_PROGRESS.md` and
+  `MASTER-CHECKLIST.md` current: the v1.3.2 push had left them
+  stale (progress said v1.3.1, checklist had v1.3.2 unchecked).
+- Correction recorded by the main agent: the builder's report and
+  the checklist note said 7/7 CLI checks, but the smoke script
+  (`run-smoke.sh`) has exactly 6 CLI checks and the main agent's
+  re-run passed all 6. The 7/7 figure is corrected to 6/6 here and
+  in MASTER-CHECKLIST.md; the correction rides with the v1.5.0
+  push, since the v1.3.3 commit already carries the 7/7 wording.
 
 ### 2026-11-26 — v1.3.2 TMS Integrations built and verified (Phase 4 continues)
 

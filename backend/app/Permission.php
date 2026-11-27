@@ -119,6 +119,15 @@ enum Permission: string
     // stored encrypted and never returned by the API.
     case ManageCommunications = 'manage-communications';
 
+    // Financial reconciliation (enforced from v1.5.0):
+    // the claim payment ledger, claim balances, and
+    // reconciliation reports. Owner, admin, operations
+    // manager, and dispatcher. Any member may read the
+    // ledger, balances, summary, and reports. Recording
+    // or voiding a payment and generating a report need
+    // this permission. Nothing here moves real money.
+    case ManageReconciliation = 'manage-reconciliation';
+
     /**
      * Every permission value, for validation and documentation.
      *
