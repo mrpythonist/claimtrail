@@ -74,3 +74,9 @@ Schedule::command('comms:expire-links')->dailyAt('05:30');
 // month, skipped when one was already generated today, so
 // the daily schedule never spams duplicate reports.
 Schedule::command('reconciliation:run')->dailyAt('06:00');
+
+// Deadline workflows run daily at 06:30: active workflows
+// with a deadline trigger fire once per claim per day, so a
+// claim whose deadline stays inside the window is not run
+// twice for the same day.
+Schedule::command('workflows:run-due')->dailyAt('06:30');

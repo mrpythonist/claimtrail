@@ -55,6 +55,7 @@ use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\SyncRunController;
 use App\Http\Controllers\Api\V1\TmsIntegrationController;
 use App\Http\Controllers\Api\V1\TmsSyncRunController;
+use App\Http\Controllers\Api\V1\WorkflowController;
 use Illuminate\Support\Facades\Route;
 
 // Every API request gets a correlation id, echoed back on the
@@ -473,6 +474,30 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/operations/broker-trends', [OperationalIntelligenceController::class, 'brokerTrends']);
             Route::get('/operations/revenue-leakage', [OperationalIntelligenceController::class, 'revenueLeakage']);
             Route::get('/operations/recommendations', [OperationalIntelligenceController::class, 'recommendations']);
+
+            // Workflow engine (v2.0.0): configuration, dry-run
+            // evaluation, and execution history with approval
+            // checkpoints and manual retries. Any member may
+            // list workflows and read runs. Creating, changing,
+            // deleting, testing, and retrying need
+            // manage-workflows (owner, admin, operations
+            // manager, dispatcher) and the Starter plan or
+            // better: the Free plan is refused with a 402.
+            // Approving or rejecting a checkpoint needs the
+            // role the checkpoint names (or the owner); the
+            // engine enforces that. The runs routes come first
+            // so /workflows/runs is not read as a workflow id.
+            Route::get('/workflows/runs', [WorkflowController::class, 'runs']);
+            Route::get('/workflows/runs/{run}', [WorkflowController::class, 'showRun']);
+            Route::post('/workflows/runs/{run}/retry', [WorkflowController::class, 'retryRun']);
+            Route::post('/workflows/runs/{run}/approve', [WorkflowController::class, 'approveRun']);
+            Route::post('/workflows/runs/{run}/reject', [WorkflowController::class, 'rejectRun']);
+            Route::get('/workflows', [WorkflowController::class, 'index']);
+            Route::post('/workflows', [WorkflowController::class, 'store']);
+            Route::get('/workflows/{workflow}', [WorkflowController::class, 'show']);
+            Route::put('/workflows/{workflow}', [WorkflowController::class, 'update']);
+            Route::delete('/workflows/{workflow}', [WorkflowController::class, 'destroy']);
+            Route::post('/workflows/{workflow}/test', [WorkflowController::class, 'test']);
         });
     });
 

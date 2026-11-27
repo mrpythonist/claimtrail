@@ -771,6 +771,42 @@ CSV export for the operations endpoints in this version.
 | GET | `/operations/revenue-leakage` | Yes + org header | Gaps between recorded amounts over the submitted population under the v1.5.0 balance rule, by balance status and currency, with the largest outstanding balances. Requires `view-analytics`. |
 | GET | `/operations/recommendations` | Yes + org header | Fixed rules over the six analyses above; each recommendation carries the numbers it was derived from and fires only when its minimum sample is met. Requires `view-analytics`. |
 
+### Workflows (v2.0.0)
+
+Automate the routine parts of a claim: evidence checks, draft
+claim packages, escalations, and human approval checkpoints.
+See docs/WORKFLOW-ENGINE.md for the step types, the honest
+limits, and the failure and retry rules. A workflow belongs
+to one organization and fires on a trigger
+(`claim.created`, `claim.submitted`, `status.changed`,
+`deadline.approaching`, `deadline.overdue`,
+`evidence.completed`, `evidence.incomplete`,
+`payment.recorded`). Conditions are evaluated against the
+claim, shipment, and evidence as recorded; a step never
+calls an external service and a prepared package is a draft
+stored locally, never sent to a broker. Creating, updating,
+or testing a workflow on the Free plan is refused with 402.
+Reading workflows and runs needs `view-workflows` (owner,
+admin, operations manager, dispatcher, viewer); creating,
+updating, deleting, testing, and retrying needs
+`manage-workflows` (owner, admin, operations manager,
+dispatcher). Approving a checkpoint needs the named role or
+the organization owner.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/workflows` | Yes + org header | The organization's workflows, most recently updated first. Requires `view-workflows`. |
+| POST | `/workflows` | Yes + org header | Create a workflow. Body: `name`, `trigger`, `is_active`, `conditions` (array of `field`, `operator`, `value`), `steps` (array of `type` plus `message`, `role`, or `to_status` as the step needs), optional `description` and `deadline_days_before` (1–90, only for `deadline.approaching`). Requires `manage-workflows`; Free plan refused with 402. |
+| GET | `/workflows/{workflow}` | Yes + org header | One workflow with its conditions and steps. Requires `view-workflows`. |
+| PUT | `/workflows/{workflow}` | Yes + org header | Replace a workflow's name, trigger, conditions, steps, and optional description and deadline. Requires `manage-workflows`; Free plan refused with 402. |
+| DELETE | `/workflows/{workflow}` | Yes + org header | Delete a workflow. Refused with 422 when the workflow has runs, so its history stays auditable; deactivate it instead. Requires `manage-workflows`. |
+| POST | `/workflows/{workflow}/test` | Yes + org header | Dry-run a workflow against a claim without starting a run. Body: `claim_id`. Returns whether the conditions match and the steps that would run. Requires `manage-workflows`; Free plan refused with 402. |
+| GET | `/workflows/runs` | Yes + org header | Workflow runs for the organization. Query: `workflow_id`, `claim_id`, `status`. Requires `view-workflows`. |
+| GET | `/workflows/runs/{run}` | Yes + org header | One run with its steps and approvals. Requires `view-workflows`. |
+| POST | `/workflows/runs/{run}/retry` | Yes + org header | Retry a failed run from its failed step. Only failed runs can be retried. Requires `manage-workflows`. |
+| POST | `/workflows/runs/{run}/approve` | Yes + org header | Approve a run waiting at a checkpoint; the run resumes from the next step. Body: optional `note`. The approver must hold the checkpoint's role or be the owner. |
+| POST | `/workflows/runs/{run}/reject` | Yes + org header | Reject a run waiting at a checkpoint; the run stops and no further step runs. Body: optional `note`. The approver must hold the checkpoint's role or be the owner. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

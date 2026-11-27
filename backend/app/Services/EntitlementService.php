@@ -102,7 +102,7 @@ class EntitlementService
      * The resolved numeric limits for a plan key at a carrier
      * count. Agency claims and storage scale per carrier.
      *
-     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool}
+     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool}
      */
     public function limitsForPlan(string $plan, int $carriers): array
     {
@@ -127,6 +127,7 @@ class EntitlementService
             'storage_bytes' => $storage,
             'pdf_packages' => (bool) ($config['pdf_packages'] ?? false),
             'reports' => $plan !== PlanCatalog::FREE,
+            'workflows' => $plan !== PlanCatalog::FREE,
         ];
     }
 
@@ -387,6 +388,38 @@ class EntitlementService
             'Full reports are not included in the '.$limits['plan_name'].' plan.'
                 .($upgrade !== null
                     ? ' Upgrade to '.$upgrade['name'].' to view reports.'
+                    : ''),
+        );
+    }
+
+    /**
+     * Refuse workflow configuration on the Free plan. Reading
+     * workflows and runs stays available: an organization that
+     * downgrades keeps its history, it just cannot create or
+     * change workflows, and its existing workflows stop firing.
+     *
+     * @throws EntitlementExceededException
+     */
+    public function authorizeWorkflows(Organization $organization): void
+    {
+        $limits = $this->limits($organization);
+
+        if ($limits['workflows']) {
+            return;
+        }
+
+        $upgrade = $this->nextPlanFor('workflows', $organization);
+
+        throw new EntitlementExceededException(
+            'workflows',
+            null,
+            0,
+            $limits['plan'],
+            $upgrade['key'] ?? null,
+            $upgrade['name'] ?? null,
+            'Workflows are not included in the '.$limits['plan_name'].' plan.'
+                .($upgrade !== null
+                    ? ' Upgrade to '.$upgrade['name'].' to use workflows.'
                     : ''),
         );
     }

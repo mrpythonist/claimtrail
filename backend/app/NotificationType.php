@@ -36,6 +36,10 @@ enum NotificationType: string
     case CommunicationEmailFailed = 'comms.email_failed';
     case ReconciliationPaymentRecorded = 'reconciliation.payment_recorded';
     case ReconciliationCompleted = 'reconciliation.completed';
+    case WorkflowNotification = 'workflow.notification';
+    case WorkflowEscalated = 'workflow.escalated';
+    case WorkflowApprovalNeeded = 'workflow.approval_needed';
+    case WorkflowRunFailed = 'workflow.run_failed';
 
     public function label(): string
     {
@@ -64,6 +68,10 @@ enum NotificationType: string
             self::CommunicationEmailFailed => 'Communication email failed',
             self::ReconciliationPaymentRecorded => 'Reconciliation payment recorded',
             self::ReconciliationCompleted => 'Reconciliation completed',
+            self::WorkflowNotification => 'Workflow notification',
+            self::WorkflowEscalated => 'Workflow escalation',
+            self::WorkflowApprovalNeeded => 'Workflow approval needed',
+            self::WorkflowRunFailed => 'Workflow run failed',
         };
     }
 

@@ -341,6 +341,22 @@ export function canManageReconciliation(role: OrganizationRole | null | undefine
   return isOneOf(role, RECONCILIATION_MANAGERS);
 }
 
+// ManageWorkflows in the backend map (config/permissions.php):
+// Owner, Admin, Operations Manager, and Dispatcher. They
+// configure workflows, test them, and retry failed runs. Every
+// member may list workflows and read runs. Creating or changing
+// a workflow needs the Starter plan or better.
+const WORKFLOW_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageWorkflows(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, WORKFLOW_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

@@ -1833,3 +1833,99 @@ export interface OperationsRecommendations {
   generated_from: string;
   recommendations: OperationsRecommendation[];
 }
+
+/** One condition of a workflow (v2.0.0). All conditions must match (AND) for the workflow to run. */
+export interface WorkflowCondition {
+  field: string;
+  operator: string;
+  value: string | number | boolean | string[] | null;
+}
+
+/** One step of a workflow definition (v2.0.0). Parameters depend on the step type. */
+export interface WorkflowStep {
+  type: string;
+  message?: string;
+  role?: string;
+  permission?: string;
+  to_status?: string;
+  accepted_amount?: number;
+  rejection_reason?: string;
+  reason?: string;
+  submitted_at?: string;
+}
+
+/** A workflow from GET /workflows (v2.0.0). */
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  trigger: string;
+  trigger_label: string;
+  is_active: boolean;
+  conditions: WorkflowCondition[];
+  steps: WorkflowStep[];
+  deadline_days_before: number | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One step of a workflow run (v2.0.0). */
+export interface WorkflowRunStep {
+  id: string;
+  step_index: number;
+  step_type: string;
+  step_label: string;
+  status: string;
+  status_label: string;
+  attempts: number;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+/** One approval checkpoint decision on a workflow run (v2.0.0). */
+export interface WorkflowApproval {
+  id: string;
+  step_index: number;
+  role: string;
+  status: string;
+  decided_by: string | null;
+  note: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
+/** One workflow run from GET /workflows/runs (v2.0.0). */
+export interface WorkflowRun {
+  id: string;
+  workflow_id: string;
+  workflow_name: string | null;
+  claim_id: string;
+  claim_reference: string | null;
+  trigger: string;
+  trigger_label: string;
+  status: string;
+  status_label: string;
+  actor_user_id: string | null;
+  current_step_index: number;
+  failure_reason: string | null;
+  context: Record<string, unknown> | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  steps: WorkflowRunStep[];
+  approvals: WorkflowApproval[];
+}
+
+/** A dry-run evaluation from POST /workflows/{id}/test (v2.0.0). */
+export interface WorkflowEvaluation {
+  workflow_id: string;
+  claim_id: string;
+  trigger: string;
+  conditions_match: boolean;
+  would_run: boolean;
+  steps: { index: number; type: string; label: string }[];
+}

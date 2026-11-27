@@ -14,8 +14,10 @@ use App\Models\EvidenceFile;
 use App\Models\Organization;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
+use App\Models\User;
 use App\NotificationType;
 use App\Permission;
+use App\ReadinessStatus;
 use App\Services\ClaimReferenceService;
 use App\Services\ClaimTransitionService;
 use App\Services\CustomFieldService;
@@ -23,6 +25,8 @@ use App\Services\DeadlineStatusService;
 use App\Services\EntitlementService;
 use App\Services\NotificationService;
 use App\Services\ReadinessService;
+use App\Services\WorkflowEngine;
+use App\WorkflowTrigger;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -279,6 +283,7 @@ class ClaimController extends Controller
         CustomFieldService $customFields,
         DeadlineStatusService $statuses,
         EntitlementService $entitlements,
+        WorkflowEngine $workflows,
     ): JsonResponse {
         $organization = $this->organization($request);
 
@@ -371,6 +376,10 @@ class ClaimController extends Controller
             null,
             $request->user(),
         );
+
+        // Workflow trigger (v2.0.0): claim.created fires after
+        // the claim exists, so conditions see the recorded claim.
+        $workflows->dispatch(WorkflowTrigger::ClaimCreated, $claim->fresh(), $request->user());
 
         return response()->json([
             'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator'])),
@@ -482,7 +491,7 @@ class ClaimController extends Controller
      * data rules. Moving to paid is rejected here: payments go
      * through the record-payment endpoint.
      */
-    public function transition(Request $request, Claim $claim, ClaimTransitionService $transitions): JsonResponse
+    public function transition(Request $request, Claim $claim, ClaimTransitionService $transitions, WorkflowEngine $workflows): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -503,6 +512,8 @@ class ClaimController extends Controller
         Gate::authorize('transitionTo', [$claim, $target]);
 
         $claim = $transitions->transition($claim, $target, $request->user(), $validated);
+
+        $this->fireStatusTriggers($workflows, $claim, $target, $request->user());
 
         return response()->json([
             'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator', 'updater'])),
@@ -579,7 +590,7 @@ class ClaimController extends Controller
      * whole batch: bulk work is partial-success by design. Moving
      * to paid is rejected here, as in the single endpoint.
      */
-    public function bulkTransition(Request $request, ClaimTransitionService $transitions): JsonResponse
+    public function bulkTransition(Request $request, ClaimTransitionService $transitions, WorkflowEngine $workflows): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -616,6 +627,8 @@ class ClaimController extends Controller
                 Gate::authorize('transitionTo', [$claim, $target]);
 
                 $result = $transitions->transition($claim, $target, $request->user(), $data);
+
+                $this->fireStatusTriggers($workflows, $result, $target, $request->user());
 
                 $updated[] = [
                     'id' => (string) $result->getKey(),
@@ -694,7 +707,7 @@ class ClaimController extends Controller
     /**
      * Record an actual payment and move the claim to paid.
      */
-    public function recordPayment(Request $request, Claim $claim, ClaimTransitionService $transitions): JsonResponse
+    public function recordPayment(Request $request, Claim $claim, ClaimTransitionService $transitions, WorkflowEngine $workflows): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -712,6 +725,10 @@ class ClaimController extends Controller
         ]);
 
         $claim = $transitions->recordPayment($claim, $request->user(), $validated);
+
+        // Workflow trigger (v2.0.0): payment.recorded fires after
+        // the payment is recorded and the claim is paid.
+        $workflows->dispatch(WorkflowTrigger::PaymentRecorded, $claim->fresh(), $request->user());
 
         return response()->json([
             'data' => new ClaimResource($claim->load(['shipment', 'event', 'creator', 'updater'])),
@@ -749,7 +766,7 @@ class ClaimController extends Controller
      * shipment as the claim: a claim can only be supported by
      * evidence from its own shipment.
      */
-    public function attachEvidence(Request $request, Claim $claim): JsonResponse
+    public function attachEvidence(Request $request, Claim $claim, ReadinessService $readiness, WorkflowEngine $workflows): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -776,9 +793,16 @@ class ClaimController extends Controller
             ], 422);
         }
 
+        $wasComplete = $readiness->compute($claim)['readiness_status'] === ReadinessStatus::Ready->value;
+
         $claim->evidenceFiles()->syncWithoutDetaching([
             $evidence->getKey() => ['attached_by' => $request->user()->id],
         ]);
+
+        // Workflow trigger (v2.0.0): the evidence triggers fire
+        // only when attaching flips the readiness outcome
+        // between complete and incomplete.
+        $this->fireEvidenceTriggers($workflows, $readiness, $claim->fresh(), $request->user(), $wasComplete);
 
         return response()->json([
             'data' => new EvidenceFileResource($evidence->load('uploader')),
@@ -789,7 +813,7 @@ class ClaimController extends Controller
      * Detach an evidence file from a claim. The file itself is not
      * deleted; only the link is removed.
      */
-    public function detachEvidence(Request $request, Claim $claim, EvidenceFile $evidence): JsonResponse
+    public function detachEvidence(Request $request, Claim $claim, EvidenceFile $evidence, ReadinessService $readiness, WorkflowEngine $workflows): JsonResponse
     {
         $organization = $this->organization($request);
 
@@ -800,7 +824,14 @@ class ClaimController extends Controller
 
         Gate::authorize('attachEvidence', $claim);
 
+        $wasComplete = $readiness->compute($claim)['readiness_status'] === ReadinessStatus::Ready->value;
+
         $claim->evidenceFiles()->detach($evidence->getKey());
+
+        // Workflow trigger (v2.0.0): detaching fires only when
+        // it flips the readiness outcome from complete to
+        // incomplete.
+        $this->fireEvidenceTriggers($workflows, $readiness, $claim->fresh(), $request->user(), $wasComplete);
 
         return response()->json(['message' => 'Evidence detached from the claim.']);
     }
@@ -933,5 +964,46 @@ class ClaimController extends Controller
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
         ];
+    }
+
+    /**
+     * Fire the workflow triggers for a status change: every
+     * transition fires status.changed, and a move to
+     * submitted also fires claim.submitted.
+     */
+    protected function fireStatusTriggers(WorkflowEngine $workflows, Claim $claim, ClaimStatus $target, User $actor): void
+    {
+        $workflows->dispatch(
+            WorkflowTrigger::StatusChanged,
+            $claim->fresh(),
+            $actor,
+            ['to_status' => $target->value],
+        );
+
+        if ($target === ClaimStatus::Submitted) {
+            $workflows->dispatch(WorkflowTrigger::ClaimSubmitted, $claim->fresh(), $actor);
+        }
+    }
+
+    /**
+     * Fire the evidence workflow triggers when attaching or
+     * detaching evidence flips the readiness outcome between
+     * complete and incomplete. A flip inside incomplete
+     * (partial to not started) fires nothing: the outcome for
+     * the team is the same.
+     */
+    protected function fireEvidenceTriggers(WorkflowEngine $workflows, ReadinessService $readiness, Claim $claim, User $actor, bool $wasComplete): void
+    {
+        $isComplete = $readiness->compute($claim->fresh())['readiness_status'] === ReadinessStatus::Ready->value;
+
+        if ($isComplete === $wasComplete) {
+            return;
+        }
+
+        $workflows->dispatch(
+            $isComplete ? WorkflowTrigger::EvidenceCompleted : WorkflowTrigger::EvidenceIncomplete,
+            $claim->fresh(),
+            $actor,
+        );
     }
 }

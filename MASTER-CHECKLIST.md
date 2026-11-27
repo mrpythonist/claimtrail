@@ -592,16 +592,16 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v2.0.0 — Workflow Engine
 
-- [ ] Workflow configuration.
-- [ ] Trigger system.
-- [ ] Conditional rules.
-- [ ] Automated evidence checks.
-- [ ] Deadline rules.
-- [ ] Automated claim preparation.
-- [ ] Escalation workflows.
-- [ ] Human approval checkpoints.
-- [ ] Workflow execution history.
-- [ ] Failure handling and retries.
+- [x] Workflow configuration.
+- [x] Trigger system.
+- [x] Conditional rules.
+- [x] Automated evidence checks.
+- [x] Deadline rules.
+- [x] Automated claim preparation.
+- [x] Escalation workflows.
+- [x] Human approval checkpoints.
+- [x] Workflow execution history.
+- [x] Failure handling and retries.
 
 ### v2.0.1 — AI Document Processing
 

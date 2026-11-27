@@ -3,6 +3,66 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [2.0.0] - 2026-11-27
+
+Phase 6, Intelligent Automation (the first version of
+Phase 6): the workflow engine. A workflow belongs to one
+organization, fires on a trigger, checks its conditions
+against the claim as recorded, and runs its steps in order.
+Steps are internal only: evidence checks, draft claim
+packages, in-app notifications, escalations, human approval
+checkpoints, workflow notes, and status changes through the
+existing claim state machine. Every run is recorded step by
+step, with approvals and failures, and a failed run can be
+retried by hand. There is no submission channel: a prepared
+package is a draft stored locally and sent nowhere, and no
+step calls an external service. App version bumped to 2.0.0;
+OpenAPI at 196 paths (188 + 8 new paths, 258 operations).
+
+### Added
+
+- Workflow engine (`App\\Services\\WorkflowEngine`,
+  `WorkflowConditionEvaluator`, `WorkflowStepRunner`):
+  eight triggers (claim created, submitted, status changed,
+  deadline approaching, deadline overdue, evidence
+  completed, evidence incomplete, payment recorded),
+  thirteen condition fields with nine operators, seven step
+  types (evidence check, prepare package, notify, escalate,
+  approval, note, transition). One active run per workflow
+  per claim; deadline runs deduped per day by the
+  `workflows:run-due` command (daily 06:30). Approval
+  checkpoints pause the run until a member holding the
+  named role, or the organization owner, approves or
+  rejects it; a wrong-role decision is refused with 422.
+  Failed steps retry with bounded backoff through the
+  `RunWorkflow` job (3 tries, 30/120/600 seconds, 24-hour
+  window); permanent failures mark the run failed with the
+  reason recorded and a `workflow.run_failed` notification.
+- Four workflow tables (`workflows`, `workflow_runs`,
+  `workflow_run_steps`, `workflow_approvals`) with the
+  `WorkflowTrigger`, `WorkflowStepType`,
+  `WorkflowRunStatus`, and `WorkflowStepStatus` enums.
+- `manage-workflows` permission (owner, admin, operations
+  manager, dispatcher) and `view-workflows` for reading;
+  the `workflows` entitlement gates creation, update, and
+  testing on the Starter plan or better (Free plan refused
+  with 402). Four notification types
+  (`workflow.notification`, `workflow.escalated`,
+  `workflow.approval_needed`, `workflow.run_failed`).
+- Workflow API (11 routes under `/workflows/*`): list,
+  create, read, update, delete, dry-run test, list and
+  read runs, retry, approve, reject. A workflow with runs
+  cannot be deleted, so its history stays auditable.
+  Claim, payment, and evidence endpoints fire the matching
+  triggers on store, transition, payment, and attach/detach
+  (evidence triggers fire only when the readiness outcome
+  flips).
+- Frontend `/workflows` page: create workflows, list runs,
+  approve or reject waiting checkpoints, retry failed
+  runs, and dry-run a workflow against a claim.
+- Docs: `docs/WORKFLOW-ENGINE.md`, API.md section, OpenAPI
+  Workflows tag with 8 paths, 11 operations, and 8 schemas.
+
 ## [1.5.2] - 2026-11-27
 
 Phase 5, Operational Intelligence (the last version of

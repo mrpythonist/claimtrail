@@ -138,6 +138,14 @@ enum Permission: string
     // Free plan is refused with a 402, the same as reports.
     case ViewAnalytics = 'view-analytics';
 
+    // Workflow engine (enforced from v2.0.0): workflow
+    // configuration, runs, retries, and approval decisions.
+    // Owner, admin, operations manager, and dispatcher.
+    // Any member may list workflows and read runs. Creating
+    // or changing a workflow needs the Starter plan or
+    // better: the Free plan is refused with a 402.
+    case ManageWorkflows = 'manage-workflows';
+
     /**
      * Every permission value, for validation and documentation.
      *

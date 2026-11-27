@@ -438,7 +438,7 @@ class NotificationTest extends TestCase
         $this->withHeaders($this->orgHeaders($organization))
             ->getJson('/api/v1/notification-preferences')
             ->assertOk()
-            ->assertJsonCount(24, 'data')
+            ->assertJsonCount(28, 'data')
             ->assertJsonPath('data.0.in_app', true)
             ->assertJsonPath('data.0.email', true);
 

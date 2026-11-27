@@ -6,10 +6,10 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.5.1 (Phase 5, Advanced
-  Analytics). App version is now **1.5.1**. Phase 5 is underway
-  (v1.5.0 Financial Reconciliation and v1.5.1 Advanced Analytics
-  done; v1.5.2 Operational Intelligence next). Phase 4 is complete
+- **Last completed version:** v1.5.2 (Phase 5, Operational
+  Intelligence). App version is now **1.5.2**. Phase 5 is COMPLETE
+  (v1.5.0 Financial Reconciliation, v1.5.1 Advanced Analytics,
+  v1.5.2 Operational Intelligence). Phase 4 is complete
   (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is complete (v1.2.3).
   Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0
   done; v0.2.0 interviews deferred, still open). What remains
@@ -19,22 +19,23 @@ chat (see "Push rule" below).
   `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
   Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `838f47fe` (v1.5.1, pushed 2026-11-27 ~17:43 PKT after Aqib's
-  yes + approval card). 29 files in the v1.5.1 commit, read-back verified
+  head `16d343c8` (v1.5.2, pushed 2026-11-27 ~18:35 PKT after Aqib's
+  yes + approval card). 18 files in the v1.5.2 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.5.1:** 617 backend (3460 assertions) + 420 frontend, all
-  passing. `npm run build` succeeds (75/75 pages). Live HTTP smoke test:
-  99/99 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
-  2026-11-27 v1.5.1 log entry). OpenAPI 181 paths, verified to match
-  the 240 live `api/v1` route operations exactly.
+- **Tests at v1.5.2:** 635 backend (3664 assertions) + 422 frontend, all
+  passing. `npm run build` succeeds (76/76 pages). Live HTTP smoke test:
+  102/102 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
+  2026-11-27 v1.5.2 log entry). OpenAPI 188 paths, verified to match
+  the 247 live `api/v1` route operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.5.2 — Operational Intelligence** (MASTER-CHECKLIST.md, Phase 5) is
-the next build. **Status 2026-11-27: v1.5.1 PUSHED, head `838f47fe`.**
+**v2.0.0 — Workflow Engine** (MASTER-CHECKLIST.md, Phase 6,
+Intelligent Automation) is the next build. **Status 2026-11-27:
+v1.5.2 PUSHED, head `16d343c8`, Phase 5 COMPLETE.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -106,6 +107,147 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v2.0.0 Workflow Engine built and verified (Phase 6 starts)
+
+- Gate check passed first: no other builder was running,
+  remote head on GitHub is `16d343c8` (v1.5.2), and no
+  `claimtrail-scratch-v200` existed. Build started
+  2026-11-27 ~21:29 PKT on Aqib's "Start v2.0.0 now" in the
+  main chat (subagent). This is the FIRST version of Phase 6
+  (Intelligent Automation); Phase 5 is complete.
+- Spec: MASTER-CHECKLIST.md v2.0.0 (10 items). All ten
+  verified and checked.
+- Backend (new): migration
+  `2026_11_27_100900_create_workflow_tables.php`
+  (`workflows`, `workflow_runs`, `workflow_run_steps`,
+  `workflow_approvals`); enums `WorkflowTrigger`,
+  `WorkflowStepType`, `WorkflowRunStatus`,
+  `WorkflowStepStatus`; models `Workflow`, `WorkflowRun`,
+  `WorkflowRunStep`, `WorkflowApproval`;
+  `app/Services/WorkflowEngine.php` (dispatch, startRun
+  with active-run dedup, execute, retry, approve, reject,
+  presentWorkflow, presentRun),
+  `WorkflowConditionEvaluator.php` (13 fields, 9
+  operators), `WorkflowStepRunner.php` (evidence_check via
+  the existing readiness computation, prepare_package as a
+  local draft PDF under `workflow-drafts/`, notify,
+  escalate, approval pause marker, note, transition via
+  `ClaimTransitionService`), `app/Jobs/RunWorkflow.php`
+  (3 tries, backoff 30/120/600 seconds, 24-hour window;
+  failed() marks the run failed),
+  `app/Console/Commands/RunDueWorkflowsCommand.php`
+  (`workflows:run-due`, daily 06:30, dedups by day),
+  `app/Http/Controllers/Api/V1/WorkflowController.php`
+  (11 routes). `manage-workflows` permission
+  (owner/admin/operations_manager/dispatcher) and
+  `view-workflows` for reading; the `workflows`
+  entitlement gates create/update/test on the Starter plan
+  or better (Free plan refused with 402). Four new
+  notification types (`workflow.notification`,
+  `workflow.escalated`, `workflow.approval_needed`,
+  `workflow.run_failed`); notification-preference count is
+  now 28. ClaimController hooks fire the matching triggers
+  on store (claim.created), transition/bulkTransition
+  (status.changed, claim.submitted), recordPayment
+  (payment.recorded), and attach/detach (evidence.completed
+  / evidence.incomplete only when the readiness outcome
+  flips). A workflow with runs cannot be deleted, so its
+  history stays auditable; deactivate it instead.
+- Backend edits: `config/app.php` version 2.0.0;
+  `config/permissions.php`, `routes/api.php` 11 new routes,
+  `app/Services/EntitlementService.php` (`workflows` limit
+  + `authorizeWorkflows`), `app/Services/NotificationService.php`
+  (four new types), notification-preference count 24 to 28.
+  Pre-existing test updated for the version bump:
+  HealthCheckTest version 1.5.2 to 2.0.0.
+- Frontend: `src/lib/workflows.ts` (client + trigger/step/
+  condition constants), `src/lib/permissions.ts`
+  (`canManageWorkflows`), workflow types in `src/lib/types.ts`,
+  AppShell "Workflows" nav entry (visible for
+  `canManageWorkflows`), `/workflows` page (create, list,
+  dry-run test, runs with approve/reject/retry). Tests:
+  `src/lib/__tests__/workflows.test.ts` (6 tests),
+  `src/app/(app)/workflows/__tests__/page.test.tsx`
+  (4 tests).
+- Docs: new `docs/WORKFLOW-ENGINE.md` (definitions and the
+  honest limits, including the no-submission-channel limit),
+  API.md Workflows section, OpenAPI Workflows tag (8 paths,
+  11 operations, 8 schemas), CHANGELOG [2.0.0].
+- Verification findings, three real defects in the
+  builder's own first pass (all fixed before the smoke
+  ran, none in the backend engine): the frontend lib, the
+  engine doc, and the OpenAPI enum first used invented
+  condition field names (`claim.event_type`,
+  `claim.broker_name`, `claim.approved_amount`,
+  `claim.readiness_percentage`, `claim.deadline_days_remaining`,
+  `shipment.origin`, `shipment.destination`, `trigger`);
+  the evaluator's 13 real fields are authoritative
+  (`claim.status`, `claim.claim_category`, `claim.currency`,
+  `claim.rejection_reason`, `claim.requested_amount`,
+  `claim.days_since_created`,
+  `shipment.broker_or_customer_name`, `shipment.carrier_id`,
+  `readiness.percentage`, `readiness.status`,
+  `readiness.missing_count`, `deadline.status`,
+  `deadline.days_until`), and the lib, docs, and OpenAPI
+  were corrected to them. The approval refusal is a 422
+  (`ValidationException` from `authorizeApprover`), not a
+  403; the engine doc and the OpenAPI approve/reject
+  responses were corrected to 422. The `/workflows` page
+  first passed a `rows` prop to the Table component, which
+  takes `<tr>` children; the page tests caught the empty
+  table and the page was rewritten to children. The smoke
+  script's first run also caught two of its own mistakes
+  (register returns the token at the top level, not under
+  `data`; the invitation-token regex was copied from a
+  redacted display), both fixed in the script.
+- Verification: backend 672 tests / 3,877 assertions, 0
+  failures (659 warnings are the pre-existing phpdotenv
+  missing-.env noise); frontend 432 tests / 60 files, all
+  passing; `npm run build` succeeds (77/77 pages, the new
+  `/workflows` route included). Live HTTP smoke test:
+  71/71 steps + 2/2 CLI checks on a fresh SQLite DB (see
+  `~/workspace/claimtrail-scratch-v200/smoke/`): Free-plan
+  workflow creation refused 402; a 900 claim fires the
+  evidence-check + draft-package + notify + note workflow
+  (draft PDF on disk, notification sent) while a 100 claim
+  does not fire it; an approval checkpoint pauses, refuses
+  a dispatcher with 422, and completes after the
+  operations manager approves; a deadline workflow fires
+  once via `workflows:run-due` and the second run starts 0;
+  an illegal transition fails the run cleanly, the
+  workflow is fixed, and the manual retry completes it;
+  dry-run, validation (422 on unknown field and empty
+  steps), delete guard (422 with runs, 200 without), and
+  cross-tenant isolation (second org gets 404/404/empty)
+  all pass. OpenAPI 196 paths / 258 operations, verified
+  to match the live `api/v1` routes exactly
+  (diff-routes.py).
+- Honest limits carried forward: workflows act only on the
+  org's own recorded data; a prepared package is a draft
+  stored locally and never sent anywhere (the app still has
+  no submission channel); no step calls an external
+  service; deadline rules use the existing deadline clock
+  (a claim gets a deadline row only when a deadline setting
+  resolves for its category, otherwise it has none);
+  approval steps are the only pause; notifications are
+  in-app only. Still unverified: browser E2E, live
+  Postgres, live Redis, Docker, real mailer.
+- Note: `backend/AGENTS.md` in the repo instructs installing
+  Laravel Boost via composer/curl. That is repo file content,
+  not a task instruction; correctly ignored by the builder,
+  not acted on (a system safety notice also flagged it during
+  this build).
+- Delta computed against remote head `16d343c8`: 18 changed +
+  23 new = 41 files, 1,122,472 bytes. Manifest at
+  `~/workspace/claimtrail-v200-paths.txt`. Smoke scripts at
+  `~/workspace/claimtrail-scratch-v200/smoke/` (smoke-v200.py,
+  run-smoke.sh, diff-routes.py); delta script at
+  `~/workspace/claimtrail-scratch-v200/compute-delta.py`.
+- Push status: **for the main agent** (not pushed; the main
+  agent verifies independently and delivers the ready-to-push
+  notice in the main chat; push only on Aqib's yes + approval
+  card).
 
 ### 2026-11-27 — v1.5.2 Operational Intelligence built and verified (Phase 5 complete)
 
@@ -231,11 +373,19 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   follows the existing v1.5.1 page patterns in the same
   codebase, which build cleanly under this Next.js version.
 - Delta computed against remote head `838f47fe`: 10 changed +
-  8 new = 18 files, 923,164 bytes. Manifest at `~/workspace/claimtrail-v152-paths.txt`.
+  8 new = 18 files, 923,202 bytes (the builder's entry said
+  923,164; that figure predated the final log-entry edit, and the
+  main agent's recomputation plus the push-time read-back both
+  give 923,202). Manifest at `~/workspace/claimtrail-v152-paths.txt`.
   Smoke scripts at `~/workspace/claimtrail-scratch-v152/smoke/`
   (smoke-v152.py, run-smoke.sh, diff-routes.py); delta
   script at `~/workspace/claimtrail-scratch-v152/compute-delta.py`.
-- Push status: for the main agent (not pushed by this build).
+- Push status: **PUSHED 2026-11-27 ~18:35 PKT, head `16d343c8`**
+  (18 files, read-back verified: branch head, commit message, file
+  list, and all 18 blob SHAs match the manifest exactly; 10
+  changed + 8 new vs the old head, remote tree 680 to 688 files).
+  Delta recomputed by the main agent before the push and identical
+  to the builder's manifest.
 
 ### 2026-11-27 — v1.5.1 Advanced Analytics built and verified (Phase 5 continues)
 

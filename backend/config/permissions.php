@@ -73,6 +73,7 @@ return [
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
+        Permission::ManageWorkflows->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -112,6 +113,7 @@ return [
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
+        Permission::ManageWorkflows->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -132,6 +134,7 @@ return [
         Permission::ManageTmsIntegrations->value,
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
+        Permission::ManageWorkflows->value,
         Permission::ViewAnalytics->value,
     ],
 
