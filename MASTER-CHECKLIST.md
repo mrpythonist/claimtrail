@@ -578,13 +578,13 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v1.5.2 — Operational Intelligence
 
-- [ ] Detention trend analysis.
-- [ ] Facility performance analysis.
-- [ ] Rejection reason analysis.
-- [ ] Missing evidence trends.
-- [ ] Broker-level trends.
-- [ ] Revenue leakage analysis.
-- [ ] Operational recommendations.
+- [x] Detention trend analysis.
+- [x] Facility performance analysis.
+- [x] Rejection reason analysis.
+- [x] Missing evidence trends.
+- [x] Broker-level trends.
+- [x] Revenue leakage analysis.
+- [x] Operational recommendations.
 
 ---
 

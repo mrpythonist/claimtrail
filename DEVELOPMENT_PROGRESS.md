@@ -6,34 +6,35 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.5.0 (Phase 5, Financial
-  Reconciliation). App version is now **1.5.0**. Phase 5 is underway
-  (v1.5.0 done; v1.5.1 Advanced Analytics and v1.5.2 Operational
-  Intelligence next). Phase 4 is complete (v1.3.0, v1.3.1, v1.3.2,
-  v1.3.3). Phase 3 is complete (v1.2.3). Phase 0 is complete
-  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews
-  deferred, still open). What remains before real customers is
-  Aqib's launch decision: open signups vs closed pilot first
-  (pilot prep is ready, no pilot customer recruited), plus the
-  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
-  (lawyer review, real Stripe, real mailer, hosting, domain).
+- **Last completed version:** v1.5.1 (Phase 5, Advanced
+  Analytics). App version is now **1.5.1**. Phase 5 is underway
+  (v1.5.0 Financial Reconciliation and v1.5.1 Advanced Analytics
+  done; v1.5.2 Operational Intelligence next). Phase 4 is complete
+  (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is complete (v1.2.3).
+  Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0
+  done; v0.2.0 interviews deferred, still open). What remains
+  before real customers is Aqib's launch decision: open signups
+  vs closed pilot first (pilot prep is ready, no pilot customer
+  recruited), plus the person-only items in
+  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
+  Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `01dc5698` (v1.5.0, pushed 2026-11-27 ~15:52 PKT after Aqib's
-  yes + approval card). 36 files in the v1.5.0 commit, read-back verified
+  head `838f47fe` (v1.5.1, pushed 2026-11-27 ~17:43 PKT after Aqib's
+  yes + approval card). 29 files in the v1.5.1 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.5.0:** 596 backend (3336 assertions) + 404 frontend, all
-  passing. `npm run build` succeeds (71/71 pages). Live HTTP smoke test:
-  78/78 backend steps + 3/3 CLI checks on a fresh SQLite DB (see the
-  2026-11-27 v1.5.0 log entry). OpenAPI 174 paths, verified to match
-  the 233 live `api/v1` route operations exactly.
+- **Tests at v1.5.1:** 617 backend (3460 assertions) + 420 frontend, all
+  passing. `npm run build` succeeds (75/75 pages). Live HTTP smoke test:
+  99/99 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
+  2026-11-27 v1.5.1 log entry). OpenAPI 181 paths, verified to match
+  the 240 live `api/v1` route operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v1.5.1 — Advanced Analytics** (MASTER-CHECKLIST.md, Phase 5) is
-the next build. **Status 2026-11-27: v1.5.0 PUSHED, head `01dc5698`.**
+**v1.5.2 — Operational Intelligence** (MASTER-CHECKLIST.md, Phase 5) is
+the next build. **Status 2026-11-27: v1.5.1 PUSHED, head `838f47fe`.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -105,6 +106,136 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v1.5.2 Operational Intelligence built and verified (Phase 5 complete)
+
+- Gate check passed first: no other builder was running,
+  remote head on GitHub is `838f47fe` (v1.5.1), and no
+  `claimtrail-scratch-v152` existed. Build started
+  2026-11-27 ~17:54 PKT on Aqib's "Start v1.5.2" in the main
+  chat (subagent). This is the LAST version of Phase 5;
+  Phase 6 is v2.0.0 Workflow Engine (not this build).
+- Spec: MASTER-CHECKLIST.md v1.5.2 (7 items). All seven
+  verified and checked.
+- Backend (new): `app/Services/OperationalIntelligenceService.php`
+  (extends `ClaimAnalyticsService`, so the submitted
+  population, rate rounding at six decimals, and money
+  totals have one definition each; injects `ReadinessService`
+  and `ReconciliationService`): detentionTrends (detention
+  claims only, monthly series, comparison against the
+  preceding window), facilities (facility is the shipment's
+  delivery location where one is recorded, otherwise its
+  pickup location, otherwise "Unnamed facility"), rejection
+  reasons (the recorded `rejection_reason`, unrecorded ones
+  under "Not recorded", no invented taxonomy), missing
+  evidence (the existing readiness computation over
+  attached evidence against the organization's configured
+  requirements; a claim with no configured requirements is
+  not incomplete), broker trends (each broker's monthly
+  series plus its change against the preceding window),
+  revenue leakage (per-claim v1.5.0 balances summed: cut at
+  approval, outstanding, overpaid, legacy, unsubmitted
+  pipeline reported separately, by balance status, per
+  currency, five largest outstanding balances),
+  recommendations (eight fixed rules with stated minimum
+  samples; each carries the numbers it was derived from in
+  its `evidence` field; severity `watch`/`note` by cutoffs
+  chosen for this report, documented as such).
+  `app/Http/Controllers/Api/V1/OperationalIntelligenceController.php`
+  (7 GET endpoints; reads need the existing `view-analytics`
+  plus the reports plan gate, Free plan refused with 402;
+  `from`/`to` validated as dates with `to` on or after
+  `from`). No new migration, no new console command, no new
+  notification types, no new permission, no CSV export for
+  the operations endpoints in this version.
+- Backend edits: `config/app.php` version 1.5.2;
+  `routes/api.php` 7 new routes under `/operations/*`
+  (GET detention-trends, facilities, rejection-reasons,
+  missing-evidence, broker-trends, revenue-leakage,
+  recommendations). Pre-existing test updated for the
+  version bump: HealthCheckTest version 1.5.1 to 1.5.2.
+- Verification findings, no product defect this time: the
+  feature-test fixture first expected the detention
+  outstanding total to be 250.00 (per-claim dues summed),
+  but the service returned 150.00 — the analytics money
+  totals compute the amount due at the aggregate level
+  (total approved when any approved amount exists), which
+  is the v1.5.1 convention, while the leakage endpoint
+  sums per-claim balances under the v1.5.0 rule. The test
+  expectation was wrong, not the service; the test was
+  corrected with a comment, and the difference is stated
+  in docs/OPERATIONAL-INTELLIGENCE.md. Second finding: the
+  claim transition endpoint REQUIRES a rejection reason,
+  so a reason-less rejection cannot be produced through
+  the API — the smoke proves the "Not recorded" grouping
+  by rejecting with a reason and then clearing it in
+  SQLite, which stands in for legacy or directly edited
+  records. The frontend page test needed two assertions
+  changed to getAllByText where the same text appears
+  twice on the page ("Beta Freight", "50%"); no app
+  change. One unused import removed from the new service
+  (`EvidenceDocumentCategory`).
+- Frontend (new): `OperationsDetentionTrends` /
+  `OperationsFacilityRow` / `OperationsRejectionReasonRow`
+  / `OperationsMissingEvidence` / `OperationsBrokerTrendRow`
+  / `OperationsRevenueLeakage` / `OperationsRecommendation`
+  types; `src/lib/operations.ts` typed client
+  (getDetentionTrends, listFacilityPerformance,
+  listRejectionReasons, getMissingEvidence,
+  listBrokerTrends, getRevenueLeakage, getRecommendations);
+  page `/operations` (recommendations, detention trends,
+  facility and broker tables, rejection reasons, missing
+  evidence, revenue leakage) with an Operational
+  Intelligence entry in the AppShell Insights section
+  (labelled in full because Settings already has an
+  "Operations" entry at `/settings/operations`). Charts
+  reuse the existing `CountBar` CSS bar component; no
+  chart library was added. Reuses `formatAnalyticsRate` /
+  `formatAnalyticsAverage` from `claim-analytics.ts`.
+- Docs: new `docs/OPERATIONAL-INTELLIGENCE.md`
+  (definitions and honest limits), a section in
+  `docs/API.md`, the Operational Intelligence tag, 7 paths,
+  and 11 schemas in `docs/openapi.yaml` (info version also
+  bumped 1.5.1 to 1.5.2), `CHANGELOG.md` [1.5.2].
+- Verification (all real counts, re-run by the builder):
+  backend 635 tests, 3664 assertions, 0 failures (617 at
+  v1.5.1 + 12 new feature + 6 new unit; the 622 warnings
+  are the standing phpdotenv missing-`.env` noise, 13 tests
+  passed cleanly); frontend 422 tests across 58 files,
+  `npm run build` 76/76 pages (75 + 1 new); live smoke
+  102/102 backend steps + 2/2 CLI checks on a fresh
+  SQLite DB via the built-in server (7 claims across two
+  brokers and three facilities, three rejection reasons,
+  evidence requirements and files seeded through SQLite);
+  OpenAPI 188 paths / 247 operations, verified to match
+  the 247 live `api/v1` route operations exactly (diff
+  script). Smoke proof points: detention recovery 50% vs
+  requested / 70% vs approved, rejection 33.33%, averages
+  2.0 days (n=3) / 5.0 days (n=1); facilities Dallas DC
+  66.67% recovery, Fort Worth Hub 16.67%, Unnamed 0%;
+  rejection reasons 66.67% insufficient evidence, 33.33%
+  not recorded; missing evidence average readiness 42.86%
+  (n=7), bill of lading and proof of delivery each missing
+  on 4 of 5 incomplete; leakage requested 950 / approved
+  600 / paid 450 / outstanding 400, cut at approval 100,
+  legacy 0, pipeline 500; recommendations 5 rules firing
+  in rule order (worst broker Beta Freight 66.67% watch,
+  top reason, most missing evidence, outstanding 400,
+  detention rising 1 to 4).
+- Note: `backend/AGENTS.md` in the repo instructs
+  installing Laravel Boost via composer/curl. That is repo
+  file content, not a task instruction; correctly ignored
+  by the builder, not acted on (a system safety notice also
+  flagged it during this build). The `frontend/AGENTS.md`
+  notice about Next.js agent rules was read; the new page
+  follows the existing v1.5.1 page patterns in the same
+  codebase, which build cleanly under this Next.js version.
+- Delta computed against remote head `838f47fe`: 10 changed +
+  8 new = 18 files, 923,164 bytes. Manifest at `~/workspace/claimtrail-v152-paths.txt`.
+  Smoke scripts at `~/workspace/claimtrail-scratch-v152/smoke/`
+  (smoke-v152.py, run-smoke.sh, diff-routes.py); delta
+  script at `~/workspace/claimtrail-scratch-v152/compute-delta.py`.
+- Push status: for the main agent (not pushed by this build).
 
 ### 2026-11-27 — v1.5.1 Advanced Analytics built and verified (Phase 5 continues)
 
@@ -265,12 +396,20 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   v1.5.0 page patterns in the same codebase, which build
   cleanly under this Next.js version.
 - Delta computed against remote head `01dc5698`: 14 changed +
-  15 new = 29 files, 920,513 bytes. Manifest at
+  15 new = 29 files, 920,542 bytes (the builder's entry said
+  920,513; that figure predated the final log-entry edit, and the
+  main agent's recomputation plus the push-time read-back both
+  give 920,542). Manifest at
   `~/workspace/claimtrail-v151-paths.txt`. Smoke scripts at
   `~/workspace/claimtrail-scratch-v151/smoke/` (smoke-v151.py,
   run-smoke.sh, diff-routes.py); delta script at
   `~/workspace/claimtrail-scratch-v151/compute-delta.py`.
-- Push status: for the main agent (not pushed by this build).
+- Push status: **PUSHED 2026-11-27 ~17:43 PKT, head `838f47fe`**
+  (29 files, read-back verified: branch head, commit message, file
+  list, and all 29 blob SHAs match the manifest exactly; 14
+  changed + 15 new vs the old head, remote tree 665 to 680 files).
+  Delta recomputed by the main agent before the push and identical
+  to the builder's manifest.
 
 ### 2026-11-27 — v1.5.0 Financial Reconciliation built and verified (Phase 5 begins)
 

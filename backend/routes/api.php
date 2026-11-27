@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
 use App\Http\Controllers\Api\V1\OnboardingController;
 use App\Http\Controllers\Api\V1\OpsController;
+use App\Http\Controllers\Api\V1\OperationalIntelligenceController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
@@ -453,6 +454,25 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/analytics/monthly', [AnalyticsController::class, 'monthly']);
             Route::get('/analytics/yearly', [AnalyticsController::class, 'yearly']);
             Route::get('/analytics/export', [AnalyticsController::class, 'export']);
+
+            // Operational intelligence (v1.5.2): detention
+            // trends, facility performance, rejection reasons,
+            // missing-evidence trends, broker-level trends,
+            // revenue leakage, and deterministic operational
+            // recommendations. Same readers and the same plan
+            // gate as analytics: view-analytics, Free plan
+            // refused with a 402. Every number is computed
+            // from the org's own recorded claims, shipments,
+            // payments, and evidence; money is summed as
+            // recorded, with no conversion, and every average
+            // carries its sample size.
+            Route::get('/operations/detention-trends', [OperationalIntelligenceController::class, 'detentionTrends']);
+            Route::get('/operations/facilities', [OperationalIntelligenceController::class, 'facilities']);
+            Route::get('/operations/rejection-reasons', [OperationalIntelligenceController::class, 'rejectionReasons']);
+            Route::get('/operations/missing-evidence', [OperationalIntelligenceController::class, 'missingEvidence']);
+            Route::get('/operations/broker-trends', [OperationalIntelligenceController::class, 'brokerTrends']);
+            Route::get('/operations/revenue-leakage', [OperationalIntelligenceController::class, 'revenueLeakage']);
+            Route::get('/operations/recommendations', [OperationalIntelligenceController::class, 'recommendations']);
         });
     });
 

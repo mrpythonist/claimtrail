@@ -739,6 +739,38 @@ are refused with 402. CSV exports need `export-reports`.
 | GET | `/analytics/yearly` | Yes + org header | One point per calendar year, same fields as monthly. Requires `view-analytics`. |
 | GET | `/analytics/export?type=overview\|brokers\|carriers\|event-types\|monthly` | Yes + org header | CSV download of the matching table or series. Requires `export-reports`. |
 
+### Operational Intelligence (v1.5.2)
+
+Read-only operational intelligence computed from the
+organization's own recorded claims, shipments, payments,
+and evidence. See docs/OPERATIONAL-INTELLIGENCE.md for the
+metric definitions and the honest limits (no external
+benchmark, no live payment verification, money summed as
+recorded with no currency conversion, averages labelled
+with their sample size, leakage is gaps between recorded
+amounts, not proven lost money, recommendations are fixed
+rules over the org's own numbers). The facility is the
+shipment's delivery location where one is recorded,
+otherwise its pickup location, otherwise "Unnamed
+facility". Rejection reasons are the reasons recorded on
+the claims; unrecorded ones group under "Not recorded".
+All endpoints take optional `from` and `to` dates
+(`YYYY-MM-DD`); without them the range is the last 12
+months. Reading needs `view-analytics` (owner, admin,
+operations manager, dispatcher, billing staff, viewer);
+Free-plan organizations are refused with 402. There is no
+CSV export for the operations endpoints in this version.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/operations/detention-trends` | Yes + org header | Detention claims only: counts, rates, averages, monthly series, and a comparison with the preceding window. Requires `view-analytics`. |
+| GET | `/operations/facilities` | Yes + org header | One row per facility as recorded on the claims' shipments, most claims first, with counts, money, rates, and average payment time. Requires `view-analytics`. |
+| GET | `/operations/rejection-reasons` | Yes + org header | One row per recorded rejection reason over the rejected claims, most rejections first, with each reason's share of rejections. Requires `view-analytics`. |
+| GET | `/operations/missing-evidence` | Yes + org header | Missing document categories, incomplete-claim counts, average readiness, and the monthly trend, from the existing readiness computation. Requires `view-analytics`. |
+| GET | `/operations/broker-trends` | Yes + org header | One row per broker with its monthly series and its change against the preceding window. Requires `view-analytics`. |
+| GET | `/operations/revenue-leakage` | Yes + org header | Gaps between recorded amounts over the submitted population under the v1.5.0 balance rule, by balance status and currency, with the largest outstanding balances. Requires `view-analytics`. |
+| GET | `/operations/recommendations` | Yes + org header | Fixed rules over the six analyses above; each recommendation carries the numbers it was derived from and fires only when its minimum sample is met. Requires `view-analytics`. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

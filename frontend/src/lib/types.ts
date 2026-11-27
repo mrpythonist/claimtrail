@@ -1670,3 +1670,166 @@ export type AnalyticsExportType =
   | "carriers"
   | "event-types"
   | "monthly";
+
+/** One monthly point of a detention trend (v1.5.2). Same shape as AnalyticsMonthlyPoint. */
+export interface OperationsMonthlyPoint {
+  month: string;
+  claims_created: number;
+  submitted: number;
+  paid: number;
+  rejected: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  recovery_rate_vs_requested: number | null;
+}
+
+/** Detention trends from GET /operations/detention-trends (v1.5.2). Detention claims only. */
+export interface OperationsDetentionTrends {
+  organization_id: string;
+  from: string;
+  to: string;
+  currencies: string[];
+  counts: {
+    claims: number;
+    submitted: number;
+    paid: number;
+    rejected: number;
+    accepted: number;
+  };
+  rates: AnalyticsRates;
+  money: AnalyticsMoney;
+  money_by_currency: (AnalyticsMoney & { currency: string })[];
+  average_submission_days: AnalyticsAverage;
+  average_payment_days: AnalyticsAverage;
+  monthly: OperationsMonthlyPoint[];
+  comparison: AnalyticsComparison;
+}
+
+/** One facility row from GET /operations/facilities (v1.5.2). */
+export interface OperationsFacilityRow extends AnalyticsPerformanceRow {
+  facility: string;
+}
+
+/** One rejection-reason row from GET /operations/rejection-reasons (v1.5.2). */
+export interface OperationsRejectionReasonRow {
+  reason: string;
+  rejected: number;
+  share_of_rejected: number | null;
+  requested_amount: string;
+  currencies: string[];
+}
+
+/** Average readiness as a percentage with its sample size (v1.5.2). */
+export interface OperationsReadinessAverage {
+  percentage: number | null;
+  sample_size: number;
+}
+
+/** One missing-evidence category row (v1.5.2). */
+export interface OperationsMissingCategoryRow {
+  category: string;
+  category_label: string;
+  claims_missing: number;
+  share_of_incomplete: number | null;
+}
+
+/** One monthly point of the missing-evidence trend (v1.5.2). */
+export interface OperationsMissingMonthlyPoint {
+  month: string;
+  claims_created: number;
+  claims_with_requirements: number;
+  incomplete: number;
+  average_readiness_percentage: OperationsReadinessAverage;
+}
+
+/** Missing-evidence trends from GET /operations/missing-evidence (v1.5.2). */
+export interface OperationsMissingEvidence {
+  organization_id: string;
+  from: string;
+  to: string;
+  claims: number;
+  claims_with_requirements: number;
+  claims_incomplete: number;
+  average_readiness_percentage: OperationsReadinessAverage;
+  by_category: OperationsMissingCategoryRow[];
+  monthly: OperationsMissingMonthlyPoint[];
+}
+
+/** One broker-trend row from GET /operations/broker-trends (v1.5.2). */
+export interface OperationsBrokerTrendRow extends AnalyticsPerformanceRow {
+  broker: string;
+  monthly: OperationsMonthlyPoint[];
+  change: AnalyticsComparison["change"];
+}
+
+/** One balance-status row of the revenue leakage (v1.5.2). */
+export interface OperationsLeakageStatusRow {
+  balance_status: string;
+  claims: number;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+}
+
+/** One of the largest outstanding balances (v1.5.2). */
+export interface OperationsLargestOutstanding {
+  claim_id: string;
+  claim_reference: string;
+  broker: string;
+  requested_amount: string;
+  approved_amount: string | null;
+  paid_amount: string;
+  outstanding_amount: string;
+}
+
+/** One per-currency leakage row (v1.5.2). */
+export interface OperationsLeakageCurrencyRow {
+  currency: string;
+  requested_amount: string;
+  approved_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  requested_vs_approved_gap: string;
+}
+
+/** Revenue leakage from GET /operations/revenue-leakage (v1.5.2). Gaps between recorded amounts only. */
+export interface OperationsRevenueLeakage {
+  organization_id: string;
+  from: string;
+  to: string;
+  currencies: string[];
+  submitted_claims: number;
+  requested_total: string;
+  approved_total: string;
+  paid_total: string;
+  outstanding_total: string;
+  requested_vs_approved_gap: string;
+  claims_cut_at_approval: number;
+  overpaid_total: string;
+  legacy_total: string;
+  unsubmitted_claims: number;
+  unsubmitted_requested_total: string;
+  by_balance_status: OperationsLeakageStatusRow[];
+  money_by_currency: OperationsLeakageCurrencyRow[];
+  largest_outstanding: OperationsLargestOutstanding[];
+}
+
+/** One operational recommendation (v1.5.2). Evidence carries the numbers the rule was derived from. */
+export interface OperationsRecommendation {
+  type: string;
+  title: string;
+  detail: string;
+  severity: string;
+  evidence: Record<string, unknown>;
+}
+
+/** Recommendations from GET /operations/recommendations (v1.5.2). */
+export interface OperationsRecommendations {
+  organization_id: string;
+  from: string;
+  to: string;
+  generated_from: string;
+  recommendations: OperationsRecommendation[];
+}

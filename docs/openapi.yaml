@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.5.1
+  version: 1.5.2
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -84,6 +84,7 @@ tags:
   - name: Communications
   - name: Reconciliation
   - name: Analytics
+  - name: Operational Intelligence
 paths:
   /auth/register:
     post:
@@ -7143,6 +7144,238 @@ paths:
               schema: { type: string }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /operations/detention-trends:
+    get:
+      tags: [Operational Intelligence]
+      summary: Detention trend analysis
+      description: >-
+        Detention claims only, over claims created in the
+        range: counts, recovery and rejection rates, average
+        submission and payment times, the monthly series, and
+        a comparison with the preceding window of the same
+        length. There is no detention-hours field on a claim,
+        so the trend is over detention claims and their
+        recorded money, not over hours waited. Query: from,
+        to (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Detention trends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OperationsDetentionTrends"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/facilities:
+    get:
+      tags: [Operational Intelligence]
+      summary: Facility performance
+      description: >-
+        One row per facility as recorded on the claims'
+        shipments: the delivery location where one is
+        recorded, otherwise the pickup location, otherwise
+        "Unnamed facility". Counts, money, rates, and average
+        payment time, most claims first. Query: from, to
+        (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Facility performance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationsFacilityRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/rejection-reasons:
+    get:
+      tags: [Operational Intelligence]
+      summary: Rejection reason analysis
+      description: >-
+        One row per recorded rejection reason over the
+        rejected claims in the range, most rejections first.
+        Rejected claims with nothing recorded group under
+        "Not recorded". No taxonomy is invented. Query: from,
+        to (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Rejection reasons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationsRejectionReasonRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/missing-evidence:
+    get:
+      tags: [Operational Intelligence]
+      summary: Missing-evidence trends
+      description: >-
+        Which document categories claims are missing, how
+        many claims are incomplete, the average readiness,
+        and the monthly trend, from the existing readiness
+        computation over attached evidence against the
+        organization's configured requirements. A claim with
+        no configured requirements is not incomplete. Query:
+        from, to (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Missing-evidence trends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OperationsMissingEvidence"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/broker-trends:
+    get:
+      tags: [Operational Intelligence]
+      summary: Broker-level trends
+      description: >-
+        One row per broker or customer name, most claims
+        first, with its monthly series and its change against
+        the preceding window of equal length. Query: from, to
+        (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Broker trends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationsBrokerTrendRow"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/revenue-leakage:
+    get:
+      tags: [Operational Intelligence]
+      summary: Revenue leakage analysis
+      description: >-
+        The gaps between recorded amounts over the submitted
+        population, under the single v1.5.0 balance rule:
+        requested vs approved is what the broker cut at
+        approval, approved vs paid is the outstanding balance,
+        overpaid is paid above the amount due, legacy is money
+        recorded as paid outside the ledger. These are gaps
+        between recorded numbers, not proven lost money.
+        Query: from, to (dates, default last 12 months).
+        Requires view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Revenue leakage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OperationsRevenueLeakage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /operations/recommendations:
+    get:
+      tags: [Operational Intelligence]
+      summary: Operational recommendations
+      description: >-
+        Fixed rules over the six analyses above. Each
+        recommendation carries the numbers it was derived
+        from, and each fires only when its stated minimum
+        sample is met; when nothing meets a rule, no
+        recommendation is invented for it. Query: from, to
+        (dates, default last 12 months). Requires
+        view-analytics; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Operational recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OperationsRecommendations"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -9154,6 +9387,211 @@ components:
         approved_amount: { type: string }
         paid_amount: { type: string }
         recovery_rate_vs_requested: { type: number, nullable: true }
+    OperationsDetentionTrends:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        currencies:
+          type: array
+          items: { type: string }
+        counts:
+          type: object
+          properties:
+            claims: { type: integer }
+            submitted: { type: integer }
+            paid: { type: integer }
+            rejected: { type: integer }
+            accepted: { type: integer }
+        rates:
+          type: object
+          properties:
+            recovery_rate_vs_requested: { type: number, nullable: true }
+            recovery_rate_vs_approved: { type: number, nullable: true }
+            rejection_rate: { type: number, nullable: true }
+        money:
+          type: object
+          properties:
+            requested_amount: { type: string }
+            approved_amount: { type: string }
+            paid_amount: { type: string }
+            outstanding_amount: { type: string }
+        money_by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsMoneyByCurrency"
+        average_submission_days:
+          $ref: "#/components/schemas/AnalyticsAverage"
+        average_payment_days:
+          $ref: "#/components/schemas/AnalyticsAverage"
+        monthly:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsMonthlyPoint"
+        comparison:
+          $ref: "#/components/schemas/AnalyticsComparison"
+    OperationsFacilityRow:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/AnalyticsPerformanceRow"
+        - type: object
+          properties:
+            facility: { type: string, description: "Delivery location, else pickup location, else 'Unnamed facility'." }
+    OperationsRejectionReasonRow:
+      type: object
+      properties:
+        reason: { type: string, description: "Recorded rejection_reason, or 'Not recorded'." }
+        rejected: { type: integer }
+        share_of_rejected: { type: number, nullable: true, description: Percent of all rejected claims in the range; null when none were rejected. }
+        requested_amount: { type: string }
+        currencies:
+          type: array
+          items: { type: string }
+    OperationsReadinessAverage:
+      type: object
+      properties:
+        percentage: { type: number, nullable: true, description: Mean readiness percent; null when no claim has configured requirements. }
+        sample_size: { type: integer, description: Claims with configured requirements. }
+    OperationsMissingCategoryRow:
+      type: object
+      properties:
+        category: { type: string }
+        category_label: { type: string }
+        claims_missing: { type: integer }
+        share_of_incomplete: { type: number, nullable: true, description: Percent of incomplete claims missing this category; null when none are incomplete. }
+    OperationsMissingMonthlyPoint:
+      type: object
+      properties:
+        month: { type: string, description: "YYYY-MM, keyed by the claim's created_at." }
+        claims_created: { type: integer }
+        claims_with_requirements: { type: integer }
+        incomplete: { type: integer }
+        average_readiness_percentage:
+          $ref: "#/components/schemas/OperationsReadinessAverage"
+    OperationsMissingEvidence:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        claims: { type: integer }
+        claims_with_requirements: { type: integer }
+        claims_incomplete: { type: integer }
+        average_readiness_percentage:
+          $ref: "#/components/schemas/OperationsReadinessAverage"
+        by_category:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsMissingCategoryRow"
+        monthly:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsMissingMonthlyPoint"
+    OperationsBrokerTrendRow:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/AnalyticsPerformanceRow"
+        - type: object
+          properties:
+            broker: { type: string }
+            monthly:
+              type: array
+              items:
+                $ref: "#/components/schemas/AnalyticsMonthlyPoint"
+            change:
+              type: object
+              properties:
+                claims: { type: integer }
+                submitted: { type: integer }
+                paid: { type: integer }
+                rejected: { type: integer }
+                requested_amount: { type: string }
+                paid_amount: { type: string }
+                recovery_rate_vs_requested_pp: { type: number, nullable: true, description: Change in percentage points; null when either side has no submitted claims. }
+                rejection_rate_pp: { type: number, nullable: true }
+    OperationsLeakageStatusRow:
+      type: object
+      properties:
+        balance_status: { type: string, enum: [unpaid, partial, paid, overpaid] }
+        claims: { type: integer }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+    OperationsLargestOutstanding:
+      type: object
+      properties:
+        claim_id: { type: string, format: uuid }
+        claim_reference: { type: string }
+        broker: { type: string }
+        requested_amount: { type: string }
+        approved_amount: { type: string, nullable: true }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+    OperationsLeakageCurrencyRow:
+      type: object
+      properties:
+        currency: { type: string }
+        requested_amount: { type: string }
+        approved_amount: { type: string }
+        paid_amount: { type: string }
+        outstanding_amount: { type: string }
+        requested_vs_approved_gap: { type: string }
+    OperationsRevenueLeakage:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        currencies:
+          type: array
+          items: { type: string }
+        submitted_claims: { type: integer }
+        requested_total: { type: string }
+        approved_total: { type: string }
+        paid_total: { type: string }
+        outstanding_total: { type: string }
+        requested_vs_approved_gap: { type: string, description: Requested minus approved, over claims with an accepted amount. }
+        claims_cut_at_approval: { type: integer }
+        overpaid_total: { type: string }
+        legacy_total: { type: string, description: Money recorded as paid outside the ledger. }
+        unsubmitted_claims: { type: integer }
+        unsubmitted_requested_total: { type: string, description: Pipeline, not leakage. }
+        by_balance_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsLeakageStatusRow"
+        money_by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsLeakageCurrencyRow"
+        largest_outstanding:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsLargestOutstanding"
+    OperationsRecommendation:
+      type: object
+      properties:
+        type: { type: string, description: "Fixed rule id, e.g. highest_rejection_broker." }
+        title: { type: string }
+        detail: { type: string }
+        severity: { type: string, enum: [watch, note], description: "Cutoff chosen for this report, not an industry standard." }
+        evidence:
+          type: object
+          description: The numbers the rule was derived from.
+          additionalProperties: true
+    OperationsRecommendations:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        generated_from: { type: string }
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationsRecommendation"
     MonitoringCheck:
       type: object
       properties:

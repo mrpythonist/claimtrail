@@ -3,6 +3,78 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [1.5.2] - 2026-11-27
+
+Phase 5, Operational Intelligence (the last version of
+Phase 5): detention trends, facility performance, rejection
+reasons, missing-evidence trends, broker-level trends,
+revenue leakage, and deterministic operational
+recommendations, all computed from the organization's own
+recorded claims, shipments, payments, and evidence. There
+is no external benchmark, no industry data, and no live
+payment verification: billing runs on a mock provider, so
+a paid claim means the organization recorded the money as
+received, not that a bank or processor confirmed it.
+Leakage is gaps between recorded amounts, not proven lost
+money. Recommendations are fixed rules over the org's own
+numbers, each carrying the numbers it was derived from,
+and each firing only when its stated minimum sample is
+met. App version bumped to 1.5.2; OpenAPI at 188 paths
+(181 + 7 new paths, 247 operations).
+
+### Added
+
+- Operational intelligence service
+  `App\\Services\\OperationalIntelligenceService` (extends
+  the analytics service, so the submitted population, rate
+  rounding, and money totals have one definition each):
+  detention trends are detention claims only, with the
+  monthly series and a comparison against the preceding
+  window; facilities group by the shipment's delivery
+  location where one is recorded, otherwise its pickup
+  location, otherwise "Unnamed facility"; rejection
+  reasons are the reasons recorded on the claims, with
+  unrecorded ones under "Not recorded" and no invented
+  taxonomy; missing-evidence trends reuse the existing
+  readiness computation over attached evidence against the
+  organization's configured requirements; broker trends
+  carry each broker's monthly series and its change
+  against the preceding window; revenue leakage sums the
+  per-claim v1.5.0 balances (requested vs approved is what
+  the broker cut at approval, approved vs paid is the
+  outstanding balance, overpaid is paid above the amount
+  due, legacy is money recorded as paid outside the
+  ledger, unsubmitted totals are pipeline, reported
+  separately); recommendations are eight fixed rules with
+  stated minimum samples and severity cutoffs chosen for
+  this report. The analytics outstanding total is computed
+  at the aggregate level while leakage sums per-claim
+  balances, and the two can disagree when some claims
+  have an accepted amount and others do not; the doc
+  states the difference.
+- Endpoints `GET /operations/detention-trends`,
+  `/facilities`, `/rejection-reasons`,
+  `/missing-evidence`, `/broker-trends`,
+  `/revenue-leakage`, and `/recommendations`. All take
+  optional `from` and `to` dates and default to the last
+  12 months. Reading needs the existing `view-analytics`
+  permission; Free-plan organizations are refused with
+  402, the same as analytics and reports. No new
+  notification types, no new console commands, no new
+  migration, and no CSV export for the operations
+  endpoints in this version.
+- Frontend: `/operations` (recommendations, detention
+  trends, facility and broker tables, rejection reasons,
+  missing evidence, revenue leakage), typed client in
+  `src/lib/operations.ts`, and an Operational Intelligence
+  entry in the AppShell Insights section. Charts reuse the
+  existing `CountBar` CSS bar component; no chart library
+  was added.
+- Docs: `docs/OPERATIONAL-INTELLIGENCE.md` (metric
+  definitions and honest limits), a section in
+  `docs/API.md`, and the Operational Intelligence tag and
+  schemas in `docs/openapi.yaml`.
+
 ## [1.5.1] - 2026-11-27
 
 Phase 5, Advanced Analytics: recovery and rejection rates,

@@ -41,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Support", href: "/support", section: "Workspace" },
   { label: "Reports", href: "/reports", section: "Insights", visibleFor: canViewReports },
   { label: "Analytics", href: "/analytics", section: "Insights", visibleFor: canViewAnalytics },
+  { label: "Operational Intelligence", href: "/operations", section: "Insights", visibleFor: canViewAnalytics },
   { label: "Audit Logs", href: "/audit-logs", section: "Insights", visibleFor: canViewAuditLogs },
   { label: "Members", href: "/settings/members", section: "Settings" },
   { label: "Organization", href: "/settings/organization", section: "Settings" },
