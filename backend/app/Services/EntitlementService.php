@@ -102,7 +102,7 @@ class EntitlementService
      * The resolved numeric limits for a plan key at a carrier
      * count. Agency claims and storage scale per carrier.
      *
-     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool}
+     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool}
      */
     public function limitsForPlan(string $plan, int $carriers): array
     {
@@ -128,6 +128,7 @@ class EntitlementService
             'pdf_packages' => (bool) ($config['pdf_packages'] ?? false),
             'reports' => $plan !== PlanCatalog::FREE,
             'workflows' => $plan !== PlanCatalog::FREE,
+            'document_processing' => $plan !== PlanCatalog::FREE,
         ];
     }
 
@@ -420,6 +421,38 @@ class EntitlementService
             'Workflows are not included in the '.$limits['plan_name'].' plan.'
                 .($upgrade !== null
                     ? ' Upgrade to '.$upgrade['name'].' to use workflows.'
+                    : ''),
+        );
+    }
+
+    /**
+     * Refuse document processing on the Free plan. Reading
+     * extractions and the accuracy monitor stays available:
+     * an organization that downgrades keeps its history, it
+     * just cannot process new documents or verify fields.
+     *
+     * @throws EntitlementExceededException
+     */
+    public function authorizeDocumentProcessing(Organization $organization): void
+    {
+        $limits = $this->limits($organization);
+
+        if ($limits['document_processing']) {
+            return;
+        }
+
+        $upgrade = $this->nextPlanFor('document_processing', $organization);
+
+        throw new EntitlementExceededException(
+            'document_processing',
+            null,
+            0,
+            $limits['plan'],
+            $upgrade['key'] ?? null,
+            $upgrade['name'] ?? null,
+            'Document processing is not included in the '.$limits['plan_name'].' plan.'
+                .($upgrade !== null
+                    ? ' Upgrade to '.$upgrade['name'].' to use document processing.'
                     : ''),
         );
     }

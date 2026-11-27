@@ -146,6 +146,16 @@ enum Permission: string
     // better: the Free plan is refused with a 402.
     case ManageWorkflows = 'manage-workflows';
 
+    // AI document processing (enforced from v2.0.1): OCR
+    // extraction, classification, shipment matching, duplicate
+    // detection, and human verification of extracted fields.
+    // Owner, admin, operations manager, and dispatcher. Any
+    // member may list extractions and read the accuracy
+    // monitor. Processing a document and verifying fields
+    // needs the Starter plan or better: the Free plan is
+    // refused with a 402.
+    case ManageDocumentProcessing = 'manage-document-processing';
+
     /**
      * Every permission value, for validation and documentation.
      *

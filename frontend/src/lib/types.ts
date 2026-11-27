@@ -1929,3 +1929,84 @@ export interface WorkflowEvaluation {
   would_run: boolean;
   steps: { index: number; type: string; label: string }[];
 }
+
+/** One extracted field from GET /documents (v2.0.1). */
+export interface DocumentExtractionField {
+  id: string;
+  extraction_id: string;
+  field_name: string;
+  field_label: string;
+  field_value: string | null;
+  confidence: number;
+  verified_value: string | null;
+  verification_status: string;
+  verification_status_label: string;
+  verified_by: string | null;
+  verified_at: string | null;
+  verification_note: string | null;
+}
+
+/** One reference candidate from a document (v2.0.1). */
+export interface DocumentMatchCandidate {
+  value: string;
+  source: string;
+  matched_shipment_id: string | null;
+  matched_field: string | null;
+}
+
+/** One processed document from GET /documents (v2.0.1). */
+export interface DocumentExtraction {
+  id: string;
+  evidence_file_id: string | null;
+  original_filename: string;
+  mime_type: string | null;
+  file_size: number | null;
+  content_sha256: string | null;
+  provider: string;
+  classification: string | null;
+  classification_label: string | null;
+  classification_confidence: number | null;
+  status: string;
+  status_label: string;
+  failure_reason: string | null;
+  matched_shipment_id: string | null;
+  matched_shipment_reference: string | null;
+  match_confidence: number | null;
+  match_method: string;
+  match_candidates: DocumentMatchCandidate[];
+  match_dismissed: boolean;
+  is_duplicate: boolean;
+  duplicate_of_id: string | null;
+  duplicate_of_filename: string | null;
+  near_duplicate_of_id: string | null;
+  near_duplicate_reason: string | null;
+  extracted_text: string | null;
+  processed_at: string | null;
+  verified_at: string | null;
+  verified_by: string | null;
+  created_at: string;
+  updated_at: string;
+  fields: DocumentExtractionField[];
+}
+
+/** One agreement bucket from GET /documents/accuracy (v2.0.1). */
+export interface DocumentAccuracyBucket {
+  decided: number;
+  agreed: number;
+  accuracy: number | null;
+}
+
+/** Measured extraction accuracy from GET /documents/accuracy (v2.0.1). */
+export interface DocumentAccuracy {
+  organization_id: string;
+  overall: DocumentAccuracyBucket;
+  by_field: Record<string, DocumentAccuracyBucket>;
+  by_classification: Record<string, DocumentAccuracyBucket>;
+  counts: {
+    total_extractions: number;
+    needs_verification: number;
+    verified_extractions: number;
+    duplicates: number;
+    decided_fields: number;
+  };
+}

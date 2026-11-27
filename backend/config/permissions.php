@@ -74,6 +74,7 @@ return [
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
+        Permission::ManageDocumentProcessing->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -114,6 +115,7 @@ return [
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
+        Permission::ManageDocumentProcessing->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -135,6 +137,7 @@ return [
         Permission::ManageCommunications->value,
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
+        Permission::ManageDocumentProcessing->value,
         Permission::ViewAnalytics->value,
     ],
 

@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import {
   canManageBilling,
   canManageCustomization,
+  canManageDocumentProcessing,
   canManageWorkflows,
   canViewAnalytics,
   canViewAuditLogs,
@@ -40,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Communications", href: "/communications", section: "Workspace" },
   { label: "Reconciliation", href: "/reconciliation", section: "Workspace" },
   { label: "Workflows", href: "/workflows", section: "Workspace", visibleFor: canManageWorkflows },
+  { label: "Document Processing", href: "/documents", section: "Workspace", visibleFor: canManageDocumentProcessing },
   { label: "Support", href: "/support", section: "Workspace" },
   { label: "Reports", href: "/reports", section: "Insights", visibleFor: canViewReports },
   { label: "Analytics", href: "/analytics", section: "Insights", visibleFor: canViewAnalytics },

@@ -807,6 +807,39 @@ the organization owner.
 | POST | `/workflows/runs/{run}/approve` | Yes + org header | Approve a run waiting at a checkpoint; the run resumes from the next step. Body: optional `note`. The approver must hold the checkpoint's role or be the owner. |
 | POST | `/workflows/runs/{run}/reject` | Yes + org header | Reject a run waiting at a checkpoint; the run stops and no further step runs. Body: optional `note`. The approver must hold the checkpoint's role or be the owner. |
 
+### Document Processing (v2.0.1)
+
+Turn an uploaded evidence file into structured data: text
+extraction, classification, field extraction, shipment
+matching, duplicate detection, and a human review queue.
+See docs/AI-DOCUMENT-PROCESSING.md for the honest limits:
+there is no live OCR service, the local provider reads
+text a document already carries and cannot OCR scanned
+images, classification and extraction are rule-based, and
+accuracy is measured agreement between extracted and
+human-verified values only (null when nothing has been
+decided). Processing an evidence file twice returns the
+existing extraction. Reading extractions, the queue, and
+accuracy needs any organization member; processing,
+verifying, rejecting, linking, and dismissing need
+`manage-document-processing` (owner, admin, operations
+manager, dispatcher). Every write endpoint on the Free plan
+is refused with 402. An extraction that needs a person
+sends a `document.needs_verification` notification.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| POST | `/documents/process` | Yes + org header | Process an evidence file. Body: `evidence_file_id`. Returns the extraction with its fields, classification, match, and duplicate flags (201). Requires `manage-document-processing`; Free plan refused with 402. |
+| GET | `/documents` | Yes + org header | The organization's extractions, newest first. Query: `status`, `classification`, `shipment_id`, `is_duplicate`. |
+| GET | `/documents/queue` | Yes + org header | The human verification queue: extractions with `needs_verification` status, oldest first. |
+| GET | `/documents/accuracy` | Yes + org header | Measured extraction accuracy: overall, by field name, and by classification, each with decided/agreed counts and an accuracy rate that is null when nothing has been decided; plus extraction counts. |
+| GET | `/documents/{extraction}` | Yes + org header | One extraction with its fields and its matched shipment, if any. |
+| POST | `/documents/{extraction}/fields/{field}/verify` | Yes + org header | Decide on one field. Body: `decision` (`verified`, `corrected`, `rejected`), `corrected_value` (required when corrected), optional `note`. Requires `manage-document-processing`; Free plan refused with 402. |
+| POST | `/documents/{extraction}/verify` | Yes + org header | Verify a whole extraction. Only when every field has a decision and any candidate match has been linked or dismissed. Body: optional `classification` (a known type, for documents the classifier could not name). Requires `manage-document-processing`; Free plan refused with 402. |
+| POST | `/documents/{extraction}/reject` | Yes + org header | Reject an extraction as not usable. Body: `reason`. A verified extraction cannot be rejected. Requires `manage-document-processing`; Free plan refused with 402. |
+| POST | `/documents/{extraction}/link-shipment` | Yes + org header | Link a shipment by hand. Body: `shipment_id`. Records confidence 100.00 and method `manual`. Requires `manage-document-processing`; Free plan refused with 402. |
+| POST | `/documents/{extraction}/dismiss-match` | Yes + org header | Dismiss the reference match: a human decided this document belongs to no shipment. Requires `manage-document-processing`; Free plan refused with 402. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

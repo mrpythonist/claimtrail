@@ -6,36 +6,37 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v1.5.2 (Phase 5, Operational
-  Intelligence). App version is now **1.5.2**. Phase 5 is COMPLETE
-  (v1.5.0 Financial Reconciliation, v1.5.1 Advanced Analytics,
-  v1.5.2 Operational Intelligence). Phase 4 is complete
-  (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is complete (v1.2.3).
-  Phase 0 is complete (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0
-  done; v0.2.0 interviews deferred, still open). What remains
-  before real customers is Aqib's launch decision: open signups
-  vs closed pilot first (pilot prep is ready, no pilot customer
-  recruited), plus the person-only items in
-  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
-  Stripe, real mailer, hosting, domain).
+- **Last completed version:** v2.0.0 (Phase 6, Workflow
+  Engine). App version is now **2.0.0**. Phase 6 is underway
+  (v2.0.0 Workflow Engine done; v2.0.1 AI Document Processing,
+  v2.0.2 API and Integrations, v2.0.3 Enterprise Readiness
+  next). Phase 5 is complete (v1.5.0, v1.5.1, v1.5.2). Phase 4
+  is complete (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is
+  complete (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0,
+  v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews deferred,
+  still open). What remains before real customers is Aqib's
+  launch decision: open signups vs closed pilot first (pilot
+  prep is ready, no pilot customer recruited), plus the
+  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
+  (lawyer review, real Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `16d343c8` (v1.5.2, pushed 2026-11-27 ~18:35 PKT after Aqib's
-  yes + approval card). 18 files in the v1.5.2 commit, read-back verified
+  head `10c9da56` (v2.0.0, pushed 2026-11-27 ~22:21 PKT after Aqib's
+  yes + approval card). 41 files in the v2.0.0 commit, read-back verified
   (commit file list matches the manifest exactly).
-- **Tests at v1.5.2:** 635 backend (3664 assertions) + 422 frontend, all
-  passing. `npm run build` succeeds (76/76 pages). Live HTTP smoke test:
-  102/102 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
-  2026-11-27 v1.5.2 log entry). OpenAPI 188 paths, verified to match
-  the 247 live `api/v1` route operations exactly.
+- **Tests at v2.0.0:** 672 backend (3877 assertions) + 432 frontend, all
+  passing. `npm run build` succeeds (77/77 pages). Live HTTP smoke test:
+  71/71 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
+  2026-11-27 v2.0.0 log entry). OpenAPI 196 paths, verified to match
+  the 258 live `api/v1` route operations exactly.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v2.0.0 — Workflow Engine** (MASTER-CHECKLIST.md, Phase 6,
+**v2.0.1 — AI Document Processing** (MASTER-CHECKLIST.md, Phase 6,
 Intelligent Automation) is the next build. **Status 2026-11-27:
-v1.5.2 PUSHED, head `16d343c8`, Phase 5 COMPLETE.**
+v2.0.0 PUSHED, head `10c9da56`, Phase 6 UNDERWAY.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -107,6 +108,145 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-27 — v2.0.1 AI Document Processing built and verified (Phase 6 continues)
+
+- Gate check passed first (main agent): no other builder
+  was running, remote head on GitHub is `10c9da56`
+  (v2.0.0), and no `claimtrail-scratch-v201` existed.
+  Build started 2026-11-27 ~22:31 PKT on Aqib's "Start
+  v2.0.1 now" in the main chat (subagent). This is the
+  SECOND version of Phase 6 (Intelligent Automation).
+- Spec: MASTER-CHECKLIST.md v2.0.1 (9 items). All nine
+  verified and checked.
+- Backend (new): migration
+  `2026_11_27_101000_create_document_processing_tables.php`
+  (`document_extractions`, `document_extraction_fields`);
+  enums `DocumentClassification` (bill_of_lading,
+  proof_of_delivery, invoice, rate_confirmation,
+  detention_notice, other, unclassified),
+  `DocumentExtractionStatus` (pending, processing,
+  completed, needs_verification, verified, rejected,
+  failed), `DocumentFieldVerificationStatus` (pending,
+  verified, corrected, rejected); models
+  `DocumentExtraction`, `DocumentExtractionField`;
+  `app/Contracts/OcrProvider.php` (interface) +
+  `OcrExtraction`, `app/Services/LocalOcrProvider.php`
+  (the only implementation: plain text and CSV verbatim,
+  PDF text layer via Tj/TJ including FlateDecode streams;
+  images and text-less PDFs fail with a plain reason —
+  there is no live OCR service, no OCR API key, and no
+  external service call; `OCR_PROVIDER=cloud` is rejected
+  until an implementation lands),
+  `app/Services/DocumentClassifier.php` (weighted keyword
+  scores, 0.25 threshold, `other` at 50.00, `unclassified`
+  at 0.00, filename hint +0.10),
+  `app/Services/DocumentFieldExtractor.php` (95 labelled /
+  80 proximity / 60 bare confidence; amounts to 2
+  decimals, dates to ISO), `app/Services/
+  DocumentProcessingService.php` (process/idempotent,
+  verifyField, verifyExtraction, rejectExtraction,
+  linkShipment, dismissMatch, accuracy, presenters;
+  exact-match auto-link only; near-duplicate on reference
+  + amount + date, which queues the extraction;
+  `document.needs_verification` notification),
+  `app/Http/Controllers/Api/V1/
+  DocumentProcessingController.php` (10 routes),
+  `config/documents.php` (`ocr_provider`, local default).
+  `manage-document-processing` permission
+  (owner/admin/operations_manager/dispatcher); the
+  `document_processing` entitlement gates every write
+  endpoint on the Starter plan or better (Free plan refused
+  with 402). One new notification type
+  (`document.needs_verification`); notification-preference
+  count is now 29. The v1.3.0 `ShipmentReferenceExtractor`
+  is reused, not duplicated. No new console command, no
+  workflow trigger in this version.
+- Backend edits: `config/app.php` version 2.0.1;
+  `config/permissions.php`, `routes/api.php` 10 new routes,
+  `app/Services/EntitlementService.php`
+  (`document_processing` limit +
+  `authorizeDocumentProcessing`),
+  `app/Services/NotificationService.php` (one new type),
+  `app/Providers/AppServiceProvider.php` (config-driven
+  OCR provider binding). Pre-existing tests updated for
+  the version bump and the new notification type:
+  HealthCheckTest version 2.0.0 to 2.0.1, NotificationTest
+  count 28 to 29.
+- Frontend: `src/lib/document-processing.ts` (client),
+  `src/lib/permissions.ts`
+  (`canManageDocumentProcessing`), document types in
+  `src/lib/types.ts`, AppShell "Document Processing" nav
+  entry (Workspace section, manager-only), `/documents`
+  page (accuracy panel, process form, all-documents and
+  verification-queue tabs, review detail with per-field
+  verify/correct/reject, shipment link and dismiss, whole
+  document verify/reject). Tests:
+  `src/lib/__tests__/document-processing.test.ts` (10
+  tests), `src/app/(app)/documents/__tests__/page.test.tsx`
+  (4 tests).
+- Docs: new `docs/AI-DOCUMENT-PROCESSING.md`
+  (definitions and the honest limits, including the mock
+  provider and the no-scanned-image-OCR limit), API.md
+  Document Processing section, OpenAPI DocumentProcessing
+  tag (10 paths, 10 operations, 4 schemas), CHANGELOG
+  [2.0.1]. OpenAPI `info.version` was stale at 1.5.2 since
+  v1.5.2; bumped to 2.0.1 with this version.
+- Verification findings, three real defects found by the
+  smoke test and fixed in this build (all with pinning
+  tests): (1) the shared shipment-reference pattern
+  required every hyphen-separated group to be at least two
+  characters, so `CT-DOC-1` extracted as `CT-DOC` — the
+  reference field showed the wrong value even though the
+  exact match still worked through the verbatim fallback;
+  groups may now be a single character, in the extractor
+  and in the classifier's reference-like check. (2)
+  `GET /documents?is_duplicate=true` was refused with 422
+  because the `boolean` validation rule rejects the string
+  `"true"`, which is what query strings and the frontend
+  client send; the filter now accepts `true`, `false`,
+  `1`, `0` and casts with `$request->boolean()`. (3) The
+  amount pattern matched only the first three digits of
+  an ungrouped four-figure amount, so `$1800.00` extracted
+  as `180.00` and `$2300.00` as `230.00`; the comma-grouped
+  alternative now requires at least one comma group so a
+  plain digit run falls through to the plain-number
+  alternative. The smoke also corrected one wrong
+  assumption in the build (not a code defect): a near
+  duplicate sets the extraction to `needs_verification`
+  — only a human decides it is the same document twice —
+  and the doc now states the five queue triggers
+  explicitly. Two frontend defects were caught by the
+  frontend tests/build before the smoke ran: the documents
+  page first omitted the required `id` prop on `Input`
+  (which also broke label association in the tests) and
+  used `Alert` tone `danger` (the component's tone is
+  `error`) and an `EmptyState` `body` prop (it is
+  `description`); all fixed.
+- Verification (all counts re-run after the fixes):
+  backend 711 tests / 4082 assertions, 0 failures (672 at
+  v2.0.0 + 35 new document processing tests + 4 pinning
+  tests for the three smoke-found defects); frontend 446
+  tests / 62 files, 0 failures; `npm run build` 78/78
+  pages (77 + the new /documents page). Live HTTP smoke
+  test: 85/85 steps on a fresh SQLite DB (see
+  `claimtrail-scratch-v201/smoke/`): a detention notice
+  processed (local provider), classified, fields extracted
+  with confidences, reference extracted in full and
+  exact-matched; a duplicate upload flagged; a near
+  duplicate flagged and queued; candidate matches listed
+  without auto-linking, then linked by hand and dismissed
+  by hand; an unclassified document verified with a
+  human-supplied type; a rejected extraction refusing
+  verification with 422; a minimal PDF text layer
+  extracted; accuracy reporting measured agreement only
+  (null before any decision, 93.75% after 15 of 16 decided
+  fields agreed); cross-tenant isolation and a Free-plan
+  402 on a second org. OpenAPI 206 paths, verified to
+  match the 268 live `api/v1` route operations exactly.
+- Push status: for the main agent (not pushed by the
+  builder; awaiting Aqib's yes + approval card in the
+  main chat).
 
 ### 2026-11-27 — v2.0.0 Workflow Engine built and verified (Phase 6 starts)
 
@@ -244,10 +384,13 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   `~/workspace/claimtrail-scratch-v200/smoke/` (smoke-v200.py,
   run-smoke.sh, diff-routes.py); delta script at
   `~/workspace/claimtrail-scratch-v200/compute-delta.py`.
-- Push status: **for the main agent** (not pushed; the main
-  agent verifies independently and delivers the ready-to-push
-  notice in the main chat; push only on Aqib's yes + approval
-  card).
+- Push status: **PUSHED 2026-11-27 ~22:21 PKT, head `10c9da56`**
+  (41 files, read-back verified: branch head, commit message, file
+  list, and all 41 blob SHAs match the manifest exactly; 18
+  changed + 23 new vs the old head, remote tree 688 to 711 files).
+  Delta recomputed by the main agent before the push and identical
+  to the builder's manifest (1,122,472 bytes — the builder's figure
+  matched the recomputation exactly this time, no correction).
 
 ### 2026-11-27 — v1.5.2 Operational Intelligence built and verified (Phase 5 complete)
 

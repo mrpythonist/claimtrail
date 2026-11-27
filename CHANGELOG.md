@@ -3,6 +3,132 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [2.0.1] - 2026-11-27
+
+Phase 6, Intelligent Automation (the second version of
+Phase 6): AI document processing. An uploaded evidence
+file is turned into structured data a human can trust:
+text extraction, document classification, field
+extraction, shipment matching, duplicate detection, and a
+review queue where a person approves, corrects, or rejects
+what the machine found. Every extracted value carries a
+confidence score, and a human-verified value is what
+downstream features use. App version bumped to 2.0.1;
+OpenAPI at 206 paths (196 + 10 new paths, 268
+operations).
+
+### Added
+
+- OCR provider interface (`App\\Contracts\\OcrProvider`)
+  with one implementation, the local provider
+  (`App\\Services\\LocalOcrProvider`): it reads text a
+  document already carries — plain text and CSV verbatim,
+  and the text layer of a PDF including FlateDecode
+  streams — and cannot OCR scanned images. A scanned
+  image, a photo of a paper document, or a PDF with no
+  text layer yields no text and the extraction is recorded
+  as `failed` with the reason stated. There is no live OCR
+  service, no OCR API key, and no external service call;
+  a cloud OCR provider is a later swap, and
+  `OCR_PROVIDER=cloud` is rejected until an implementation
+  lands. Never claim OCR accuracy on scanned images.
+- Rule-based document classification
+  (`App\\Services\\DocumentClassifier`): weighted keyword
+  scores for bill of lading, proof of delivery, invoice,
+  rate confirmation, detention notice, and other, plus a
+  filename hint (+0.10). The best type wins at the 0.25
+  threshold with confidence equal to its score as a
+  percentage; below the threshold a document-like file is
+  `other` at a flat 50.00, and anything else is
+  `unclassified` at 0.00, never forced into a type.
+- Field extraction (`App\\Services\\DocumentFieldExtractor`):
+  amounts, dates (ISO, US, and month-name forms,
+  normalized to ISO), references, and parties per document
+  type, with confidence 95 for a labelled match, 80 for a
+  proximity match, and 60 for a bare match. Amounts are
+  stored to two decimals; dates to ISO format. A field
+  below the 70.00 low-confidence threshold sends the
+  extraction to verification.
+- Shipment reference extraction reuses the v1.3.0
+  `ShipmentReferenceExtractor`; matching is exact-match
+  first (auto-linked, confidence 100.00), then ranked
+  candidates (listed, never auto-linked), and a human can
+  link by hand (confidence 100.00, method `manual`) or
+  dismiss the match.
+- Duplicate detection: a SHA-256 content hash match flags
+  an exact duplicate, and the same shipment reference,
+  amount, and date flags a near duplicate. Duplicates are
+  flagged, never auto-deleted.
+- Human verification: a review queue (`GET
+  /documents/queue`, oldest first) and per-field decisions
+  (`verified`, `corrected` with the right value stored as
+  `verified_value` alongside the extracted value, which is
+  never edited, or `rejected`). A whole extraction can be
+  verified only when every field has a decision and any
+  candidate match has been linked or dismissed; an
+  optional classification may be supplied for documents
+  the classifier could not name. A verified extraction
+  cannot be rejected, and a rejected extraction cannot be
+  verified.
+- Extraction accuracy monitoring (`GET
+  /documents/accuracy`): measured agreement between
+  extracted and human-verified values only — overall, by
+  field name, and by classification — with decided/agreed
+  counts and a rate that is null when nothing has been
+  decided. Never a benchmark.
+- Two tables (`document_extractions`,
+  `document_extraction_fields`) with the
+  `DocumentClassification`, `DocumentExtractionStatus`, and
+  `DocumentFieldVerificationStatus` enums.
+  `manage-document-processing` permission (owner, admin,
+  operations manager, dispatcher); the
+  `document_processing` entitlement gates every write
+  endpoint on the Starter plan or better (Free plan refused
+  with 402). One notification type
+  (`document.needs_verification`), sent when an extraction
+  lands in the review queue.
+- Document Processing API (10 routes under `/documents/*`):
+  process, list, queue, accuracy, read, verify one field,
+  verify, reject, link a shipment, dismiss a match.
+  Processing the same evidence file twice returns the
+  existing extraction.
+- Frontend `/documents` page: accuracy panel, process form,
+  all-documents and verification-queue tabs, review detail
+  with per-field verify/correct/reject, shipment link and
+  dismiss, and whole-document verify/reject; Document
+  Processing entry in the AppShell Workspace section
+  (manager-only).
+- Docs: `docs/AI-DOCUMENT-PROCESSING.md` (definitions and
+  the honest limits, including the mock provider and the
+  no-scanned-image-OCR limit), API.md section, OpenAPI
+  DocumentProcessing tag with 10 paths, 10 operations, and
+  4 schemas.
+
+### Fixed
+
+- The shared shipment-reference pattern required every
+  hyphen-separated group to be at least two characters, so
+  a reference such as `CT-DOC-1` extracted as `CT-DOC`:
+  the reference field showed the wrong value and the
+  candidates list showed a truncated token, even though
+  the exact match itself still worked through the verbatim
+  fallback. Groups may now be a single character, in the
+  extractor and in the classifier's reference-like check,
+  and a test pins the full extraction.
+- `GET /documents?is_duplicate=true` was refused with 422:
+  query strings carry booleans as text and the `boolean`
+  validation rule rejects the string `"true"`, which is
+  also what the frontend client sends. The filter now
+  accepts `true`, `false`, `1`, and `0` and casts with
+  `$request->boolean()`; a test pins both spellings.
+- The amount pattern matched only the first three digits
+  of an ungrouped four-figure amount: `$1800.00` extracted
+  as `180.00` and `$2300.00` as `230.00`. The comma-grouped
+  alternative now requires at least one comma group, so a
+  plain digit run falls through to the plain-number
+  alternative; a test pins `$1800.00`, `$2300.00`, and
+  `$12500`.
+
 ## [2.0.0] - 2026-11-27
 
 Phase 6, Intelligent Automation (the first version of

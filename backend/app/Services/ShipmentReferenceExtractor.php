@@ -28,8 +28,11 @@ class ShipmentReferenceExtractor
      * Reference-shaped tokens in a text: two or more letters
      * followed by hyphen or underscore separated groups of
      * letters and digits, for example PLT-1001 or CT-TEST-AB12.
+     * A group may be a single character, so a reference such
+     * as CT-DOC-1 extracts in full instead of truncating to
+     * CT-DOC.
      */
-    protected const REFERENCE_PATTERN = '/\b[A-Z]{2,10}(?:[-_][A-Z0-9]{2,10}){1,3}\b/i';
+    protected const REFERENCE_PATTERN = '/\b[A-Z]{2,10}(?:[-_][A-Z0-9]{1,10}){1,3}\b/i';
 
     /**
      * Candidate references found in the given texts, in order

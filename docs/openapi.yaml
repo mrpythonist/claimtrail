@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 1.5.2
+  version: 2.0.1
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -86,6 +86,7 @@ tags:
   - name: Analytics
   - name: Operational Intelligence
   - name: Workflows
+  - name: DocumentProcessing
 paths:
   /auth/register:
     post:
@@ -7710,6 +7711,349 @@ paths:
                     $ref: "#/components/schemas/WorkflowRun"
         "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /documents/process:
+    post:
+      tags: [DocumentProcessing]
+      summary: Process an evidence file
+      description: >-
+        Extract text, classify, extract fields, match the
+        shipment reference, and flag duplicates for one
+        evidence file. Processing the same file twice returns
+        the existing extraction. The local provider reads
+        text the document already carries; it cannot OCR
+        scanned images. Requires
+        manage-document-processing; Free plan refused with
+        402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence_file_id]
+              properties:
+                evidence_file_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Extraction created (or the existing one returned)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/queue:
+    get:
+      tags: [DocumentProcessing]
+      summary: Human verification queue
+      description: >-
+        Extractions with needs_verification status, oldest
+        first, so the longest-waiting document is reviewed
+        first. Any member may read it.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Queued extractions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentExtraction"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/accuracy:
+    get:
+      tags: [DocumentProcessing]
+      summary: Extraction accuracy, measured only from human decisions
+      description: >-
+        Agreement between extracted and human-verified
+        values, overall, by field name, and by
+        classification, with extraction counts. Accuracy is
+        null in every group when no fields have been decided.
+        Any member may read it.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Measured accuracy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentAccuracy"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents:
+    get:
+      tags: [DocumentProcessing]
+      summary: List document extractions
+      description: >-
+        The organization's extractions, newest first. Any
+        member may list. Filters: status, classification,
+        shipment_id, is_duplicate.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, needs_verification, verified, rejected, failed]
+        - name: classification
+          in: query
+          schema:
+            type: string
+            enum: [bill_of_lading, proof_of_delivery, invoice, rate_confirmation, detention_notice, other, unclassified]
+        - name: shipment_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: is_duplicate
+          in: query
+          schema: { type: boolean }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Extractions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentExtraction"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}:
+    get:
+      tags: [DocumentProcessing]
+      summary: Get one extraction
+      description: >-
+        One extraction with its fields and its matched
+        shipment, if any. Any member may read it.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Extraction
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}/fields/{field}/verify:
+    post:
+      tags: [DocumentProcessing]
+      summary: Decide on one extracted field
+      description: >-
+        Decision verified keeps the extracted value;
+        corrected needs the right value, stored as
+        verified_value alongside the extracted value, which
+        is never edited; rejected marks the value unusable.
+        Requires manage-document-processing; Free plan
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: field
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [verified, corrected, rejected] }
+                corrected_value: { type: string, maxLength: 2000 }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Field decided
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtractionField"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}/verify:
+    post:
+      tags: [DocumentProcessing]
+      summary: Verify a whole extraction
+      description: >-
+        Only when every field has a decision and any
+        candidate match has been linked or dismissed. An
+        optional classification may be supplied when the
+        classifier could not name the document; it must be a
+        known type, never unclassified. Requires
+        manage-document-processing; Free plan refused with
+        402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                classification:
+                  type: string
+                  enum: [bill_of_lading, proof_of_delivery, invoice, rate_confirmation, detention_notice, other]
+      responses:
+        "200":
+          description: Extraction verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}/reject:
+    post:
+      tags: [DocumentProcessing]
+      summary: Reject an extraction
+      description: >-
+        Reject an extraction as not usable, with a reason. A
+        verified extraction cannot be rejected. Requires
+        manage-document-processing; Free plan refused with
+        402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Extraction rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}/link-shipment:
+    post:
+      tags: [DocumentProcessing]
+      summary: Link a shipment by hand
+      description: >-
+        Link a shipment to an extraction by hand. Records
+        confidence 100.00 and method manual. Requires
+        manage-document-processing; Free plan refused with
+        402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipment_id]
+              properties:
+                shipment_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Shipment linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{extraction}/dismiss-match:
+    post:
+      tags: [DocumentProcessing]
+      summary: Dismiss the reference match
+      description: >-
+        A human decided this document belongs to no
+        shipment. Requires manage-document-processing; Free
+        plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: extraction
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Match dismissed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentExtraction"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -10103,3 +10447,98 @@ components:
         url: { type: string, description: Frontend billing page with the session token }
         token: { type: string, description: "Opens the summary at GET /billing/portal/{token}" }
         expires_at: { type: string, format: date-time }
+
+    DocumentExtractionField:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        extraction_id: { type: string, format: uuid }
+        field_name: { type: string }
+        field_label: { type: string }
+        field_value: { type: string, nullable: true }
+        confidence: { type: number }
+        verified_value: { type: string, nullable: true }
+        verification_status:
+          type: string
+          enum: [pending, verified, corrected, rejected]
+        verification_status_label: { type: string }
+        verified_by: { type: string, format: uuid, nullable: true }
+        verified_at: { type: string, format: date-time, nullable: true }
+        verification_note: { type: string, nullable: true }
+    DocumentExtraction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        evidence_file_id: { type: string, format: uuid, nullable: true }
+        original_filename: { type: string }
+        mime_type: { type: string }
+        file_size: { type: integer }
+        content_sha256: { type: string, nullable: true }
+        provider: { type: string, description: OCR provider name, for example "local" }
+        classification:
+          type: string
+          nullable: true
+          enum: [bill_of_lading, proof_of_delivery, invoice, rate_confirmation, detention_notice, other, unclassified]
+        classification_label: { type: string, nullable: true }
+        classification_confidence: { type: number, nullable: true }
+        status:
+          type: string
+          enum: [pending, processing, completed, needs_verification, verified, rejected, failed]
+        status_label: { type: string }
+        failure_reason: { type: string, nullable: true }
+        matched_shipment_id: { type: string, format: uuid, nullable: true }
+        matched_shipment_reference: { type: string, nullable: true }
+        match_confidence: { type: number, nullable: true }
+        match_method:
+          type: string
+          nullable: true
+          enum: [none, exact, candidate, manual]
+        match_candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        match_dismissed: { type: boolean }
+        is_duplicate: { type: boolean }
+        duplicate_of_id: { type: string, format: uuid, nullable: true }
+        duplicate_of_filename: { type: string, nullable: true }
+        near_duplicate_of_id: { type: string, format: uuid, nullable: true }
+        near_duplicate_reason: { type: string, nullable: true }
+        extracted_text: { type: string, nullable: true }
+        processed_at: { type: string, format: date-time, nullable: true }
+        verified_at: { type: string, format: date-time, nullable: true }
+        verified_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentExtractionField"
+    DocumentAccuracyGroup:
+      type: object
+      properties:
+        decided: { type: integer }
+        agreed: { type: integer }
+        accuracy: { type: number, nullable: true, description: "agreed / decided x 100, two decimals; null when nothing has been decided" }
+    DocumentAccuracy:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+        overall:
+          $ref: "#/components/schemas/DocumentAccuracyGroup"
+        by_field:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/DocumentAccuracyGroup"
+        by_classification:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/DocumentAccuracyGroup"
+        counts:
+          type: object
+          properties:
+            total_extractions: { type: integer }
+            needs_verification: { type: integer }
+            verified_extractions: { type: integer }
+            duplicates: { type: integer }
+            decided_fields: { type: integer }

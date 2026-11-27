@@ -49,6 +49,18 @@ class AppServiceProvider extends ServiceProvider
                 default => throw new \RuntimeException('Unknown billing provider: '.config('billing.provider')),
             };
         });
+
+        // The OCR provider behind its interface. Only the local
+        // provider is implemented in v2.0.1; "cloud" is the
+        // swap-out target and is rejected until an implementation
+        // lands, so a misconfigured driver fails loudly instead
+        // of silently returning no text.
+        $this->app->bind(\App\Services\OcrProvider::class, function () {
+            return match (config('documents.ocr_provider')) {
+                'local' => new \App\Services\LocalOcrProvider(),
+                default => throw new \RuntimeException('Unknown OCR provider: '.config('documents.ocr_provider')),
+            };
+        });
     }
 
     /**

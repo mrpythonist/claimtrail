@@ -55,6 +55,7 @@ use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\SyncRunController;
 use App\Http\Controllers\Api\V1\TmsIntegrationController;
 use App\Http\Controllers\Api\V1\TmsSyncRunController;
+use App\Http\Controllers\Api\V1\DocumentProcessingController;
 use App\Http\Controllers\Api\V1\WorkflowController;
 use Illuminate\Support\Facades\Route;
 
@@ -498,6 +499,28 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::put('/workflows/{workflow}', [WorkflowController::class, 'update']);
             Route::delete('/workflows/{workflow}', [WorkflowController::class, 'destroy']);
             Route::post('/workflows/{workflow}/test', [WorkflowController::class, 'test']);
+
+            // AI document processing (v2.0.1): OCR extraction,
+            // classification, field extraction, shipment
+            // matching, duplicate detection, human verification,
+            // and accuracy monitoring. Any member may list
+            // extractions and read the queue and accuracy.
+            // Processing and verification need
+            // manage-document-processing (owner, admin,
+            // operations manager, dispatcher) and the Starter
+            // plan or better: the Free plan is refused with a
+            // 402. The queue and accuracy routes come first so
+            // /documents/queue is not read as an extraction id.
+            Route::get('/documents/queue', [DocumentProcessingController::class, 'queue']);
+            Route::get('/documents/accuracy', [DocumentProcessingController::class, 'accuracy']);
+            Route::post('/documents/process', [DocumentProcessingController::class, 'process']);
+            Route::get('/documents', [DocumentProcessingController::class, 'index']);
+            Route::get('/documents/{extraction}', [DocumentProcessingController::class, 'show']);
+            Route::post('/documents/{extraction}/fields/{field}/verify', [DocumentProcessingController::class, 'verifyField']);
+            Route::post('/documents/{extraction}/verify', [DocumentProcessingController::class, 'verify']);
+            Route::post('/documents/{extraction}/reject', [DocumentProcessingController::class, 'reject']);
+            Route::post('/documents/{extraction}/link-shipment', [DocumentProcessingController::class, 'linkShipment']);
+            Route::post('/documents/{extraction}/dismiss-match', [DocumentProcessingController::class, 'dismissMatch']);
         });
     });
 

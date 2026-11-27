@@ -357,6 +357,23 @@ export function canManageWorkflows(role: OrganizationRole | null | undefined): b
   return isOneOf(role, WORKFLOW_MANAGERS);
 }
 
+// ManageDocumentProcessing in the backend map
+// (config/permissions.php): Owner, Admin, Operations Manager,
+// and Dispatcher. They process documents, verify extracted
+// fields, link shipments, and reject extractions. Every member
+// may list extractions and read the accuracy monitor.
+// Processing and verification need the Starter plan or better.
+const DOCUMENT_PROCESSING_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageDocumentProcessing(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, DOCUMENT_PROCESSING_MANAGERS);
+}
+
 /**
  * Whether the role may move a claim to the given target status.
  * Mirrors the backend ClaimPolicy: submitting needs the submit

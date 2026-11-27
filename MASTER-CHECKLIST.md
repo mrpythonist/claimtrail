@@ -605,15 +605,15 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v2.0.1 — AI Document Processing
 
-- [ ] OCR integration.
-- [ ] Document classification.
-- [ ] Data extraction.
-- [ ] Shipment reference extraction.
-- [ ] Shipment matching.
-- [ ] Duplicate detection.
-- [ ] Confidence scoring.
-- [ ] Human verification interface.
-- [ ] Extraction accuracy monitoring.
+- [x] OCR integration.
+- [x] Document classification.
+- [x] Data extraction.
+- [x] Shipment reference extraction.
+- [x] Shipment matching.
+- [x] Duplicate detection.
+- [x] Confidence scoring.
+- [x] Human verification interface.
+- [x] Extraction accuracy monitoring.
 
 ### v2.0.2 — API and Integrations
 

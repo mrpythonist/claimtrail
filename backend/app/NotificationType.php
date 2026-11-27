@@ -40,6 +40,7 @@ enum NotificationType: string
     case WorkflowEscalated = 'workflow.escalated';
     case WorkflowApprovalNeeded = 'workflow.approval_needed';
     case WorkflowRunFailed = 'workflow.run_failed';
+    case DocumentNeedsVerification = 'document.needs_verification';
 
     public function label(): string
     {
@@ -72,6 +73,7 @@ enum NotificationType: string
             self::WorkflowEscalated => 'Workflow escalation',
             self::WorkflowApprovalNeeded => 'Workflow approval needed',
             self::WorkflowRunFailed => 'Workflow run failed',
+            self::DocumentNeedsVerification => 'Document needs verification',
         };
     }
 
