@@ -433,6 +433,22 @@ export function canManageIntegrations(role: OrganizationRole | null | undefined)
   return isOneOf(role, INTEGRATION_MANAGERS);
 }
 
+// ManageEnterprise in the backend map (config/permissions.php):
+// Owner, Admin, and Operations Manager. They manage security
+// policies, retention purges, disaster recovery drills, alert
+// rules, SLOs, load tests, and security assessments. Enterprise
+// management also needs the Growth plan or better: lower plans
+// are refused with a 402.
+const ENTERPRISE_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+];
+
+export function canManageEnterprise(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, ENTERPRISE_MANAGERS);
+}
+
 export function roleLabel(role: OrganizationRole): string {
   switch (role) {
     case "owner":

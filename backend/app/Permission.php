@@ -176,6 +176,15 @@ enum Permission: string
     // with a 402.
     case ManageIntegrations = 'manage-integrations';
 
+    // Enterprise readiness (enforced from v2.0.3): security
+    // policies, audit exports, retention previews and purges,
+    // disaster recovery drills, alert rules and alerts, SLOs,
+    // load tests, and the enterprise security self-assessment.
+    // Owner, admin, and operations manager. Enterprise features
+    // need the Growth plan or better: the Free and Starter plans
+    // are refused with a 402.
+    case ManageEnterprise = 'manage-enterprise';
+
     /**
      * Every permission value, for validation and documentation.
      *

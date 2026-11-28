@@ -902,6 +902,49 @@ and no submission channel exists.
 | POST | `/accounting/{accounting}/sync` | Yes + org header | Run a mock sync: export recorded payments to the provider's dummy shape. Body: optional `payment_ids`. A zero-amount payment is skipped. No money moves. Requires `manage-integrations`; Free plan refused with 402. A disconnected connection is refused with 422. |
 | DELETE | `/accounting/{accounting}` | Yes + org header | Disconnect a connection. History stays readable. Requires `manage-integrations`. |
 
+### Enterprise Readiness (v2.0.3)
+
+Audit controls, security policies, retention controls,
+disaster recovery, bounded local load tests, monitoring alert
+rules and alerts, service-level objectives, and a security
+self-assessment. All of it needs `manage-enterprise` (owner,
+admin, operations manager) and the Growth plan or better:
+the Free and Starter plans are refused with 402. The error
+rate is probe-relative (5xx errors over errors + hourly
+health probes), because the app records no per-request
+counter. SLO targets, RPO/RTO, and alert thresholds are
+configured objectives, not guarantees. See
+docs/ENTERPRISE-READINESS.md.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/audit-logs/export` | Yes + org header | Export the audit trail as CSV (download) or JSON, same filters as the list, capped at 5,000 rows. Requires `manage-enterprise`; Growth or better. |
+| GET | `/security/policies` | Yes + org header | The organization's security policy (defaults when no row exists), with per-setting enforcement notes. Requires `manage-enterprise`; Growth or better. |
+| PUT | `/security/policies` | Yes + org header | Set the policy. Body: `password_min_length` (8-128), `password_require_numbers`, `password_require_symbols`, `session_timeout_minutes` (5-43200), `max_concurrent_sessions` (null for unlimited), `allowed_ip_ranges`, `require_two_factor`. Requires `manage-enterprise`; Growth or better. |
+| POST | `/security/policies/check-password` | Yes + org header | Check a password against the organization's policy without changing it. Requires `manage-enterprise`; Growth or better. |
+| POST | `/security/policies/check-ip` | Yes + org header | Check whether an IP address is inside the policy's allowed ranges (check-only; nothing enforces ranges). Requires `manage-enterprise`; Growth or better. |
+| GET | `/retention/preview` | Yes + org header | The effective retention settings plus, per kind, how many rows a purge would delete and the cutoff it would use. Nothing is deleted. Requires `manage-enterprise`; Growth or better. |
+| POST | `/retention/purge` | Yes + org header | Run the purge now for this organization. Body: `dry_run` (default true). A real purge writes one `retention.purged` audit row. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/disaster-recovery` | Yes + org header | DR status: the configured RPO/RTO, the latest backup, the last verified backup, the latest drill, and the drill count. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/disaster-recovery/drills` | Yes + org header | Drill history, newest first. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/disaster-recovery/drills` | Yes + org header | Run a drill. Body: `kind` (`verify`, `restore_dry_run`), optional `backup_run_id`. PostgreSQL restore dry-runs are refused with 422. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/load-tests` | Yes + org header | Load test history, newest first. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/load-tests` | Yes + org header | Run a bounded local synthetic load pass (at most 200 requests, default 50; `target` `health` or `shipments`). Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/alert-rules` | Yes + org header | Alert rules, newest first. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/alert-rules` | Yes + org header | Create a rule. Body: `name`, `metric` (`queue_depth`, `failed_jobs`, `error_rate`, `disk_usage_percent`, `backup_age_hours`), `operator` (`gt`, `gte`), `threshold`, `window_minutes`, `severity` (`warning`, `critical`). Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/alert-rules/{alertRule}` | Yes + org header | One alert rule. Requires `manage-enterprise`; Growth or better. |
+| PUT | `/enterprise/alert-rules/{alertRule}` | Yes + org header | Change a rule. Requires `manage-enterprise`; Growth or better. |
+| DELETE | `/enterprise/alert-rules/{alertRule}` | Yes + org header | Delete a rule; its alerts keep the rule id as null. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/alert-rules/{alertRule}/evaluate` | Yes + org header | Evaluate one rule now. Returns the observed value, whether it breached, and the alert when one was recorded. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/alerts` | Yes + org header | Alerts, newest first. Query: `status` (`active`, `acknowledged`, `resolved`), `metric`. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/alerts/{alert}/acknowledge` | Yes + org header | Acknowledge an active alert. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/alerts/{alert}/resolve` | Yes + org header | Resolve an alert. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/slos` | Yes + org header | The three SLOs with measured values, sample sizes, and statuses. Requires `manage-enterprise`; Growth or better. |
+| PUT | `/enterprise/slos/{key}` | Yes + org header | Change an SLO's target, window, or `enabled`. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/assessments/latest` | Yes + org header | The latest security self-assessment, or 404 when none exists. Requires `manage-enterprise`; Growth or better. |
+| GET | `/enterprise/assessments` | Yes + org header | Assessment history, newest first. Requires `manage-enterprise`; Growth or better. |
+| POST | `/enterprise/assessments` | Yes + org header | Generate and store a new security self-assessment. The overall result is never `pass` while any standing open finding remains. Requires `manage-enterprise`; Growth or better. |
+
 ## Example: register, create an organization, invite someone
 
 ```sh

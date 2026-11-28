@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\DriverEvidenceLinkController;
 use App\Http\Controllers\Api\V1\DriverEvidenceSubmissionController;
 use App\Http\Controllers\Api\V1\EmailIntakeWebhookController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
+use App\Http\Controllers\Api\V1\EnterpriseController;
 use App\Http\Controllers\Api\V1\EventCategoryController;
 use App\Http\Controllers\Api\V1\EvidenceFileController;
 use App\Http\Controllers\Api\V1\EvidenceRequirementController;
@@ -52,6 +53,7 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RetentionController;
 use App\Http\Controllers\Api\V1\SavedViewController;
 use App\Http\Controllers\Api\V1\SecurityController;
+use App\Http\Controllers\Api\V1\SecurityPolicyController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\ShipmentEventController;
 use App\Http\Controllers\Api\V1\ShipmentImportController;
@@ -210,8 +212,11 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/documents/{document}/download', [ClaimPackageController::class, 'download']);
 
             // Audit trail: read-only by design. There are no store,
-            // update, or delete routes for audit rows.
+            // update, or delete routes for audit rows. The export
+            // (v2.0.3) is an enterprise control: it needs
+            // manage-enterprise and the Growth plan or better.
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('/audit-logs/export', [AuditLogController::class, 'export']);
 
             // The member's own notifications. The fixed unread-count
             // path must come before any /notifications/{id} route.
@@ -286,14 +291,31 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
 
             // Retention (v1.1.3): effective retention settings and
             // per-organization overrides, in days. 0 keeps forever.
+            // The preview and purge (v2.0.3) are enterprise
+            // controls: they need manage-enterprise and the Growth
+            // plan or better. Purge dry-runs by default; pass
+            // dry_run=false to actually delete.
             Route::get('/retention', [RetentionController::class, 'show']);
             Route::put('/retention', [RetentionController::class, 'update']);
+            Route::get('/retention/preview', [RetentionController::class, 'preview']);
+            Route::post('/retention/purge', [RetentionController::class, 'purge']);
 
             // Security (v1.1.3): production-readiness checks and
             // the security event log (failed logins, authorization
             // denials). Both require manage-security.
             Route::get('/security/check', [SecurityController::class, 'check']);
             Route::get('/security/events', [SecurityController::class, 'events']);
+
+            // Security policies (v2.0.3): the organization's own
+            // policy row, plus password and IP checks against it.
+            // All four need manage-enterprise and the Growth plan
+            // or better. Only the password rules are enforced by
+            // code (on password change); IP ranges are check-only
+            // and two-factor is recorded policy only.
+            Route::get('/security/policies', [SecurityPolicyController::class, 'show']);
+            Route::put('/security/policies', [SecurityPolicyController::class, 'update']);
+            Route::post('/security/policies/check-password', [SecurityPolicyController::class, 'checkPassword']);
+            Route::post('/security/policies/check-ip', [SecurityPolicyController::class, 'checkIp']);
 
             // Billing (v1.2.0): plans, checkout, trials, plan
             // changes, cancellations, invoices, payment methods,
@@ -566,6 +588,37 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/accounting/{accounting}/test', [AccountingController::class, 'test']);
             Route::post('/accounting/{accounting}/sync', [AccountingController::class, 'sync']);
             Route::delete('/accounting/{accounting}', [AccountingController::class, 'destroy']);
+
+            // Enterprise readiness (v2.0.3): disaster recovery,
+            // load tests, alert rules and alerts, SLOs, and the
+            // security self-assessment. Every route needs
+            // manage-enterprise (owner, admin, operations
+            // manager) and the Growth plan or better: the Free
+            // and Starter plans are refused with a 402. The
+            // /alert-rules/{rule} routes come before the
+            // /alerts/{alert} routes only by grouping; the two
+            // resources bind different models, so there is no
+            // shadowing. The assessments/latest route comes
+            // before any /assessments/{id} route (there is none).
+            Route::get('/enterprise/disaster-recovery', [EnterpriseController::class, 'disasterRecovery']);
+            Route::get('/enterprise/disaster-recovery/drills', [EnterpriseController::class, 'listDrills']);
+            Route::post('/enterprise/disaster-recovery/drills', [EnterpriseController::class, 'runDrill']);
+            Route::get('/enterprise/load-tests', [EnterpriseController::class, 'listLoadTests']);
+            Route::post('/enterprise/load-tests', [EnterpriseController::class, 'runLoadTest']);
+            Route::get('/enterprise/alert-rules', [EnterpriseController::class, 'listAlertRules']);
+            Route::post('/enterprise/alert-rules', [EnterpriseController::class, 'storeAlertRule']);
+            Route::get('/enterprise/alert-rules/{alertRule}', [EnterpriseController::class, 'showAlertRule']);
+            Route::put('/enterprise/alert-rules/{alertRule}', [EnterpriseController::class, 'updateAlertRule']);
+            Route::delete('/enterprise/alert-rules/{alertRule}', [EnterpriseController::class, 'destroyAlertRule']);
+            Route::post('/enterprise/alert-rules/{alertRule}/evaluate', [EnterpriseController::class, 'evaluateAlertRule']);
+            Route::get('/enterprise/alerts', [EnterpriseController::class, 'listAlerts']);
+            Route::post('/enterprise/alerts/{alert}/acknowledge', [EnterpriseController::class, 'acknowledgeAlert']);
+            Route::post('/enterprise/alerts/{alert}/resolve', [EnterpriseController::class, 'resolveAlert']);
+            Route::get('/enterprise/slos', [EnterpriseController::class, 'listSlos']);
+            Route::put('/enterprise/slos/{key}', [EnterpriseController::class, 'updateSlo']);
+            Route::get('/enterprise/assessments/latest', [EnterpriseController::class, 'latestAssessment']);
+            Route::get('/enterprise/assessments', [EnterpriseController::class, 'listAssessments']);
+            Route::post('/enterprise/assessments', [EnterpriseController::class, 'generateAssessment']);
         });
     });
 

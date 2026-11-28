@@ -629,15 +629,34 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v2.0.3 — Enterprise Readiness
 
-- [ ] Advanced audit controls.
-- [ ] Security policies.
-- [ ] Data retention controls.
-- [ ] Disaster recovery.
-- [ ] Load testing.
-- [ ] Monitoring and alerting.
-- [ ] Service-level objectives.
-- [ ] Scalability improvements.
-- [ ] Enterprise security assessment.
+> Verified 2026-11-28 (daily build run, independently re-verified by the
+> parent run: backend 776 tests / 4539 assertions, frontend 484 tests,
+> `npm run build` 80/80 pages, live HTTP smoke 78/78 steps + 5/5 CLI
+> checks on a fresh SQLite DB, OpenAPI 237 paths / 313 operations
+> matching the live `api/v1` routes exactly, public spec 9/9): audit
+> export (JSON/CSV/filter), security policies with password-rule
+> enforcement on change and reset, retention preview + dry-run purge,
+> DR verify + restore-dry-run drills, bounded local load tests, alert
+> rules with breach notifications, SLOs with insufficient-data states,
+> readiness N+1 fix (12 queries for 5 and 10 claims, was 26/41),
+> enterprise self-assessment (warn, 16 checks, 7 open findings).
+> Still unverified: browser E2E (standing blocker), live
+> Postgres/Redis/Docker (standing blockers), real mailer, pen test.
+> v2.0.3 limits: no real failover; load tests local synthetic only;
+> IP ranges check-only; 2FA policy-only; SLO targets are objectives,
+> not guarantees; assessment is a self-assessment, not a pen test.
+
+- [x] Advanced audit controls.
+- [x] Security policies.
+- [x] Data retention controls.
+- [x] Disaster recovery.
+- [x] Load testing.
+- [x] Monitoring and alerting.
+- [x] Service-level objectives.
+- [x] Scalability improvements.
+- [x] Enterprise security assessment.
+
+> Verified 2026-11-28 (daily build run): backend 776 passed (4539 assertions), frontend 484 passed (65 files), `npm run build` succeeds (80/80 pages), live HTTP smoke 78/78 + 5 CLI checks on a fresh SQLite DB, OpenAPI 237 internal paths (313 ops) + 8 public paths (9 ops) matching live routes exactly. Readiness N+1 fixed and pinned (missing-evidence endpoint flat at 12 queries for 5 and 10 claims, was 26 and 41). Honest limits: error rate is probe-relative; RPO/RTO and SLO targets are configured objectives; load tests are local synthetic only; no failover; the assessment is a self-assessment, never a pen test. Still unverified: live Postgres/Redis/Docker, browser E2E, real mailer (standing blockers).
 
 ---
 

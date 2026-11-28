@@ -97,6 +97,26 @@ class RetentionService
     }
 
     /**
+     * Preview counts for an organization (v2.0.3): how many
+     * rows the purge would delete per kind, without deleting
+     * anything. The global job_executions kind is counted
+     * across all organizations, because the scheduled run
+     * purges it globally, not per organization.
+     *
+     * @return array<string, int>
+     */
+    public function previewCounts(Organization $organization): array
+    {
+        $counts = $this->purge($organization, true);
+
+        $counts['job_executions'] = $this->purgeJobExecutions(
+            (int) config('retention.job_executions_days', 0), true
+        );
+
+        return $counts;
+    }
+
+    /**
      * Purge one organization. Global kinds (job executions and
      * unattributed security events) are only purged when no
      * organization is given, by purgeAll().

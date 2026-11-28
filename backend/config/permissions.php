@@ -77,6 +77,7 @@ return [
         Permission::ManageDocumentProcessing->value,
         Permission::ManageApiKeys->value,
         Permission::ManageIntegrations->value,
+        Permission::ManageEnterprise->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -120,6 +121,7 @@ return [
         Permission::ManageDocumentProcessing->value,
         Permission::ManageApiKeys->value,
         Permission::ManageIntegrations->value,
+        Permission::ManageEnterprise->value,
     ],
 
     OrganizationRole::Dispatcher->value => [

@@ -342,7 +342,7 @@ class OperationalIntelligenceService extends ClaimAnalyticsService
     protected function claimsWithEvidence(Organization $organization, CarbonImmutable $from, CarbonImmutable $to): Collection
     {
         return $this->claimsInRange($organization, $from, $to)
-            ->loadMissing(['event', 'evidenceFiles']);
+            ->loadMissing(['event', 'evidenceFiles', 'requirementSnapshots']);
     }
 
     /**

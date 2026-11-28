@@ -6,28 +6,30 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v2.0.2 (Phase 6, API and
-  Integrations). App version is now **2.0.2**. Phase 6 is underway
-  (v2.0.0 Workflow Engine, v2.0.1 AI Document Processing, and
-  v2.0.2 API and Integrations done; v2.0.3 Enterprise Readiness
-  next, last of Phase 6). Phase 5 is complete (v1.5.0, v1.5.1,
-  v1.5.2). Phase 4 is complete (v1.3.0, v1.3.1, v1.3.2,
-  v1.3.3). Phase 3 is complete (v1.2.3). Phase 0 is complete
-  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0
-  interviews deferred, still open). What remains before real
-  customers is Aqib's launch decision: open signups vs closed
-  pilot first (pilot prep is ready, no pilot customer
-  recruited), plus the person-only items in
-  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
-  Stripe, real mailer, hosting, domain).
+- **Last completed version:** v2.0.3 (Phase 6, Enterprise
+  Readiness). App version is now **2.0.3**. Phase 6 is COMPLETE
+  (v2.0.0 Workflow Engine, v2.0.1 AI Document Processing,
+  v2.0.2 API and Integrations, and v2.0.3 Enterprise Readiness
+  done). Phase 5 is complete (v1.5.0, v1.5.1, v1.5.2). Phase 4
+  is complete (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is
+  complete (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0,
+  v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews deferred,
+  still open). What remains before real customers is Aqib's
+  launch decision: open signups vs closed pilot first (pilot
+  prep is ready, no pilot customer recruited), plus the
+  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
+  (lawyer review, real Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `3763ad28` (v2.0.1, pushed 2026-11-27 ~23:10 PKT after Aqib's
-  yes + approval card). v2.0.2 is built and verified locally,
-  46 files, awaiting Aqib's yes to push.
-- **Tests at v2.0.2:** 738 backend (4240 assertions) + 458 frontend, all
-  passing. `npm run build` succeeds (79/79 pages). Live HTTP smoke test:
-  105/105 backend steps on a fresh SQLite DB (see the
-  2026-11-28 v2.0.2 log entry). OpenAPI 218 internal paths (287 ops)
+  head `a2a7d9c2` (v2.0.2, pushed 2026-11-28 ~07:52 PKT after Aqib's
+  yes + approval card). 46 files in the v2.0.2 commit, read-back verified
+  (all 46 blob SHAs match the new head exactly). **v2.0.3 is built and
+  verified locally but NOT pushed yet** — awaiting Aqib's yes + approval
+  card (see the 2026-11-28 v2.0.3 log entry; delta manifest at
+  `~/workspace/claimtrail-v203-paths-manifest.json`).
+- **Tests at v2.0.3:** 776 backend (4539 assertions) + 484 frontend, all
+  passing. `npm run build` succeeds (80/80 pages). Live HTTP smoke test:
+  78/78 steps plus 5 CLI checks on a fresh SQLite DB (see the
+  2026-11-28 v2.0.3 log entry). OpenAPI 237 internal paths (313 ops)
   plus 8 public paths (9 ops), verified to match the live routes
   exactly on both surfaces.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
@@ -36,10 +38,10 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**v2.0.3 — Enterprise Readiness** (MASTER-CHECKLIST.md, Phase 6,
-Intelligent Automation) is the next build. **Status 2026-11-28:
-v2.0.2 BUILT AND VERIFIED, 46 files, awaiting Aqib's yes to push;
-remote head still `3763ad28` (v2.0.1).**
+**v2.1.0 — Agency Management** (MASTER-CHECKLIST.md, Phase 7,
+Partner Ecosystem) is the next build. **Status 2026-11-28:
+v2.0.3 READY TO PUSH, not pushed — awaiting Aqib's yes +
+approval card. Phase 6 COMPLETE.**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -111,6 +113,231 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-28 — v2.0.3 Enterprise Readiness built and verified (Phase 6 COMPLETE)
+
+- Gate check passed first (main agent): no other builder
+  was running, remote head on GitHub is `a2a7d9c2`
+  (v2.0.2, pushed 2026-11-28 ~07:52 PKT), and no
+  `claimtrail-scratch-v203` existed. Build started
+  2026-11-28 ~10:10 PKT on the scheduled daily run
+  (`daily-claimtrail-build`). This is the FOURTH and last
+  version of Phase 6 (Intelligent Automation). **Phase 6 is
+  now COMPLETE.** Next is Phase 7, v2.1.0 Agency Management.
+- Spec: MASTER-CHECKLIST.md v2.0.3 (9 items). All nine
+  verified and checked.
+- Backend (new): `backend/config/enterprise.php` (security
+  policy defaults, RPO 1440 min, RTO 240 min, SLO defaults,
+  load test max 200/default 50, alert metric labels);
+  migration
+  `2026_11_28_101200_create_enterprise_tables.php`
+  (`security_policies`, `alert_rules`, `alerts`, `slos`,
+  `load_test_runs`, `security_assessments`,
+  `disaster_recovery_drills`); models `SecurityPolicy`,
+  `AlertRule` (metrics queue_depth/failed_jobs/error_rate/
+  disk_usage_percent/backup_age_hours; operators gt/gte;
+  severities warning/critical), `EnterpriseAlert` (table
+  `alerts`; statuses active/acknowledged/resolved), `Slo`
+  (keys availability/error_rate/latency_p95), `LoadTestRun`
+  (targets health/shipments), `SecurityAssessment`,
+  `DisasterRecoveryDrill` (kinds verify/restore_dry_run);
+  `App\\Permission` addition `ManageEnterprise`
+  (manage-enterprise, owner/admin/operations_manager);
+  `NotificationType` `EnterpriseAlertTriggered`
+  (enterprise.alert_triggered); `EntitlementService`
+  `enterprise` limit (Growth/Fleet/Agency/SuccessFee) +
+  `authorizeEnterprise()` (402 for Free/Starter);
+  `App\\Services\\SecurityPolicyService` (defaults/effective/
+  update/present, `validatePassword`, `checkIp` IPv4 CIDR
+  match, `validatePasswordWithPolicy`,
+  `strictestPolicyForUser`); `App\\Services\\AuditExportService`
+  (CSV/JSON, same filters as the audit list, 5000-row cap);
+  `App\\Services\\AlertingService` (measures 5 metrics from
+  local data only, one active alert per rule — a repeat
+  breach updates it; notifies enterprise managers only when
+  first opened); `App\\Services\\SloService` (seeds defaults
+  from config; availability from monitoring checks,
+  error_rate probe-relative, latency_p95 from stored check
+  latencies; status bands: availability at-risk within 1pt
+  below target, error rate within 0.5pt above, latency
+  within 10% above); `App\\Services\\LoadTestService`
+  (bounded sequential in-process requests through the HTTP
+  kernel; health or shipments target; cap 200);
+  `App\\Services\\DisasterRecoveryService` (status with
+  RPO/RTO + latest/last-verified backup + latest drill;
+  `runDrill` verify via `BackupService::verify`,
+  restore_dry_run copies a SQLite backup to a temp file,
+  opens it read-only, counts rows, deletes the temp file;
+  pgsql drills record a failure honestly);
+  `App\\Services\\SecurityAssessmentService` (10
+  SecurityCheckService checks + 6 config checks + 7
+  standing open items; overall never `pass` while any open
+  finding stands; missing backup is `warn`, not `fail`);
+  `ErrorLogService::errorCountForOrganization()` (windowed
+  5xx count); `RetentionService::previewCounts()` (org
+  dry-run counts + global job_executions count);
+  `SecurityPolicyController` (show/update/check-password/
+  check-ip), `EnterpriseController` (DR status/drills, load
+  tests, alert rules CRUD + evaluate, alerts list/
+  acknowledge/resolve, SLOs list/update, assessments list/
+  generate/latest), `AuditLogController::export` (CSV
+  download `audit-logs-YYYY-MM-DD.csv` or JSON),
+  `RetentionController::preview` + `purge` (dry_run defaults
+  true; purge writes an audit row); `AuthController::
+  updatePassword` enforces the org policy (org from the
+  `X-Organization-Id` header if member, else the user's
+  first org, else defaults); `PasswordResetController::reset`
+  enforces the strictest policy across the user's orgs,
+  checked before the token is consumed. `routes/api.php`:
+  19 new paths / 26 new operations (audit export; security
+  policies; retention preview/purge; DR status/drills; load
+  tests; alert rules + evaluate; alerts; SLOs; assessments).
+  Console commands `alerts:evaluate` (hourly schedule),
+  `load:test` (health target only), `enterprise:assess`,
+  `dr:drill`. The error rate is probe-relative —
+  `100 x errors / (errors + hourly health probes)` — because
+  the app records no per-request counter; documented in code
+  and in docs/ENTERPRISE-READINESS.md.
+- Backend edits: `config/app.php` version 2.0.3;
+  `config/permissions.php`, `routes/api.php`,
+  `routes/console.php` (hourly alerts schedule),
+  `app/NotificationType.php` (new type + label arm),
+  `app/Permission.php`, `App\\Services\\EntitlementService`,
+  `App\\Services\\ReadinessService` (see Fixed),
+  `App\\Services\\OperationalIntelligenceService`
+  (eager-loads `requirementSnapshots`),
+  `App\\Services\\ErrorLogService`,
+  `App\\Services\\RetentionService`,
+  `App\\Http\\Controllers\\Api\\V1\\AuthController`,
+  `App\\Http\\Controllers\\Api\\V1\\PasswordResetController`,
+  `App\\Http\\Controllers\\Api\\V1\\AuditLogController`,
+  `App\\Http\\Controllers\\Api\\V1\\RetentionController`,
+  HealthCheckTest version 2.0.2 to 2.0.3, NotificationTest
+  preference count 30 to 31. Pre-existing tests updated
+  only for the version bump and the new notification type.
+- Frontend: `src/lib/enterprise.ts` (typed client for all
+  24 contract endpoints), `src/lib/permissions.ts`
+  (`canManageEnterprise`: owner/admin/operations_manager),
+  enterprise types in `src/lib/types.ts`, AppShell
+  "Enterprise" nav entry (Workspace section), `/enterprise`
+  page (8 tabs: Overview, Audit, Security policies,
+  Retention, Disaster recovery, Monitoring, Load tests,
+  Assessment). Tests: `src/lib/__tests__/enterprise.test.ts`
+  (17 tests) and `src/app/(app)/enterprise/__tests__/
+  page.test.tsx` (9 tests). Not verified against a live
+  backend (contract trusted); component conventions honored
+  (Alert tones error/success/info/warning; Table takes
+  children; Input/Select require id + label).
+- Docs: new `docs/ENTERPRISE-READINESS.md` (definitions,
+  honest limits, what is measured vs configured, the DR
+  runbook, what is NOT verified); API.md Enterprise
+  Readiness section (26 endpoint rows); OpenAPI Enterprise
+  tag (19 new paths, 26 new operations, 11 new schemas),
+  `info.version` 2.0.3, description extended; CHANGELOG
+  [2.0.3]. OpenAPI counts: 237 internal paths (313 ops),
+  public spec unchanged at 8 paths (9 ops).
+- Verification: full backend suite re-run: **776 tests /
+  4539 assertions, 0 failures** (696 Feature + 80 Unit; was
+  738/4240 at v2.0.2; +38 new tests, 247 new assertions;
+  the other +52 assertions come from `RbacAuditTest`'s route
+  sweep over the 26 new routes, which also proves every new
+  route requires auth and resolves an organization).
+  Frontend: **484 tests in 65 files, 0 failures;
+  `npm run build` 80/80 pages** including `/enterprise`
+  (79 at v2.0.2 + 1). Live HTTP smoke on a fresh SQLite DB
+  (built-in server, port 8132): **78/78 steps** — audit
+  export JSON/CSV/filter, policy get/put + password/IP
+  checks + password-change and password-reset enforcement
+  (reset token parsed from the log mail), retention preview
+  + dry-run purge (row counts unchanged), backup create +
+  DR status + verify drill + restore dry-run drill (85
+  tables, row counts in the result), load tests (health and
+  shipments, 5/5 each), alert rule create/evaluate/breach
+  (one active alert only, notification to the second member,
+  acknowledge, resolve, re-breach opens a fresh alert),
+  SLOs (insufficient data, then seeded probes: availability
+  100% meeting, latency p95 120 ms meeting, error rate
+  9.09% breaching), assessment generation (warn, 16 checks,
+  7 open findings), missing-evidence consistency at 1/5/10
+  claims, Free 402, Starter 402, cross-tenant 404 (after a
+  Growth trial on the second org), dispatcher 403s, admin
+  200. CLI checks: `load:test`, `alerts:evaluate`,
+  `enterprise:assess`, `dr:drill` verify + restore_dry_run —
+  all exit 0. Route diff: OpenAPI matches
+  `route:list --json` exactly on both surfaces (internal
+  313/313, public 9/9).
+- Verification findings, five real defects found by the
+  tests and fixed in this build (all test-side except the
+  assessment one, each with a pinning test):
+  (1) the password test first used a password failing the
+  base min-8 rule before the policy ran — changed to
+  `longenough` (10 chars, no number) so the policy itself
+  refuses with both reasons; (2) JSON encodes whole floats
+  as ints (`10.0` to `10`, `0.0` to `0`, `50.0` to `50`,
+  `400.0` to `400`) — fixed the assertions; (3) the 402
+  test authenticated as the wrong org's owner so the org
+  middleware 404'd before the plan gate — now `actAs()`
+  per org, same fix in the cross-tenant test; (4) the
+  assessment backup finding changed fail to warn for a
+  missing backup (a daily backup may simply not have run
+  yet); (5) `ScalabilityTest` first used wrong response
+  keys — the actual keys are `claims`,
+  `claims_incomplete`,
+  `average_readiness_percentage.percentage`, `by_category`.
+  The live smoke found no code defects; its first run had
+  5 failed steps, all wrong smoke assumptions, corrected
+  and re-run green: (a) org creation is not audited — there
+  is no `organization.created` row, so the export filter
+  was corrected to `shipment.created` (the filter itself
+  works; noted as an observation, pre-existing behaviour,
+  out of scope); (b) `check-password` returns 200 with
+  `{valid, errors}`, not 422 — by design, and the OpenAPI
+  already documents it; (c) assessment finding ids use
+  hyphens (`live-postgres`), not `open.live_postgres`;
+  (d) the plan gate (402) runs before the ownership check,
+  so a cross-tenant 404 needs an entitled plan on the
+  other org — the smoke now trials org B to Growth first.
+  One count corrected during the build: the OpenAPI adds
+  19 paths / 26 operations, not 26 paths (paths share
+  operations: e.g. GET+PUT on `/security/policies`).
+- Fixed (scalability, item 8): `ReadinessService::compute()`
+  had a real N+1 — 3 queries per claim (requirements
+  lookup, evidence pluck, snapshot read). Fixed with a
+  per-instance requirements cache keyed by (org,
+  event_category) + reuse of the eager-loaded `evidenceFiles`
+  / `requirementSnapshots` relations; the operations
+  endpoint now also eager-loads `requirementSnapshots`.
+  Measured: **12 queries for 5 claims and 12 for 10
+  claims** (before, computed from the removed queries: 26
+  at 5 claims, 41 at 10). Pinned by
+  `tests/Feature/ScalabilityTest.php`, which also pins the
+  returned numbers unchanged. Index coverage was already
+  complete (security_events, notifications,
+  monitoring_checks, evidence_requirements,
+  claim_requirements all indexed), so no new indexes were
+  needed.
+- Honest limits (v2.0.3-specific, also in
+  docs/ENTERPRISE-READINESS.md): no real failover; load
+  tests are local synthetic only (sequential, at most 200
+  requests, in-process); the error rate is probe-relative;
+  IP ranges are check-only; two-factor is policy-only;
+  session timeout/max concurrent sessions are recorded
+  only; pgsql restore dry-run is unsupported; SLO targets
+  are objectives, not guarantees; the assessment is a
+  self-assessment, not a pen test or an external audit;
+  monitoring checks are deployment-wide, so the
+  availability and latency SLOs read the same probe history
+  for every organization.
+- Push status: **READY TO PUSH, not pushed — awaiting Aqib's
+  yes.** No git push, no tag, no `.github/workflows` files
+  (per the push rule). Delta manifest:
+  `~/workspace/claimtrail-v203-paths.txt` +
+  `~/workspace/claimtrail-v203-paths-manifest.json` — 55 files
+  (25 changed + 30 new), 1,454,186 bytes vs remote head
+  `a2a7d9c2`, recomputed by the parent run after the final
+  checklist-note edit, so the manifest is current. The paths
+  file is one path per line (the v202 file was NUL-separated
+  — different format, flag to the pusher).
 
 ### 2026-11-28 — v2.0.2 API and Integrations built and verified (Phase 6 continues)
 
@@ -269,11 +496,9 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   `api/v1` route operations exactly, and the public spec
   verified to match the 9 live `api/public/v1` route
   operations exactly (diff script covers both surfaces).
-- Push status: **READY TO PUSH — built and verified, awaiting Aqib's
-  yes in the main chat. Verified by the main agent 2026-11-28 ~07:40
-  PKT: backend 738/4240, frontend 458, build 79/79, smoke 105/105,
-  OpenAPI exact on both surfaces, delta 46 files vs 3763ad28 (final
-  byte total in the push notice).**
+- Push status: **PUSHED 2026-11-28 ~07:52 PKT, head `a2a7d9c2`** (46
+  files, read-back verified: added 28, changed 18, removed 0, all
+  46 blob SHAs match the new head).
 
 ### 2026-11-27 — v2.0.1 AI Document Processing built and verified (Phase 6 continues)
 

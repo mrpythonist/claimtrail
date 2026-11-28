@@ -102,7 +102,7 @@ class EntitlementService
      * The resolved numeric limits for a plan key at a carrier
      * count. Agency claims and storage scale per carrier.
      *
-     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool, public_api: bool}
+     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool, public_api: bool, enterprise: bool}
      */
     public function limitsForPlan(string $plan, int $carriers): array
     {
@@ -130,6 +130,12 @@ class EntitlementService
             'workflows' => $plan !== PlanCatalog::FREE,
             'document_processing' => $plan !== PlanCatalog::FREE,
             'public_api' => $plan !== PlanCatalog::FREE,
+            'enterprise' => in_array($plan, [
+                PlanCatalog::GROWTH,
+                PlanCatalog::FLEET,
+                PlanCatalog::AGENCY,
+                PlanCatalog::SUCCESS_FEE,
+            ], true),
         ];
     }
 
@@ -489,6 +495,40 @@ class EntitlementService
             'The public API is not included in the '.$limits['plan_name'].' plan.'
                 .($upgrade !== null
                     ? ' Upgrade to '.$upgrade['name'].' to use the public API.'
+                    : ''),
+        );
+    }
+
+    /**
+     * Refuse enterprise readiness features below the Growth
+     * plan. The Free and Starter plans are refused with a 402.
+     * Reading and writing are both gated: unlike workflows and
+     * document processing, there is no enterprise history a
+     * downgraded organization keeps, because the surface is
+     * the enterprise tooling itself.
+     *
+     * @throws EntitlementExceededException
+     */
+    public function authorizeEnterprise(Organization $organization): void
+    {
+        $limits = $this->limits($organization);
+
+        if ($limits['enterprise']) {
+            return;
+        }
+
+        $upgrade = $this->nextPlanFor('enterprise', $organization);
+
+        throw new EntitlementExceededException(
+            'enterprise',
+            null,
+            0,
+            $limits['plan'],
+            $upgrade['key'] ?? null,
+            $upgrade['name'] ?? null,
+            'Enterprise readiness features are not included in the '.$limits['plan_name'].' plan.'
+                .($upgrade !== null
+                    ? ' Upgrade to '.$upgrade['name'].' to use them.'
                     : ''),
         );
     }

@@ -42,6 +42,7 @@ enum NotificationType: string
     case WorkflowRunFailed = 'workflow.run_failed';
     case DocumentNeedsVerification = 'document.needs_verification';
     case WebhookDeliveryFailed = 'webhook.delivery_failed';
+    case EnterpriseAlertTriggered = 'enterprise.alert_triggered';
 
     public function label(): string
     {
@@ -76,6 +77,7 @@ enum NotificationType: string
             self::WorkflowRunFailed => 'Workflow run failed',
             self::DocumentNeedsVerification => 'Document needs verification',
             self::WebhookDeliveryFailed => 'Webhook delivery failed',
+            self::EnterpriseAlertTriggered => 'Enterprise alert triggered',
         };
     }
 

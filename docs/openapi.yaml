@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 2.0.2
+  version: 2.0.3
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -70,6 +70,14 @@ info:
     modelled schema-only). The public API itself is a separate
     surface, /api/public/v1, documented in
     docs/openapi-public.yaml and docs/DEVELOPER-API.md.
+    Version 2.0.3 adds enterprise readiness: security
+    policies with enforced password rules, audit export,
+    retention preview and purge, disaster recovery drills,
+    bounded local load tests, monitoring alert rules and
+    alerts, service-level objectives measured from local
+    data, scalability fixes, and an enterprise security
+    self-assessment. Enterprise features need the Growth
+    plan or better.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -111,6 +119,7 @@ tags:
   - name: ApiKeys
   - name: Webhooks
   - name: Accounting
+  - name: Enterprise
 paths:
   /auth/register:
     post:
@@ -8671,6 +8680,857 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /audit-logs/export:
+    get:
+      tags: [Enterprise]
+      summary: Export the audit trail (requires manage-enterprise)
+      description: >-
+        The filtered audit trail as a CSV download or as JSON,
+        newest first, capped at 5,000 rows. The trail stays
+        append-only: the export is a read, and the retention
+        purge is the only sanctioned deletion path. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: format
+          in: query
+          schema: { type: string, enum: [csv, json], default: csv }
+        - name: entity_type
+          in: query
+          schema: { type: string }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Audit export (CSV file, or JSON rows when format=json)
+          content:
+            text/csv:
+              schema: { type: string }
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /security/policies:
+    get:
+      tags: [Enterprise]
+      summary: Get the security policy (requires manage-enterprise)
+      description: >-
+        The effective security policy: the organization's own
+        row, or the config defaults until one is set. Includes
+        what each setting can and cannot enforce: password
+        rules are enforced on password change, IP ranges are
+        check-only, two-factor is recorded policy only.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Effective security policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SecurityPolicy"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Enterprise]
+      summary: Set the security policy (requires manage-enterprise)
+      description: >-
+        Only the fields in the request are changed; the rest
+        keep their current value (or the default when no row
+        exists yet). Requires manage-enterprise; Free and
+        Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password_min_length: { type: integer, minimum: 8, maximum: 128 }
+                password_require_numbers: { type: boolean }
+                password_require_symbols: { type: boolean }
+                session_timeout_minutes: { type: integer, minimum: 5, maximum: 43200 }
+                max_concurrent_sessions: { type: integer, minimum: 1, maximum: 100, nullable: true }
+                allowed_ip_ranges:
+                  type: array
+                  items: { type: string }
+                require_two_factor: { type: boolean }
+      responses:
+        "200":
+          description: Security policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SecurityPolicy"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /security/policies/check-password:
+    post:
+      tags: [Enterprise]
+      summary: Check a password against the policy (requires manage-enterprise)
+      description: >-
+        Returns whether the password satisfies the effective
+        policy, and the reasons it fails. Nothing is changed.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200":
+          description: Password check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      valid: { type: boolean }
+                      errors:
+                        type: array
+                        items: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /security/policies/check-ip:
+    post:
+      tags: [Enterprise]
+      summary: Check an IP against the allowed ranges (requires manage-enterprise)
+      description: >-
+        Whether the address is inside the organization's
+        allowed IP ranges. Check-only: the answer does not
+        gate access anywhere. With no ranges configured every
+        address is allowed. Requires manage-enterprise; Free
+        and Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip: { type: string, format: ipv4 }
+      responses:
+        "200":
+          description: IP check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      ip: { type: string }
+                      allowed: { type: boolean }
+                      in_range: { type: boolean, nullable: true }
+                      ranges:
+                        type: array
+                        items: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /retention/preview:
+    get:
+      tags: [Enterprise]
+      summary: Retention preview (requires manage-enterprise)
+      description: >-
+        The effective retention settings plus, per kind, how
+        many rows the purge would delete and the cutoff it
+        would use. Nothing is deleted by a preview. The
+        job_executions kind is counted globally, because the
+        scheduled run purges it globally, not per
+        organization. Requires manage-enterprise; Free and
+        Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Retention preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RetentionPreview"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /retention/purge:
+    post:
+      tags: [Enterprise]
+      summary: Run the retention purge (requires manage-enterprise)
+      description: >-
+        Purge this organization's expired rows now. Dry-runs
+        by default; pass dry_run=false to actually delete.
+        The purge writes one audit row with the counts.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dry_run: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      dry_run: { type: boolean }
+                      counts:
+                        type: object
+                        additionalProperties: { type: integer }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /enterprise/disaster-recovery:
+    get:
+      tags: [Enterprise]
+      summary: Disaster recovery status (requires manage-enterprise)
+      description: >-
+        The RPO/RTO objectives (configured targets, not
+        measured values), the latest backup, the last verified
+        backup, and the latest drill. There is no failover:
+        a drill proves a backup can be read back. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Disaster recovery status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DisasterRecoveryStatus"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/disaster-recovery/drills:
+    get:
+      tags: [Enterprise]
+      summary: List disaster recovery drills (requires manage-enterprise)
+      description: >-
+        Drill history, newest first. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Disaster recovery drills
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DisasterRecoveryDrill"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Enterprise]
+      summary: Run a disaster recovery drill (requires manage-enterprise)
+      description: >-
+        verify re-hashes a backup against its manifest;
+        restore_dry_run opens a temporary copy of the backup
+        database read-only and counts its rows. The live
+        database is never touched. PostgreSQL backups cannot
+        be dry-run restored here: that needs a live server and
+        pg_restore, so the drill records a failure with the
+        reason. Requires manage-enterprise; Free and Starter
+        plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [verify, restore_dry_run] }
+                backup_run_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "201":
+          description: Drill recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DisasterRecoveryDrill"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /enterprise/load-tests:
+    get:
+      tags: [Enterprise]
+      summary: List load test runs (requires manage-enterprise)
+      description: >-
+        Bounded local synthetic load runs, newest first.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Load test runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoadTestRun"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Enterprise]
+      summary: Run a load test (requires manage-enterprise)
+      description: >-
+        Run a bounded local synthetic load pass now: N
+        sequential in-process requests through the HTTP
+        kernel, at most 200. The health target hits the
+        public health endpoint; the shipments target hits the
+        authenticated shipment list with the caller's own
+        credentials. No external service is touched. This is
+        a local synthetic pass, not a production load test.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120, nullable: true }
+                requests: { type: integer, minimum: 1, maximum: 200 }
+                target: { type: string, enum: [health, shipments] }
+      responses:
+        "201":
+          description: Load test run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LoadTestRun"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /enterprise/alert-rules:
+    get:
+      tags: [Enterprise]
+      summary: List alert rules (requires manage-enterprise)
+      description: >-
+        The organization's monitoring alert rules, by name.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Alert rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AlertRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Enterprise]
+      summary: Create an alert rule (requires manage-enterprise)
+      description: >-
+        Metrics are measured from local data only: queue
+        depth, failed jobs, probe-relative error rate,
+        disk usage, backup age. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, metric, threshold]
+              properties:
+                name: { type: string, maxLength: 120 }
+                metric: { type: string, enum: [queue_depth, failed_jobs, error_rate, disk_usage_percent, backup_age_hours] }
+                operator: { type: string, enum: [gt, gte], default: gt }
+                threshold: { type: number, minimum: 0 }
+                window_minutes: { type: integer, minimum: 1, maximum: 43200 }
+                enabled: { type: boolean }
+                severity: { type: string, enum: [warning, critical] }
+      responses:
+        "201":
+          description: Alert rule created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AlertRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /enterprise/alert-rules/{alertRule}:
+    get:
+      tags: [Enterprise]
+      summary: Show an alert rule (requires manage-enterprise)
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alertRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Alert rule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AlertRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Enterprise]
+      summary: Update an alert rule (requires manage-enterprise)
+      description: >-
+        Only the fields in the request are changed. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alertRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                metric: { type: string, enum: [queue_depth, failed_jobs, error_rate, disk_usage_percent, backup_age_hours] }
+                operator: { type: string, enum: [gt, gte] }
+                threshold: { type: number, minimum: 0 }
+                window_minutes: { type: integer, minimum: 1, maximum: 43200 }
+                enabled: { type: boolean }
+                severity: { type: string, enum: [warning, critical] }
+      responses:
+        "200":
+          description: Alert rule updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AlertRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Enterprise]
+      summary: Delete an alert rule (requires manage-enterprise)
+      description: >-
+        The rule's alerts stay: their rule id is set to null,
+        so the history is kept. Requires manage-enterprise;
+        Free and Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alertRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Alert rule deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/alert-rules/{alertRule}/evaluate:
+    post:
+      tags: [Enterprise]
+      summary: Evaluate an alert rule now (requires manage-enterprise)
+      description: >-
+        Measure the rule's metric and breach-check it outside
+        the hourly schedule. A breach opens (or refreshes)
+        an alert and notifies the enterprise managers when
+        first opened. A metric that cannot be measured
+        reports a null observed value and does not breach.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alertRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AlertEvaluation"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/alerts:
+    get:
+      tags: [Enterprise]
+      summary: List alerts (requires manage-enterprise)
+      description: >-
+        Alerts, newest first, with status and metric filters.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, acknowledged, resolved] }
+        - name: metric
+          in: query
+          schema: { type: string, enum: [queue_depth, failed_jobs, error_rate, disk_usage_percent, backup_age_hours] }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnterpriseAlert"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/alerts/{alert}/acknowledge:
+    post:
+      tags: [Enterprise]
+      summary: Acknowledge an alert (requires manage-enterprise)
+      description: >-
+        The alert stays open, marked as seen. A repeat breach
+        still updates it rather than opening a second row.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alert
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnterpriseAlert"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/alerts/{alert}/resolve:
+    post:
+      tags: [Enterprise]
+      summary: Resolve an alert (requires manage-enterprise)
+      description: >-
+        A later breach of the same rule opens a fresh alert.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: alert
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnterpriseAlert"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/slos:
+    get:
+      tags: [Enterprise]
+      summary: List SLOs with measured values (requires manage-enterprise)
+      description: >-
+        The organization's SLOs (availability, error rate,
+        latency p95), seeded from config on first read, each
+        with its measured value from this instance's own
+        recorded data, sample size, and status. A measurement
+        with no underlying data reports null with the status
+        insufficient_data. Targets are objectives, not
+        guarantees. Requires manage-enterprise; Free and
+        Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: SLOs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SloStatus"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/slos/{key}:
+    put:
+      tags: [Enterprise]
+      summary: Update an SLO (requires manage-enterprise)
+      description: >-
+        Change one SLO's target, window, or enabled flag.
+        Requires manage-enterprise; Free and Starter plans
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, enum: [availability, error_rate, latency_p95] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_value: { type: number, minimum: 0 }
+                window_days: { type: integer, minimum: 1, maximum: 365 }
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: SLO updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SloStatus"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /enterprise/assessments/latest:
+    get:
+      tags: [Enterprise]
+      summary: Latest security assessment (requires manage-enterprise)
+      description: >-
+        The latest generated self-assessment, or 404 when
+        none exists yet. Requires manage-enterprise; Free
+        and Starter plans refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Latest assessment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SecurityAssessment"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /enterprise/assessments:
+    get:
+      tags: [Enterprise]
+      summary: List security assessments (requires manage-enterprise)
+      description: >-
+        Assessment history, newest first. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Security assessments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SecurityAssessment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Enterprise]
+      summary: Generate a security self-assessment (requires manage-enterprise)
+      description: >-
+        Generate and store a fresh self-assessment: the
+        production-readiness checks plus configuration checks
+        against this instance's own data, with the standing
+        unverified items as open findings. This is a
+        self-assessment, not a penetration test and not an
+        external audit. The overall result is never pass
+        while any open finding stands. Requires
+        manage-enterprise; Free and Starter plans refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "201":
+          description: Assessment generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SecurityAssessment"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -9055,6 +9915,215 @@ components:
         overrides:
           type: object
           additionalProperties: { type: integer }
+    SecurityPolicy:
+      type: object
+      description: >-
+        An organization's security policy. Only the password
+        rules are enforced by code (on password change);
+        allowed IP ranges are check-only and two-factor is
+        recorded policy only.
+      properties:
+        password_min_length: { type: integer }
+        password_require_numbers: { type: boolean }
+        password_require_symbols: { type: boolean }
+        session_timeout_minutes: { type: integer }
+        max_concurrent_sessions: { type: integer, nullable: true }
+        allowed_ip_ranges:
+          type: array
+          items: { type: string }
+        require_two_factor: { type: boolean }
+        is_default: { type: boolean }
+        enforced:
+          type: object
+          additionalProperties: { type: string }
+    RetentionPreview:
+      type: object
+      properties:
+        effective:
+          type: object
+          additionalProperties: { type: integer }
+        defaults:
+          type: object
+          additionalProperties: { type: integer }
+        overrides:
+          type: object
+          additionalProperties: { type: integer }
+        preview:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count: { type: integer }
+              cutoff: { type: string, format: date-time, nullable: true }
+        generated_at: { type: string, format: date-time }
+    DisasterRecoveryStatus:
+      type: object
+      description: >-
+        Disaster recovery status. RPO and RTO are configured
+        objectives, not measured values.
+      properties:
+        rpo_minutes: { type: integer }
+        rto_minutes: { type: integer }
+        latest_backup:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string }
+            driver: { type: string }
+            size_bytes: { type: integer, nullable: true }
+            checksum: { type: string, nullable: true }
+            created_at: { type: string, format: date-time }
+        last_verified_backup:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid, nullable: true }
+            verified_at: { type: string, format: date-time }
+            ok: { type: boolean }
+        latest_drill:
+          $ref: "#/components/schemas/DisasterRecoveryDrill"
+        total_drills: { type: integer }
+    DisasterRecoveryDrill:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [verify, restore_dry_run] }
+        status: { type: string, enum: [completed, failed] }
+        result:
+          type: object
+          nullable: true
+          additionalProperties: true
+        backup_run_id: { type: string, format: uuid, nullable: true }
+        performed_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string, nullable: true }
+        performed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    LoadTestRun:
+      type: object
+      description: >-
+        One bounded local synthetic load run. Sequential
+        in-process requests against this instance only.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        target: { type: string, enum: [health, shipments] }
+        requests: { type: integer }
+        status: { type: string, enum: [completed, failed] }
+        total_requests: { type: integer }
+        success_count: { type: integer }
+        error_count: { type: integer }
+        avg_ms: { type: number }
+        p95_ms: { type: number }
+        max_ms: { type: number }
+        requests_per_second: { type: number }
+        detail:
+          type: object
+          nullable: true
+          additionalProperties: true
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    AlertRule:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        metric: { type: string, enum: [queue_depth, failed_jobs, error_rate, disk_usage_percent, backup_age_hours] }
+        metric_label: { type: string }
+        operator: { type: string, enum: [gt, gte] }
+        threshold: { type: number }
+        window_minutes: { type: integer }
+        enabled: { type: boolean }
+        severity: { type: string, enum: [warning, critical] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EnterpriseAlert:
+      type: object
+      description: >-
+        One recorded breach of an alert rule. Only one active
+        alert is kept per rule; a repeat breach refreshes it.
+      properties:
+        id: { type: string, format: uuid }
+        alert_rule_id: { type: string, format: uuid, nullable: true }
+        metric: { type: string }
+        metric_label: { type: string }
+        observed_value: { type: number }
+        threshold: { type: number }
+        severity: { type: string, enum: [warning, critical] }
+        status: { type: string, enum: [active, acknowledged, resolved] }
+        message: { type: string }
+        triggered_at: { type: string, format: date-time }
+        acknowledged_at: { type: string, format: date-time, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    AlertEvaluation:
+      type: object
+      properties:
+        rule_id: { type: string, format: uuid }
+        metric: { type: string }
+        observed_value: { type: number, nullable: true }
+        breached: { type: boolean }
+        alert:
+          $ref: "#/components/schemas/EnterpriseAlert"
+    SloStatus:
+      type: object
+      description: >-
+        One SLO with its measured value from this instance's
+        own recorded data. Null measured_value with status
+        insufficient_data means there is not enough history
+        yet. Targets are objectives, not guarantees.
+      properties:
+        key: { type: string, enum: [availability, error_rate, latency_p95] }
+        name: { type: string }
+        kind: { type: string, enum: [availability, error_rate, latency] }
+        target_value: { type: number }
+        target_unit: { type: string, enum: ["%", ms] }
+        window_days: { type: integer }
+        enabled: { type: boolean }
+        measured_value: { type: number, nullable: true }
+        sample_size: { type: integer }
+        status: { type: string, enum: [meeting, at_risk, breaching, insufficient_data] }
+        measured_at: { type: string, format: date-time }
+    AssessmentFinding:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [pass, warn, fail, open] }
+        detail: { type: string }
+        category: { type: string }
+    SecurityAssessment:
+      type: object
+      description: >-
+        A generated enterprise security self-assessment. Not a
+        penetration test and not an external audit. open
+        findings are the standing unverified items; the
+        overall result is never pass while any stand.
+      properties:
+        id: { type: string, format: uuid }
+        overall: { type: string, enum: [pass, warn, fail] }
+        open_findings: { type: integer }
+        total_checks: { type: integer }
+        passed: { type: integer }
+        warnings: { type: integer }
+        failures: { type: integer }
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssessmentFinding"
+        generated_by:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string, nullable: true }
+        generated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
     SecurityEvent:
       type: object
       properties:

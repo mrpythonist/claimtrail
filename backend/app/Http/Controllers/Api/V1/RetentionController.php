@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Permission;
+use App\Services\EntitlementService;
 use App\Services\RetentionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class RetentionController extends Controller
 {
     public function __construct(
         protected RetentionService $retention,
+        protected EntitlementService $entitlements,
     ) {}
 
     /**
@@ -39,6 +41,71 @@ class RetentionController extends Controller
                 'effective' => $this->retention->effectiveSettings($organization),
                 'defaults' => $this->defaults(),
                 'overrides' => $organization->settings['retention'] ?? [],
+            ],
+        ]);
+    }
+
+    /**
+     * Retention preview (v2.0.3): the effective settings plus,
+     * per kind, how many rows the purge would delete and the
+     * cutoff it would use. Nothing is deleted by a preview.
+     * Enterprise-gated: previewing is an enterprise control.
+     */
+    public function preview(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ManageEnterprise->value, $organization);
+        $this->entitlements->authorizeEnterprise($organization);
+
+        $effective = $this->retention->effectiveSettings($organization);
+        $counts = $this->retention->previewCounts($organization);
+
+        $preview = [];
+
+        foreach (RetentionService::kinds() as $kind) {
+            $days = (int) ($effective[$kind] ?? 0);
+            $preview[$kind] = [
+                'count' => (int) ($counts[$kind] ?? 0),
+                'cutoff' => $days > 0 ? now()->subDays($days)->toIso8601String() : null,
+            ];
+        }
+
+        return response()->json([
+            'data' => [
+                'effective' => $effective,
+                'defaults' => $this->defaults(),
+                'overrides' => $organization->settings['retention'] ?? [],
+                'preview' => $preview,
+                'generated_at' => now()->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Run the retention purge for this organization now
+     * (v2.0.3). Dry-run by default: pass dry_run=false to
+     * actually delete. The purge writes one audit row with
+     * the counts, the same as the scheduled run.
+     */
+    public function purge(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        Gate::authorize(Permission::ManageEnterprise->value, $organization);
+        $this->entitlements->authorizeEnterprise($organization);
+
+        $validated = $request->validate([
+            'dry_run' => ['sometimes', 'boolean'],
+        ]);
+
+        $dryRun = $validated['dry_run'] ?? true;
+        $counts = $this->retention->purge($organization, $dryRun);
+
+        return response()->json([
+            'data' => [
+                'dry_run' => $dryRun,
+                'counts' => $counts,
             ],
         ]);
     }

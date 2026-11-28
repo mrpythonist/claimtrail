@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\Organization;
 use App\Models\User;
 use App\Services\SecurityEventService;
+use App\Services\SecurityPolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +18,7 @@ class AuthController extends Controller
 {
     public function __construct(
         protected SecurityEventService $securityEvents,
+        protected SecurityPolicyService $policies,
     ) {}
 
     /**
@@ -122,6 +125,13 @@ class AuthController extends Controller
 
     /**
      * Change the authenticated user's password.
+     *
+     * The new password must also satisfy the organization's
+     * security policy (v2.0.3): the policy of the organization
+     * named in the X-Organization-Id header when the user is a
+     * member of it, else the user's first active organization,
+     * else the config defaults. A policy failure is a 422 with
+     * the reasons listed.
      */
     public function updatePassword(Request $request): JsonResponse
     {
@@ -130,10 +140,48 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
+        $organization = $this->passwordPolicyOrganization($request);
+        $policy = $organization !== null
+            ? $this->policies->effective($organization)
+            : $this->policies->defaults();
+        $policyErrors = $this->policies->validatePasswordWithPolicy($validated['password'], $policy);
+
+        if ($policyErrors !== []) {
+            return response()->json([
+                'message' => 'The new password does not meet your organization\'s security policy.',
+                'errors' => ['password' => $policyErrors],
+            ], 422);
+        }
+
         $request->user()->update([
             'password' => Hash::make($validated['password']),
         ]);
 
         return response()->json(['message' => 'Your password has been changed.']);
+    }
+
+    /**
+     * The organization whose security policy governs this
+     * password change, if any.
+     */
+    protected function passwordPolicyOrganization(Request $request): ?Organization
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        $headerId = $request->header('X-Organization-Id');
+
+        if ($headerId !== null) {
+            $organization = Organization::query()->whereKey($headerId)->first();
+
+            if ($organization !== null && $user->isActiveMemberOf($organization)) {
+                return $organization;
+            }
+        }
+
+        return $user->organizations()->orderBy('organizations.name')->first();
     }
 }

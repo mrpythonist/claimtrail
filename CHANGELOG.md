@@ -3,6 +3,106 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [2.0.3] - 2026-11-28
+
+Phase 6, Intelligent Automation (the last version of Phase 6):
+enterprise readiness. Security policies, advanced audit
+controls, retention controls, disaster recovery drills,
+bounded local load tests, monitoring alert rules and alerts,
+service-level objectives, and an enterprise security
+self-assessment. Enterprise features need the
+`manage-enterprise` permission (owner, admin, operations
+manager) and the Growth plan or better; Free and Starter are
+refused with 402. Honest limits, stated everywhere: the
+error rate is probe-relative, because the app records no
+per-request counter; RPO/RTO and SLO targets are configured
+objectives, not measured values or guarantees; load tests are
+local and synthetic only; there is no failover; the
+assessment is a self-assessment, never a penetration test.
+The readiness N+1 is fixed: the missing-evidence endpoint
+stays at 12 queries for 5 claims and 12 for 10 (was 26 and
+41). App version bumped to 2.0.3; OpenAPI at 237 paths
+(218 + 19 new paths, 313 operations) for the internal
+surface; the public spec is unchanged at 8 paths, 9
+operations. Verified: 776 backend tests / 4,539 assertions,
+0 failures; 484 frontend tests in 65 files, 0 failures;
+build passes; live smoke to follow.
+
+### Added
+
+- Security policies (`App\\Services\\SecurityPolicyService`,
+  `App\\Http\\Controllers\\Api\\V1\\SecurityPolicyController`):
+  per-organization policy (password minimum length and
+  number/symbol rules, session timeout, max concurrent
+  sessions, allowed IP ranges, two-factor flag). The password
+  rules are enforced on password change and reset (reset
+  checks the strictest policy across the user's
+  organizations, before the token is consumed); IP ranges
+  are check-only and two-factor is policy-only, and the API
+  says so with every policy it returns.
+- Audit export (`GET /audit-logs/export`): CSV download or
+  JSON with the same filters as the list, capped at 5,000
+  rows. The trail stays append-only: no update or delete
+  endpoints exist, and the model cancels updates and
+  deletes.
+- Retention controls (`GET /retention/preview`,
+  `POST /retention/purge`): preview the per-kind counts and
+  cutoffs a purge would delete, then run the purge now
+  (dry-run by default). A real purge writes one
+  `retention.purged` audit row, like the scheduled run.
+- Disaster recovery (`App\\Services\\DisasterRecoveryService`,
+  `App\\Http\\Controllers\\Api\\V1\\EnterpriseController`):
+  DR status with the configured RPO/RTO, backup and drill
+  history, and verify and restore-dry-run drills. The
+  restore dry-run copies a SQLite backup to a temporary
+  file, opens it read-only, counts its rows, and deletes
+  the file; PostgreSQL dry-runs are refused with 422
+  instead of pretending. See the DR runbook in
+  `docs/ENTERPRISE-READINESS.md`. There is no failover.
+- Load testing (`App\\Services\\LoadTestService`, `load:test`):
+  a bounded local synthetic load pass (at most 200
+  sequential in-process requests, default 50) against the
+  health endpoint or the authenticated shipment list, with
+  average, p95, and max latency plus requests per second.
+  Local only; no external service is touched.
+- Monitoring and alerting (`App\\Services\\AlertingService`,
+  `alerts:evaluate`, hourly schedule): alert rules on queue
+  depth, failed jobs, probe-relative error rate, disk usage,
+  and backup age, with per-rule thresholds, windows, and
+  severities. A breach opens one active alert per rule and
+  notifies the enterprise managers only when first opened;
+  alerts can be acknowledged and resolved. The error rate is
+  5xx errors over (errors + hourly health probes), stated in
+  the docs.
+- Service-level objectives (`App\\Services\\SloService`):
+  availability, error rate, and latency p95, seeded from
+  config, measured from the monitoring check history with
+  sample sizes and `insufficient_data` states. Targets are
+  objectives, not guarantees.
+- Enterprise security assessment
+  (`App\\Services\\SecurityAssessmentService`,
+  `enterprise:assess`): a self-assessment from the ten
+  production-readiness checks plus six configuration checks,
+  with the seven standing unverified items recorded as open
+  findings in every report. The overall result is never
+  `pass` while any open finding stands.
+- A new `enterprise` entitlement: Growth, Fleet, Agency, and
+  SuccessFee plans have it; Free and Starter do not. The
+  `manage-enterprise` permission and the
+  `enterprise.alert_triggered` notification type are added.
+
+### Fixed
+
+- Readiness N+1: `ReadinessService::compute()` issued three
+  queries per claim (requirements lookup, attached-evidence
+  pluck, snapshot read). The requirements are now cached per
+  event category for the service instance's life, and
+  `compute()` reuses the eager-loaded evidence and snapshot
+  relations. The operations missing-evidence endpoint is now
+  flat at 12 queries for both 5 and 10 claims (was 26 and
+  41); the returned numbers are unchanged and pinned by
+  `tests/Feature/ScalabilityTest.php`.
+
 ## [2.0.2] - 2026-11-28
 
 Phase 6, Intelligent Automation (the third version of

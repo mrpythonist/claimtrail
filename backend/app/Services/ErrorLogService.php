@@ -67,6 +67,61 @@ class ErrorLogService
     }
 
     /**
+     * Server errors for the organization inside a window.
+     *
+     * The errors channel only records 5xx failures, so this is a
+     * count of recorded errors, not a rate on its own: callers
+     * that need a rate divide by their own denominator (the
+     * alerting service uses the hourly health probes in the
+     * same window). Returns the error count and how many log
+     * lines were scanned.
+     *
+     * @return array{errors: int, scanned_lines: int}
+     */
+    public function errorCountForOrganization(string $organizationId, int $windowMinutes): array
+    {
+        $path = storage_path('logs/errors.json.log');
+
+        if (! is_file($path) || ! is_readable($path)) {
+            return ['errors' => 0, 'scanned_lines' => 0];
+        }
+
+        $since = now()->subMinutes(max(1, $windowMinutes));
+        $errors = 0;
+        $scanned = 0;
+
+        foreach ($this->tailLines($path, self::MAX_READ_BYTES) as $line) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $scanned++;
+
+            $entry = json_decode($line, true);
+
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            if (($entry['context']['organization_id'] ?? null) !== $organizationId) {
+                continue;
+            }
+
+            $datetime = isset($entry['datetime']) ? strtotime((string) $entry['datetime']) : false;
+
+            if ($datetime === false || $datetime < $since->getTimestamp()) {
+                continue;
+            }
+
+            $errors++;
+        }
+
+        return ['errors' => $errors, 'scanned_lines' => $scanned];
+    }
+
+    /**
      * The fields the API exposes for one error entry.
      *
      * @return array{datetime: string|null, level: string|null, message: string|null, exception: string|null, route: string|null, method: string|null, correlation_id: string|null}

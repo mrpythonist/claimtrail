@@ -28,7 +28,27 @@ use Illuminate\Validation\ValidationException;
 class ReadinessService
 {
     /**
+     * Applicable requirements, cached per organization and
+     * event category for the life of this service instance.
+     * The operational-intelligence endpoints compute readiness
+     * for every claim in a window, and the requirements for
+     * claims sharing a category are identical — without the
+     * cache that is one query per claim (v2.0.3).
+     *
+     * @var array<string, \Illuminate\Support\Collection<int, EvidenceRequirement>>
+     */
+    protected array $requirementsCache = [];
+
+    /**
      * Compute the live readiness breakdown for a claim.
+     *
+     * When the caller already loaded the claim's evidence files
+     * and requirement snapshots (the operations endpoints do),
+     * the loaded relations are used instead of re-querying:
+     * compute() used to issue three queries per claim — the
+     * requirements lookup, the attached-evidence pluck, and the
+     * snapshot read — which made the missing-evidence endpoint
+     * scale with the claim count (v2.0.3).
      *
      * @return array<string, mixed>
      */
@@ -48,14 +68,7 @@ class ReadinessService
             ->values()
             ->all();
 
-        $attached = $claim->evidenceFiles()
-            ->pluck('document_category')
-            ->map(fn ($category) => $category instanceof EvidenceDocumentCategory
-                ? $category->value
-                : (string) $category)
-            ->unique()
-            ->values()
-            ->all();
+        $attached = $this->attachedCategories($claim);
 
         $collected = array_values(array_intersect($required, $attached));
         $missing = array_values(array_diff($required, $attached));
@@ -73,7 +86,7 @@ class ReadinessService
             default => ReadinessStatus::Partial,
         };
 
-        $snapshots = $claim->requirementSnapshots()->get();
+        $snapshots = $this->requirementSnapshots($claim);
         $overridden = $snapshots->contains(fn (ClaimRequirement $row) => $row->isOverridden());
 
         return [
@@ -193,16 +206,58 @@ class ReadinessService
     protected function applicableRequirements(Claim $claim)
     {
         $eventCategoryId = $claim->event?->event_category_id;
+        $cacheKey = $claim->organization_id.'|'.($eventCategoryId ?? 'null');
 
-        return EvidenceRequirement::forOrganization($claim->organization_id)
-            ->where(function ($query) use ($eventCategoryId) {
-                $query->whereNull('event_category_id');
+        if (! isset($this->requirementsCache[$cacheKey])) {
+            $this->requirementsCache[$cacheKey] = EvidenceRequirement::forOrganization($claim->organization_id)
+                ->where(function ($query) use ($eventCategoryId) {
+                    $query->whereNull('event_category_id');
 
-                if ($eventCategoryId !== null) {
-                    $query->orWhere('event_category_id', $eventCategoryId);
-                }
-            })
-            ->get();
+                    if ($eventCategoryId !== null) {
+                        $query->orWhere('event_category_id', $eventCategoryId);
+                    }
+                })
+                ->get();
+        }
+
+        return $this->requirementsCache[$cacheKey];
+    }
+
+    /**
+     * The document categories attached to the claim as
+     * evidence. Uses the loaded relation when the caller
+     * eager-loaded it, so a bulk readiness pass does not
+     * re-query per claim.
+     *
+     * @return array<int, string>
+     */
+    protected function attachedCategories(Claim $claim): array
+    {
+        $files = $claim->relationLoaded('evidenceFiles')
+            ? $claim->evidenceFiles
+            : $claim->evidenceFiles()->get();
+
+        return $files
+            ->pluck('document_category')
+            ->map(fn ($category) => $category instanceof EvidenceDocumentCategory
+                ? $category->value
+                : (string) $category)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The claim's requirement snapshots. Uses the loaded
+     * relation when the caller eager-loaded it.
+     *
+     * @return \Illuminate\Support\Collection<int, ClaimRequirement>
+     */
+    protected function requirementSnapshots(Claim $claim)
+    {
+        return $claim->relationLoaded('requirementSnapshots')
+            ? $claim->requirementSnapshots
+            : $claim->requirementSnapshots()->get();
     }
 
     /**

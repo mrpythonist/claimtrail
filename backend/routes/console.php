@@ -51,6 +51,12 @@ Schedule::command('monitoring:check')->hourly();
 // caught before it is needed. A failure writes to the log.
 Schedule::command('backup:verify')->weeklyOn(0, '04:00');
 
+// Alert rules are evaluated hourly: every enabled rule of
+// every organization is measured from local data, and a breach
+// opens (or refreshes) an alert and notifies the enterprise
+// managers. A breach is a finding, not a command failure.
+Schedule::command('alerts:evaluate')->hourly();
+
 // Due scheduled imports run daily at 04:30: active daily and
 // weekly schedules whose next run is due import their stored
 // file with the saved mapping. Manual schedules never run

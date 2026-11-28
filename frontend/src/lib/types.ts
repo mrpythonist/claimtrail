@@ -2108,3 +2108,243 @@ export interface AccountingSyncSummary {
     recorded_at: string | null;
   }[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Enterprise readiness (v2.0.3)                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Enterprise security policy from GET /security/policies.
+ * Password rules are enforced on password change; IP ranges are
+ * check-only (not enforced at the edge); two-factor is recorded
+ * policy only, no 2FA exists yet.
+ */
+export interface SecurityPolicy {
+  password_min_length: number;
+  password_require_numbers: boolean;
+  password_require_symbols: boolean;
+  session_timeout_minutes: number;
+  max_concurrent_sessions: number | null;
+  allowed_ip_ranges: string[];
+  require_two_factor: boolean;
+  is_default: boolean;
+}
+
+/** Result of POST /security/policies/check-password. */
+export interface PasswordCheckResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/** Result of POST /security/policies/check-ip. */
+export interface IpCheckResult {
+  ip: string;
+  allowed: boolean;
+  in_range: boolean | null;
+  ranges: string[];
+}
+
+/** Retention kinds (v2.0.3). Days: 0 keeps forever. */
+export type RetentionKind =
+  | "audit_logs"
+  | "notifications"
+  | "job_executions"
+  | "failed_documents"
+  | "security_events";
+
+/** Retention days per kind. */
+export type RetentionDaysByKind = Record<RetentionKind, number>;
+
+/** One retention preview row: how many rows are older than the cutoff. */
+export interface RetentionPreviewRow {
+  count: number;
+  cutoff: string | null;
+}
+
+/** Retention preview from GET /retention/preview. */
+export interface RetentionPreview {
+  effective: RetentionDaysByKind;
+  defaults: RetentionDaysByKind;
+  overrides: Partial<RetentionDaysByKind>;
+  preview: Record<RetentionKind, RetentionPreviewRow>;
+  generated_at: string;
+}
+
+/** Result of POST /retention/purge. */
+export interface RetentionPurgeResult {
+  dry_run: boolean;
+  counts: Record<string, number>;
+}
+
+/** Disaster recovery drill kinds (v2.0.3). */
+export type DisasterRecoveryDrillKind = "verify" | "restore_dry_run";
+
+/** Disaster recovery drill statuses (v2.0.3). */
+export type DisasterRecoveryDrillStatus = "completed" | "failed";
+
+/** One disaster recovery drill from GET /enterprise/disaster-recovery/drills. */
+export interface DisasterRecoveryDrill {
+  id: string;
+  kind: DisasterRecoveryDrillKind;
+  status: DisasterRecoveryDrillStatus;
+  result: Record<string, unknown>;
+  performed_by: { id: number; name: string } | null;
+  performed_at: string;
+  created_at: string;
+}
+
+/** Disaster recovery status from GET /enterprise/disaster-recovery. */
+export interface DisasterRecoveryStatus {
+  rpo_minutes: number;
+  rto_minutes: number;
+  latest_backup: {
+    id: string;
+    status: string;
+    created_at: string;
+    checksum: string | null;
+  } | null;
+  last_verified_backup: { id: string; verified_at: string; ok: boolean } | null;
+  latest_drill: DisasterRecoveryDrill | null;
+  total_drills: number;
+}
+
+/** Load test targets (v2.0.3). */
+export type LoadTestTarget = "health" | "shipments";
+
+/** Load test run statuses (v2.0.3). */
+export type LoadTestStatus = "completed" | "failed";
+
+/** One load test run from GET /enterprise/load-tests. */
+export interface LoadTestRun {
+  id: string;
+  name: string | null;
+  target: LoadTestTarget;
+  requests: number;
+  status: LoadTestStatus;
+  total_requests: number;
+  success_count: number;
+  error_count: number;
+  avg_ms: number;
+  p95_ms: number;
+  max_ms: number;
+  requests_per_second: number;
+  detail: Record<string, unknown> | null;
+  started_at: string;
+  finished_at: string | null;
+  created_at: string;
+}
+
+/** Alert rule metrics (v2.0.3). */
+export type AlertMetric =
+  | "queue_depth"
+  | "failed_jobs"
+  | "error_rate"
+  | "disk_usage_percent"
+  | "backup_age_hours";
+
+/** Alert rule operators (v2.0.3). */
+export type AlertOperator = "gt" | "gte";
+
+/** Alert severities (v2.0.3). */
+export type AlertSeverity = "warning" | "critical";
+
+/** One alert rule from GET /enterprise/alert-rules. */
+export interface AlertRule {
+  id: string;
+  name: string;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  window_minutes: number;
+  enabled: boolean;
+  severity: AlertSeverity;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Alert statuses (v2.0.3). */
+export type EnterpriseAlertStatus = "active" | "acknowledged" | "resolved";
+
+/** One enterprise alert from GET /enterprise/alerts. */
+export interface EnterpriseAlert {
+  id: string;
+  alert_rule_id: string | null;
+  metric: string;
+  observed_value: number;
+  threshold: number;
+  severity: AlertSeverity;
+  status: EnterpriseAlertStatus;
+  message: string;
+  triggered_at: string;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+/** Result of POST /enterprise/alert-rules/{id}/evaluate. */
+export interface AlertEvaluation {
+  rule_id: string;
+  metric: string;
+  observed_value: number | null;
+  breached: boolean;
+  alert: EnterpriseAlert | null;
+}
+
+/** SLO keys (v2.0.3). */
+export type SloKey = "availability" | "error_rate" | "latency_p95";
+
+/** SLO kinds (v2.0.3). Note the latency SLO's key is latency_p95 but its kind is latency. */
+export type SloKind = "availability" | "error_rate" | "latency";
+
+/** SLO statuses (v2.0.3). */
+export type SloStatusValue =
+  | "meeting"
+  | "at_risk"
+  | "breaching"
+  | "insufficient_data";
+
+/** One SLO status row from GET /enterprise/slos. */
+export interface SloStatus {
+  key: SloKey;
+  name: string;
+  kind: SloKind;
+  target_value: number;
+  target_unit: "%" | "ms";
+  window_days: number;
+  enabled: boolean;
+  measured_value: number | null;
+  sample_size: number;
+  status: SloStatusValue;
+  measured_at: string;
+}
+
+/** Assessment finding statuses (v2.0.3). */
+export type AssessmentFindingStatus = "pass" | "warn" | "fail" | "open";
+
+/** One finding inside a security assessment (v2.0.3). */
+export interface AssessmentFinding {
+  id: string;
+  label: string;
+  status: AssessmentFindingStatus;
+  detail: string;
+  category: string;
+}
+
+/** Assessment overall results (v2.0.3). */
+export type AssessmentOverall = "pass" | "warn" | "fail";
+
+/** One security assessment from GET /enterprise/assessments. */
+export interface SecurityAssessment {
+  id: string;
+  overall: AssessmentOverall;
+  open_findings: number;
+  total_checks: number;
+  passed: number;
+  warnings: number;
+  failures: number;
+  findings: AssessmentFinding[];
+  generated_by: { id: number; name: string } | null;
+  generated_at: string;
+  created_at: string;
+}
+
