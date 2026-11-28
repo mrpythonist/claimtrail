@@ -449,6 +449,22 @@ export function canManageEnterprise(role: OrganizationRole | null | undefined): 
   return isOneOf(role, ENTERPRISE_MANAGERS);
 }
 
+// ManageAgency in the backend map (config/permissions.php):
+// Owner, Admin, and Operations Manager. They manage partner
+// links, carrier management, the agency dashboard, consolidated
+// reporting, referral codes, commission rules, and reseller
+// workflows. Agency management also needs the Agency plan:
+// every other plan is refused with a 402.
+const AGENCY_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+];
+
+export function canManageAgency(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, AGENCY_MANAGERS);
+}
+
 export function roleLabel(role: OrganizationRole): string {
   switch (role) {
     case "owner":

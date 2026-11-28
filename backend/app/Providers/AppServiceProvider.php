@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Billing\BillingProvider;
 use App\Billing\MockBillingProvider;
+use App\Models\AgencyCarrierGrant;
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
 use App\Models\ClaimPayment;
+use App\Models\CommissionRule;
 use App\Models\CustomField;
 use App\Models\DeadlineSetting;
 use App\Models\DocumentExtraction;
@@ -17,6 +19,8 @@ use App\Models\ExportTemplate;
 use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\OrganizationMember;
+use App\Models\PartnerLink;
+use App\Models\ReferralCode;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Models\WorkflowRun;
@@ -98,6 +102,16 @@ class AppServiceProvider extends ServiceProvider
         ExportTemplate::observe(AuditObserver::class);
         OrganizationMember::observe(AuditObserver::class);
         OrganizationInvitation::observe(AuditObserver::class);
+
+        // Agency management (v2.1.0): partner links, commission
+        // rules, referral codes, and carrier grants are audited
+        // like the other membership-shaped records, because they
+        // decide who sees a carrier and what the carrier is
+        // billed.
+        PartnerLink::observe(AuditObserver::class);
+        CommissionRule::observe(AuditObserver::class);
+        ReferralCode::observe(AuditObserver::class);
+        AgencyCarrierGrant::observe(AuditObserver::class);
 
         // Webhook events (v2.0.2): the observer fires the
         // claim, payment, document, and workflow-run events

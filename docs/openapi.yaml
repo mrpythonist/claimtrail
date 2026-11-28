@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 2.0.3
+  version: 2.1.0
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -78,6 +78,18 @@ info:
     data, scalability fixes, and an enterprise security
     self-assessment. Enterprise features need the Growth
     plan or better.
+    Version 2.1.0 adds agency management: partner accounts
+    linking an agency to the carriers it manages, an agency
+    dashboard with per-carrier and consolidated stats,
+    carrier-specific permission grants, consolidated
+    cross-carrier reporting computed only from the linked
+    carriers' own recorded claims and payments, referral
+    codes with attribution, commission rules and earned
+    commission computed only from recorded payments, and
+    reseller workflows (carrier onboarding approval and plan
+    assignment). Agency features need the Agency plan.
+    Commission is a recorded figure only: nothing pays a
+    partner out.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -120,6 +132,7 @@ tags:
   - name: Webhooks
   - name: Accounting
   - name: Enterprise
+  - name: Agency
 paths:
   /auth/register:
     post:
@@ -9531,6 +9544,871 @@ paths:
         "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /agency/dashboard:
+    get:
+      tags: [Agency]
+      summary: Agency dashboard (requires manage-agency, Agency plan)
+      description: >-
+        Per-carrier claim stats for every active partner link the
+        caller may see, consolidated totals by currency, link
+        counts, the referral summary, and commission earned on
+        recorded payments. Agency members without a grant see
+        only the carriers they are granted. Outstanding is due
+        minus recovered, where due is the accepted total when it
+        is above zero and the requested total otherwise. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Agency dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgencyDashboard"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/carriers:
+    get:
+      tags: [Agency]
+      summary: List the agency's active carriers (requires manage-agency, Agency plan)
+      description: >-
+        One stats row per active partner link the caller may
+        see, with claim counts, by-status counts, and totals by
+        currency. Requires manage-agency; plans below Agency
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Agency carriers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgencyCarrierStats"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/carriers/{carrierOrganizationId}/claims:
+    get:
+      tags: [Agency]
+      summary: List one linked carrier's claims, read-only (requires manage-agency, Agency plan)
+      description: >-
+        The linked carrier's own claims, newest first, 25 per
+        page. The link must be active, and a caller who is not
+        an owner or admin of the agency needs a grant for the
+        carrier covering at least view. Writing a claim stays
+        with the carrier organization. Requires manage-agency;
+        plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: carrierOrganizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ClaimStatus"
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          description: Carrier claims
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgencyCarrierClaim"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/carriers/{carrierOrganizationId}/claims/{claim}:
+    get:
+      tags: [Agency]
+      summary: Show one linked carrier's claim, read-only (requires manage-agency, Agency plan)
+      description: >-
+        One claim of a linked carrier, with the same active-link
+        and grant checks as the claim list. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: carrierOrganizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Carrier claim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgencyCarrierClaim"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/reports/consolidated:
+    get:
+      tags: [Agency]
+      summary: Consolidated cross-carrier report (requires manage-agency, Agency plan)
+      description: >-
+        One row per active linked carrier the caller may see,
+        plus totals by currency. Computed only from the linked
+        carriers' own recorded claims and payments: claims by
+        created date, payments by paid date. No external
+        benchmarks. An optional carrier filter 404s when the
+        agency has no active link for that carrier. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: carrier_organization_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Consolidated report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ConsolidatedReport"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners:
+    get:
+      tags: [Agency]
+      summary: List partner links (requires manage-agency, Agency plan)
+      description: >-
+        The agency's partner links, newest first, 25 per page,
+        optionally filtered by status. Removed links stay
+        listed. Requires manage-agency; plans below Agency
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, suspended, rejected, removed] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          description: Partner links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PartnerLink"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agency]
+      summary: Create a partner link (requires manage-agency, Agency plan)
+      description: >-
+        Links the agency to a carrier organization. The link
+        starts pending: the carrier approves or rejects it from
+        its own side. The carrier must exist, must not be the
+        agency itself, and must have no existing non-removed
+        link. A referral code, when given, must be one of the
+        agency's active codes. Requires manage-agency; plans
+        below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrier_organization_id]
+              properties:
+                carrier_organization_id: { type: string, format: uuid }
+                referral_code: { type: string, nullable: true, maxLength: 32 }
+                notes: { type: string, nullable: true, maxLength: 2000 }
+      responses:
+        "201":
+          description: Partner link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}:
+    get:
+      tags: [Agency]
+      summary: Show one partner link (requires manage-agency, Agency plan)
+      description: >-
+        One partner link of the agency. A link belonging to
+        another agency 404s. Requires manage-agency; plans
+        below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/partners/{partnerLink}/suspend:
+    post:
+      tags: [Agency]
+      summary: Suspend a partner link (requires manage-agency, Agency plan)
+      description: >-
+        Suspends an approved link. A suspended link blocks
+        carrier claim access until reactivated. Admin-only.
+        Requires manage-agency; plans below Agency refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}/reactivate:
+    post:
+      tags: [Agency]
+      summary: Reactivate a suspended partner link (requires manage-agency, Agency plan)
+      description: >-
+        Reactivates a suspended link back to approved.
+        Admin-only. Requires manage-agency; plans below Agency
+        refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link reactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}/remove:
+    post:
+      tags: [Agency]
+      summary: Remove a partner link (requires manage-agency, Agency plan)
+      description: >-
+        Removes a link. The row is kept with status removed,
+        never deleted, so the audit trail and referral
+        attribution survive. Admin-only. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}/plan:
+    post:
+      tags: [Agency]
+      summary: Assign a plan to a linked carrier (requires manage-agency, Agency plan)
+      description: >-
+        Changes the linked carrier's subscription plan through
+        the mock billing provider and records the assigned plan
+        on the link. The link must be approved. Admin-only.
+        Requires manage-agency; plans below Agency refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [free, starter, growth, fleet, agency, success_fee] }
+      responses:
+        "200":
+          description: Plan assigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}/grants:
+    get:
+      tags: [Agency]
+      summary: List carrier access grants for a link (requires manage-agency, Agency plan)
+      description: >-
+        The agency members granted access to this carrier, and
+        their scope (view or manage). Admin-only. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Carrier access grants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgencyCarrierGrant"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agency]
+      summary: Grant a member access to a carrier (requires manage-agency, Agency plan)
+      description: >-
+        Grants an active agency member access to this carrier
+        with view or manage scope. Manage covers view.
+        Re-granting replaces the scope. The member must belong
+        to the agency. Admin-only. Requires manage-agency;
+        plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, scope]
+              properties:
+                user_id: { type: integer }
+                scope: { type: string, enum: [view, manage] }
+      responses:
+        "201":
+          description: Grant saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgencyCarrierGrant"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/partners/{partnerLink}/grants/{grant}:
+    delete:
+      tags: [Agency]
+      summary: Delete a carrier access grant (requires manage-agency, Agency plan)
+      description: >-
+        Removes one member's access to this carrier. The member
+        keeps their agency membership. Admin-only. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: grant
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Grant deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/referrals:
+    get:
+      tags: [Agency]
+      summary: List referral codes (requires manage-agency, Agency plan)
+      description: >-
+        The agency's referral codes, newest first, 25 per page,
+        each with its attributed carrier count. Requires
+        manage-agency; plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          description: Referral codes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReferralCode"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agency]
+      summary: Create a referral code (requires manage-agency, Agency plan)
+      description: >-
+        Creates a referral code for this agency: the configured
+        prefix plus a random suffix. Carriers linked with the
+        code are attributed to it. Requires manage-agency;
+        plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes: { type: string, nullable: true, maxLength: 2000 }
+      responses:
+        "201":
+          description: Referral code created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReferralCode"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/referrals/{referralCode}:
+    get:
+      tags: [Agency]
+      summary: Show one referral code with attributed links (requires manage-agency, Agency plan)
+      description: >-
+        One referral code of the agency, with the partner links
+        attributed to it. Requires manage-agency; plans below
+        Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: referralCode
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Referral code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReferralCodeDetail"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/referrals/{referralCode}/deactivate:
+    post:
+      tags: [Agency]
+      summary: Deactivate a referral code (requires manage-agency, Agency plan)
+      description: >-
+        Deactivates a referral code. New links can no longer use
+        it; attribution of links already created is preserved.
+        Requires manage-agency; plans below Agency refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: referralCode
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Referral code deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReferralCode"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/commission-rules:
+    get:
+      tags: [Agency]
+      summary: List commission rules (requires manage-agency, Agency plan)
+      description: >-
+        The agency's commission rules, default rule first, then
+        per-carrier rules. A per-carrier rule overrides the
+        default for that carrier only. Requires manage-agency;
+        plans below Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Commission rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CommissionRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agency]
+      summary: Create a commission rule (requires manage-agency, Agency plan)
+      description: >-
+        Creates a commission rule. Omit partner_link_id for the
+        agency default; only one active default may exist. A
+        per-carrier rule needs an active link and manage scope
+        for that carrier. The rate applies to recorded payments
+        on the paid basis; the optional cap is in minor units
+        per currency. Requires manage-agency; plans below
+        Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rate_percent]
+              properties:
+                partner_link_id: { type: string, format: uuid, nullable: true }
+                rate_percent: { type: number, minimum: 0, maximum: 100 }
+                cap_cents: { type: integer, minimum: 0, nullable: true }
+                effective_from: { type: string, format: date, nullable: true }
+      responses:
+        "201":
+          description: Commission rule created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommissionRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /agency/commission-rules/{commissionRule}:
+    put:
+      tags: [Agency]
+      summary: Update a commission rule (requires manage-agency, Agency plan)
+      description: >-
+        Updates a rule's rate, cap, active flag, or effective
+        date. The rule's carrier never changes. A default rule
+        is admin-only; a per-carrier rule needs manage scope
+        for that carrier. Requires manage-agency; plans below
+        Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: commissionRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rate_percent: { type: number, minimum: 0, maximum: 100 }
+                cap_cents: { type: integer, minimum: 0, nullable: true }
+                active: { type: boolean }
+                effective_from: { type: string, format: date, nullable: true }
+      responses:
+        "200":
+          description: Commission rule updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CommissionRule"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Agency]
+      summary: Delete a commission rule (requires manage-agency, Agency plan)
+      description: >-
+        Deletes a commission rule. Earnings computed afterwards
+        fall back to the default rule, or to the configured
+        default rate when no rule applies. A default rule is
+        admin-only; a per-carrier rule needs manage scope for
+        that carrier. Requires manage-agency; plans below
+        Agency refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: commissionRule
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Commission rule deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /agency/commissions:
+    get:
+      tags: [Agency]
+      summary: Commission earned per carrier (requires manage-agency, Agency plan)
+      description: >-
+        Commission earned per active linked carrier the caller
+        may see, computed only from recorded payments in the
+        optional date window: payments times the applicable
+        rule's rate, capped per currency when the rule sets a
+        cap. A recorded figure only: nothing here pays a
+        partner out, and billing runs on the mock provider.
+        Requires manage-agency; plans below Agency refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Agency commissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgencyCommissions"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /partner-links/pending:
+    get:
+      tags: [Agency]
+      summary: List pending partner links for the caller's carrier organizations
+      description: >-
+        Partner links awaiting a decision from the carrier side:
+        every pending link whose carrier organization the caller
+        belongs to. Approval and rejection happen from the
+        carrier side, by an owner or admin of the carrier
+        organization. This route is not tenant-scoped to one
+        organization.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Pending partner links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PartnerLink"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /partner-links/{partnerLink}/approve:
+    post:
+      tags: [Agency]
+      summary: Approve a pending partner link (carrier side)
+      description: >-
+        Approves a pending link. The caller must be an owner or
+        admin of the CARRIER organization; the agency cannot
+        approve its own link. The link becomes active and the
+        agency can then see the carrier's claims. This route is
+        not tenant-scoped to one organization.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /partner-links/{partnerLink}/reject:
+    post:
+      tags: [Agency]
+      summary: Reject a pending partner link (carrier side)
+      description: >-
+        Rejects a pending link. The caller must be an owner or
+        admin of the CARRIER organization; the agency cannot
+        reject its own link. This route is not tenant-scoped to
+        one organization.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: partnerLink
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Partner link rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PartnerLink"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 components:
   securitySchemes:
     bearerAuth:
@@ -12330,3 +13208,295 @@ components:
               payment_method: { type: string, nullable: true }
               reference: { type: string, nullable: true }
               recorded_at: { type: string, format: date-time, nullable: true }
+    PartnerLink:
+      type: object
+      description: >-
+        A link between an agency organization and a carrier
+        organization it manages. The link starts pending and
+        only becomes active when the carrier approves it. Removed
+        links are kept, never deleted.
+      properties:
+        id: { type: string, format: uuid }
+        agency_organization_id: { type: string, format: uuid }
+        carrier_organization_id: { type: string, format: uuid }
+        carrier_organization_name: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [pending, approved, suspended, rejected, removed]
+        referred_by_code: { type: string, nullable: true }
+        assigned_plan: { type: string, nullable: true }
+        approved_by: { type: integer, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        created_by: { type: integer, nullable: true }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AgencyCarrier:
+      type: object
+      description: >-
+        A linked carrier as the agency sees it, with the link
+        that connects the two organizations.
+      properties:
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        partner_link_id: { type: string, format: uuid }
+        link_status:
+          type: string
+          enum: [pending, approved, suspended, rejected, removed]
+        referred_by_code: { type: string, nullable: true }
+        assigned_plan: { type: string, nullable: true }
+    MoneyBucket:
+      type: object
+      description: >-
+        Claim and payment totals in one currency. Amounts are
+        decimal strings, never converted.
+      properties:
+        currency: { type: string }
+        requested: { type: string, description: Decimal string }
+        accepted: { type: string, description: Decimal string }
+        recovered: { type: string, description: Decimal string }
+        payments: { type: string, description: Decimal string }
+        outstanding: { type: string, description: Decimal string }
+    AgencyCommissionBucket:
+      type: object
+      description: >-
+        Recorded payments and earned commission in one currency.
+        Earned is payments times the applicable rule rate,
+        capped when the rule sets a cap.
+      properties:
+        currency: { type: string }
+        payments: { type: string, description: Decimal string }
+        earned: { type: string, description: Decimal string }
+        capped: { type: boolean }
+    AgencyCommission:
+      type: object
+      description: >-
+        Commission earned for one carrier, from recorded
+        payments only. A recorded figure: nothing here pays a
+        partner out.
+      properties:
+        rate_percent: { type: string, description: Decimal string }
+        rule_id: { type: string, format: uuid, nullable: true }
+        rule_is_default: { type: boolean }
+        basis: { type: string, enum: [paid] }
+        by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgencyCommissionBucket"
+        note: { type: string }
+    AgencyCommissionRow:
+      type: object
+      description: >-
+        One row of the commissions endpoint: the carrier plus
+        its earned commission.
+      allOf:
+        - $ref: "#/components/schemas/AgencyCommission"
+        - type: object
+          properties:
+            carrier:
+              $ref: "#/components/schemas/AgencyCarrier"
+    AgencyCarrierStats:
+      type: object
+      description: >-
+        Per-carrier claim stats for the agency dashboard.
+        Outstanding is due minus recovered, where due is the
+        accepted total when it is above zero and the requested
+        total otherwise.
+      properties:
+        carrier:
+          $ref: "#/components/schemas/AgencyCarrier"
+        claims_total: { type: integer }
+        by_status:
+          type: object
+          additionalProperties: { type: integer }
+        totals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyBucket"
+        commission:
+          $ref: "#/components/schemas/AgencyCommission"
+          nullable: true
+    AgencyDashboard:
+      type: object
+      description: >-
+        The agency dashboard: per-carrier stats, consolidated
+        totals, link counts, the referral summary, and
+        commission earned on recorded payments.
+      properties:
+        agency_organization_id: { type: string, format: uuid }
+        carriers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgencyCarrierStats"
+        totals_by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyBucket"
+        link_counts:
+          type: object
+          properties:
+            total: { type: integer }
+            pending: { type: integer }
+            approved: { type: integer }
+            suspended: { type: integer }
+            rejected: { type: integer }
+            removed: { type: integer }
+        referrals:
+          type: object
+          properties:
+            codes_total: { type: integer }
+            codes_active: { type: integer }
+            carriers_attributed: { type: integer }
+        commission:
+          $ref: "#/components/schemas/AgencyCommissions"
+    ConsolidatedReportRow:
+      type: object
+      description: >-
+        One carrier's row of the consolidated report.
+      properties:
+        carrier:
+          $ref: "#/components/schemas/AgencyCarrier"
+        claims_total: { type: integer }
+        by_status:
+          type: object
+          additionalProperties: { type: integer }
+        totals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyBucket"
+    ConsolidatedReport:
+      type: object
+      description: >-
+        The consolidated cross-carrier report, computed only
+        from the linked carriers' own recorded claims and
+        payments. Claims are filtered by created date, payments
+        by paid date. No external benchmarks.
+      properties:
+        agency_organization_id: { type: string, format: uuid }
+        date_from: { type: string, format: date, nullable: true }
+        date_to: { type: string, format: date, nullable: true }
+        carrier_organization_id: { type: string, format: uuid, nullable: true }
+        carriers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsolidatedReportRow"
+        totals_by_currency:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyBucket"
+        note: { type: string }
+    ReferralCode:
+      type: object
+      description: >-
+        A referral code of the agency. Carriers linked with the
+        code are attributed to it; deactivating the code keeps
+        the attribution.
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        code: { type: string }
+        active: { type: boolean }
+        uses_count: { type: integer }
+        created_by: { type: integer, nullable: true }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ReferralCodeDetail:
+      type: object
+      description: >-
+        One referral code with the partner links attributed to
+        it.
+      allOf:
+        - $ref: "#/components/schemas/ReferralCode"
+        - type: object
+          properties:
+            attributed_links:
+              type: array
+              items:
+                $ref: "#/components/schemas/PartnerLink"
+    CommissionRule:
+      type: object
+      description: >-
+        A commission rule. A rule with no partner link is the
+        agency default; a per-carrier rule overrides the default
+        for that carrier only. The rate applies to recorded
+        payments on the paid basis.
+      properties:
+        id: { type: string, format: uuid }
+        agency_organization_id: { type: string, format: uuid }
+        partner_link_id: { type: string, format: uuid, nullable: true }
+        carrier_organization_id: { type: string, format: uuid, nullable: true }
+        carrier_organization_name: { type: string, nullable: true }
+        is_default: { type: boolean }
+        rate_percent: { type: string, description: Decimal string }
+        cap_cents: { type: integer, nullable: true }
+        basis: { type: string, enum: [paid] }
+        active: { type: boolean }
+        effective_from: { type: string, format: date, nullable: true }
+        created_by: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AgencyCommissions:
+      type: object
+      description: >-
+        Commission earned for the whole agency, computed only
+        from recorded payments. A recorded figure: nothing here
+        pays a partner out.
+      properties:
+        agency_organization_id: { type: string, format: uuid }
+        date_from: { type: string, format: date, nullable: true }
+        date_to: { type: string, format: date, nullable: true }
+        carriers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgencyCommissionRow"
+        totals_by_currency:
+          type: array
+          items:
+            type: object
+            properties:
+              currency: { type: string }
+              payments: { type: string, description: Decimal string }
+              earned: { type: string, description: Decimal string }
+        note: { type: string }
+    AgencyCarrierGrant:
+      type: object
+      description: >-
+        A per-carrier permission grant: one agency member's
+        access to one linked carrier, with view or manage scope.
+        Manage covers view.
+      properties:
+        id: { type: string, format: uuid }
+        partner_link_id: { type: string, format: uuid }
+        user_id: { type: integer }
+        user_name: { type: string, nullable: true }
+        user_email: { type: string, nullable: true }
+        scope: { type: string, enum: [view, manage] }
+        granted_by: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AgencyCarrierClaim:
+      type: object
+      description: >-
+        A linked carrier's claim as the agency sees it:
+        read-only, with the carrier's shipment reference.
+      properties:
+        id: { type: string, format: uuid }
+        claim_reference: { type: string }
+        organization_id: { type: string, format: uuid }
+        shipment_id: { type: string, format: uuid }
+        shipment_reference: { type: string, nullable: true }
+        carrier_id: { type: string, format: uuid, nullable: true }
+        claim_category:
+          $ref: "#/components/schemas/ClaimCategory"
+        status:
+          $ref: "#/components/schemas/ClaimStatus"
+        currency: { type: string }
+        requested_amount: { type: string, description: Decimal string }
+        accepted_amount: { type: string, nullable: true, description: Decimal string }
+        recovered_amount: { type: string, description: Decimal string }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }

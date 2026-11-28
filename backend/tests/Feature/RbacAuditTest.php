@@ -192,6 +192,12 @@ class RbacAuditTest extends TestCase
             'api/v1/auth/password',
             'api/v1/email/verification-notification',
             'api/v1/invitations/accept',
+            // Partner links (v2.1.0): the carrier side of the
+            // approval flow is account-level, like invitation
+            // acceptance; the link names the carrier org.
+            'api/v1/partner-links/pending',
+            'api/v1/partner-links/{partnerLink}/approve',
+            'api/v1/partner-links/{partnerLink}/reject',
             'api/v1/organizations',
             'api/v1/organizations/{organization}',
             'api/v1/organizations/{organization}/switch',

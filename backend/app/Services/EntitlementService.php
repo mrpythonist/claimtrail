@@ -102,7 +102,7 @@ class EntitlementService
      * The resolved numeric limits for a plan key at a carrier
      * count. Agency claims and storage scale per carrier.
      *
-     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool, public_api: bool, enterprise: bool}
+     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool, public_api: bool, enterprise: bool, agency: bool}
      */
     public function limitsForPlan(string $plan, int $carriers): array
     {
@@ -136,6 +136,7 @@ class EntitlementService
                 PlanCatalog::AGENCY,
                 PlanCatalog::SUCCESS_FEE,
             ], true),
+            'agency' => $plan === PlanCatalog::AGENCY,
         ];
     }
 
@@ -527,6 +528,41 @@ class EntitlementService
             $upgrade['key'] ?? null,
             $upgrade['name'] ?? null,
             'Enterprise readiness features are not included in the '.$limits['plan_name'].' plan.'
+                .($upgrade !== null
+                    ? ' Upgrade to '.$upgrade['name'].' to use them.'
+                    : ''),
+        );
+    }
+
+    /**
+     * Refuse agency management features below the Agency plan.
+     * Every other plan is refused with a 402, including Growth
+     * and Fleet: agency features are the Agency tier, not a
+     * higher tier of the same features. Reading and writing are
+     * both gated: unlike workflows and document processing,
+     * there is no agency history a downgraded organization
+     * keeps, because the surface is the agency tooling itself.
+     *
+     * @throws EntitlementExceededException
+     */
+    public function authorizeAgency(Organization $organization): void
+    {
+        $limits = $this->limits($organization);
+
+        if ($limits['agency']) {
+            return;
+        }
+
+        $upgrade = $this->nextPlanFor('agency', $organization);
+
+        throw new EntitlementExceededException(
+            'agency',
+            null,
+            0,
+            $limits['plan'],
+            $upgrade['key'] ?? null,
+            $upgrade['name'] ?? null,
+            'Agency management features are not included in the '.$limits['plan_name'].' plan.'
                 .($upgrade !== null
                     ? ' Upgrade to '.$upgrade['name'].' to use them.'
                     : ''),

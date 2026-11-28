@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import {
+  canManageAgency,
   canManageApiKeys,
   canManageBilling,
   canManageCustomization,
@@ -46,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Document Processing", href: "/documents", section: "Workspace", visibleFor: canManageDocumentProcessing },
   { label: "Developers", href: "/developers", section: "Workspace", visibleFor: canManageApiKeys },
   { label: "Enterprise", href: "/enterprise", section: "Workspace", visibleFor: canManageEnterprise },
+  { label: "Agency", href: "/agency", section: "Workspace", visibleFor: canManageAgency },
   { label: "Support", href: "/support", section: "Workspace" },
   { label: "Reports", href: "/reports", section: "Insights", visibleFor: canViewReports },
   { label: "Analytics", href: "/analytics", section: "Insights", visibleFor: canViewAnalytics },

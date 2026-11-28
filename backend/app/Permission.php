@@ -185,6 +185,14 @@ enum Permission: string
     // are refused with a 402.
     case ManageEnterprise = 'manage-enterprise';
 
+    // Agency management (enforced from v2.1.0): partner links,
+    // carrier management, the agency dashboard, consolidated
+    // reporting, referral codes, commission rules, and reseller
+    // workflows. Owner, admin, and operations manager. Agency
+    // features need the Agency plan: every other plan is refused
+    // with a 402.
+    case ManageAgency = 'manage-agency';
+
     /**
      * Every permission value, for validation and documentation.
      *

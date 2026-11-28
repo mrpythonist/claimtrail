@@ -2,8 +2,10 @@
 
 namespace App\Observers;
 
+use App\Models\AgencyCarrierGrant;
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
+use App\Models\CommissionRule;
 use App\Models\CustomField;
 use App\Models\DeadlineSetting;
 use App\Models\EventCategory;
@@ -12,6 +14,8 @@ use App\Models\EvidenceTemplate;
 use App\Models\ExportTemplate;
 use App\Models\OrganizationInvitation;
 use App\Models\OrganizationMember;
+use App\Models\PartnerLink;
+use App\Models\ReferralCode;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Services\AuditService;
@@ -87,6 +91,22 @@ class AuditObserver
         ],
         OrganizationInvitation::class => [
             'email', 'role', 'accepted_at', 'expires_at',
+        ],
+        PartnerLink::class => [
+            'agency_organization_id', 'carrier_organization_id',
+            'status', 'referred_by_code', 'assigned_plan',
+            'approved_by', 'approved_at',
+        ],
+        CommissionRule::class => [
+            'agency_organization_id', 'partner_link_id',
+            'rate_percent', 'cap_cents', 'basis', 'active',
+            'effective_from',
+        ],
+        ReferralCode::class => [
+            'organization_id', 'code', 'active',
+        ],
+        AgencyCarrierGrant::class => [
+            'partner_link_id', 'user_id', 'scope',
         ],
     ];
 

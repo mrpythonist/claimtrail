@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Public\V1\PublicApiController;
 use App\Http\Controllers\Api\V1\AccountingController;
+use App\Http\Controllers\Api\V1\AgencyController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AnalyticsEventController;
 use App\Http\Controllers\Api\V1\ApiKeyController;
@@ -46,6 +47,7 @@ use App\Http\Controllers\Api\V1\OperationalIntelligenceController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\OrganizationInvitationController;
 use App\Http\Controllers\Api\V1\OrganizationMemberController;
+use App\Http\Controllers\Api\V1\PartnerLinkController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PublicPlanController;
 use App\Http\Controllers\Api\V1\ReconciliationController;
@@ -110,6 +112,15 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
         // Accepting an invitation is not tenant-scoped: the user is not
         // a member yet, so there is no organization to resolve.
         Route::post('/invitations/accept', [OrganizationInvitationController::class, 'accept']);
+
+        // The carrier side of the partner-link flow (v2.1.0) is not
+        // tenant-scoped either: the carrier user acts on a link
+        // that names their organization, and approval needs an
+        // owner or admin of the CARRIER organization, so an agency
+        // can never approve its own link.
+        Route::get('/partner-links/pending', [PartnerLinkController::class, 'pending']);
+        Route::post('/partner-links/{partnerLink}/approve', [PartnerLinkController::class, 'approve']);
+        Route::post('/partner-links/{partnerLink}/reject', [PartnerLinkController::class, 'reject']);
 
         // Organizations the user belongs to. These routes address the
         // organization in the URL and authorize through the policy.
@@ -619,6 +630,45 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::get('/enterprise/assessments/latest', [EnterpriseController::class, 'latestAssessment']);
             Route::get('/enterprise/assessments', [EnterpriseController::class, 'listAssessments']);
             Route::post('/enterprise/assessments', [EnterpriseController::class, 'generateAssessment']);
+
+            // Agency management (v2.1.0): partner links, carrier
+            // management, the agency dashboard, consolidated
+            // reporting, referral codes, commission rules and
+            // computed earnings, and reseller workflows. Every
+            // route needs manage-agency (owner, admin, operations
+            // manager) and the Agency plan: every other plan is
+            // refused with a 402. Carrier access is per-carrier:
+            // owners and admins see every linked carrier, other
+            // members need a grant for each carrier. The
+            // /carriers/{id}/claims routes come before the
+            // /partners/{link} routes only by grouping; the two
+            // resources bind different models, so there is no
+            // shadowing. The /referrals/{code} routes bind the
+            // ReferralCode model, not a plain string.
+            Route::get('/agency/dashboard', [AgencyController::class, 'dashboard']);
+            Route::get('/agency/carriers', [AgencyController::class, 'listCarriers']);
+            Route::get('/agency/carriers/{carrierOrganizationId}/claims', [AgencyController::class, 'listCarrierClaims']);
+            Route::get('/agency/carriers/{carrierOrganizationId}/claims/{claim}', [AgencyController::class, 'showCarrierClaim']);
+            Route::get('/agency/reports/consolidated', [AgencyController::class, 'consolidatedReport']);
+            Route::get('/agency/partners', [AgencyController::class, 'listLinks']);
+            Route::post('/agency/partners', [AgencyController::class, 'storeLink']);
+            Route::get('/agency/partners/{partnerLink}', [AgencyController::class, 'showLink']);
+            Route::post('/agency/partners/{partnerLink}/suspend', [AgencyController::class, 'suspendLink']);
+            Route::post('/agency/partners/{partnerLink}/reactivate', [AgencyController::class, 'reactivateLink']);
+            Route::post('/agency/partners/{partnerLink}/remove', [AgencyController::class, 'removeLink']);
+            Route::post('/agency/partners/{partnerLink}/plan', [AgencyController::class, 'assignPlan']);
+            Route::get('/agency/partners/{partnerLink}/grants', [AgencyController::class, 'listGrants']);
+            Route::post('/agency/partners/{partnerLink}/grants', [AgencyController::class, 'storeGrant']);
+            Route::delete('/agency/partners/{partnerLink}/grants/{grant}', [AgencyController::class, 'destroyGrant']);
+            Route::get('/agency/referrals', [AgencyController::class, 'listCodes']);
+            Route::post('/agency/referrals', [AgencyController::class, 'storeCode']);
+            Route::get('/agency/referrals/{referralCode}', [AgencyController::class, 'showCode']);
+            Route::post('/agency/referrals/{referralCode}/deactivate', [AgencyController::class, 'deactivateCode']);
+            Route::get('/agency/commission-rules', [AgencyController::class, 'listRules']);
+            Route::post('/agency/commission-rules', [AgencyController::class, 'storeRule']);
+            Route::put('/agency/commission-rules/{commissionRule}', [AgencyController::class, 'updateRule']);
+            Route::delete('/agency/commission-rules/{commissionRule}', [AgencyController::class, 'destroyRule']);
+            Route::get('/agency/commissions', [AgencyController::class, 'commissions']);
         });
     });
 

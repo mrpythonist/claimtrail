@@ -6,9 +6,10 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v2.0.3 (Phase 6, Enterprise
-  Readiness). App version is now **2.0.3**. Phase 6 is COMPLETE
-  (v2.0.0 Workflow Engine, v2.0.1 AI Document Processing,
+- **Last completed version:** v2.1.0 (Phase 7, Agency
+  Management). App version is now **2.1.0**. Phase 7 is STARTED
+  (v2.1.0 first version; next is v2.1.1 White Label). Phase 6 is
+  COMPLETE (v2.0.0 Workflow Engine, v2.0.1 AI Document Processing,
   v2.0.2 API and Integrations, and v2.0.3 Enterprise Readiness
   done). Phase 5 is complete (v1.5.0, v1.5.1, v1.5.2). Phase 4
   is complete (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is
@@ -20,16 +21,16 @@ chat (see "Push rule" below).
   person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
   (lawyer review, real Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `a2a7d9c2` (v2.0.2, pushed 2026-11-28 ~07:52 PKT after Aqib's
-  yes + approval card). 46 files in the v2.0.2 commit, read-back verified
-  (all 46 blob SHAs match the new head exactly). **v2.0.3 is built and
+  head `8063bc8c` (v2.0.3, pushed 2026-11-28 ~17:22 PKT after Aqib's
+  yes + approval card). 55 files in the v2.0.3 commit, read-back verified
+  (all 55 blob SHAs match the new head exactly). **v2.1.0 is built and
   verified locally but NOT pushed yet** — awaiting Aqib's yes + approval
-  card (see the 2026-11-28 v2.0.3 log entry; delta manifest at
-  `~/workspace/claimtrail-v203-paths-manifest.json`).
-- **Tests at v2.0.3:** 776 backend (4539 assertions) + 484 frontend, all
-  passing. `npm run build` succeeds (80/80 pages). Live HTTP smoke test:
-  78/78 steps plus 5 CLI checks on a fresh SQLite DB (see the
-  2026-11-28 v2.0.3 log entry). OpenAPI 237 internal paths (313 ops)
+  card (see the 2026-11-28 v2.1.0 log entry; delta manifest at
+  `~/workspace/claimtrail-v210-paths-manifest.json`).
+- **Tests at v2.1.0:** 807 backend (4725 assertions) + 506 frontend, all
+  passing. `npm run build` succeeds (81/81 pages). Live HTTP smoke test:
+  85/85 steps plus 2 CLI checks on a fresh SQLite DB (see the
+  2026-11-28 v2.1.0 log entry). OpenAPI 259 internal paths (340 ops)
   plus 8 public paths (9 ops), verified to match the live routes
   exactly on both surfaces.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
@@ -38,10 +39,10 @@ chat (see "Push rule" below).
 
 ## Next task
 
-**v2.1.0 — Agency Management** (MASTER-CHECKLIST.md, Phase 7,
+**v2.1.1 — White Label** (MASTER-CHECKLIST.md, Phase 7,
 Partner Ecosystem) is the next build. **Status 2026-11-28:
-v2.0.3 READY TO PUSH, not pushed — awaiting Aqib's yes +
-approval card. Phase 6 COMPLETE.**
+v2.1.0 READY TO PUSH, not pushed — awaiting Aqib's yes +
+approval card. Phase 7 STARTED (v2.1.0 first version).**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -113,6 +114,204 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-28 — v2.1.0 Agency Management built and verified (Phase 7 starts)
+
+- Gate check passed first (main agent): no other builder
+  was running, remote head on GitHub is `8063bc8c`
+  (v2.0.3, pushed 2026-11-28 ~17:22 PKT), and no
+  `claimtrail-scratch-v210` existed. Build started
+  2026-11-28 ~17:19 PKT on Aqib's "Start v2.1.0 now" in the
+  main chat. This is the FIRST version of Phase 7 (Partner
+  Ecosystem). Next is v2.1.1 White Label.
+- Spec: MASTER-CHECKLIST.md v2.1.0 (8 items). All eight
+  verified and checked.
+- Backend (new): `backend/config/agency.php` (referral
+  prefix `REF`, code length 8, default commission rate 10%,
+  basis `paid`); migration
+  `2026_11_28_101300_create_agency_tables.php`
+  (`partner_links`, `referral_codes`, `commission_rules`,
+  `agency_carrier_grants`); models `PartnerLink` (statuses
+  pending/approved/suspended/rejected/removed; `isActive()`
+  is approved only), `ReferralCode` (`usesCount` derived
+  from the links citing the code), `CommissionRule`
+  (`isDefault()` is a null link), `AgencyCarrierGrant`
+  (scopes view/manage; `covers()` — manage covers view);
+  `App\\Permission` addition `ManageAgency`
+  (manage-agency, owner/admin/operations_manager);
+  `EntitlementService` `agency` limit (Agency plan only) +
+  `authorizeAgency()` (402 for Free/Starter/Growth/Fleet);
+  `App\\Services\\AgencyService` (link CRUD with the
+  pending-first flow and carrier-side approve/reject,
+  suspend/reactivate/remove with the row kept, plan
+  assignment through `BillingService::changePlan`,
+  `carrierStats` with outstanding computed on bucket
+  totals — due is the accepted total when above zero else
+  the requested total, floored at zero — `dashboard`,
+  `consolidatedReport` with claims by created date and
+  payments by paid date, `listCarrierClaims` /
+  `showCarrierClaim` read-only, referral codes with
+  10-retry unique generation, commission rules with one
+  active default enforced, `commissionForLink` via bc math
+  with a per-currency cap, `commissions` user-scoped and
+  `commissionsForReport` unscoped sharing
+  `commissionsForLinks`, grants via updateOrCreate so
+  re-granting replaces the scope, presenters
+  `presentLink` / `presentCarrier` / `presentCode` /
+  `presentRule` / `presentGrant` / `presentClaim`).
+  `AuditService::recordFor` extended: the org id falls back
+  to `agency_organization_id`, then to the link's agency
+  org (for grants). Cross-tenant rule that matters:
+  `Claim` and `ClaimPayment` carry the tenant global scope,
+  so every carrier-org query in the service uses
+  `Claim::forOrganization($carrierOrg)` /
+  `ClaimPayment::forOrganization(...)`; the four agency
+  models have no global scope. `AgencyController`
+  (tenant-scoped; every endpoint calls `authorizeAgency`),
+  `PartnerLinkController` (non-tenant: pending list,
+  approve, reject — the carrier is resolved from the
+  caller's memberships, not the header). Console command
+  `agency:commissions` (`--organization`, `--date-from`,
+  `--date-to`; all-agency mode queries `Subscription` rows
+  with plan `agency` — `Organization` has no
+  `subscriptions()` relation, so `whereHas` fails).
+  `routes/api.php`: 22 new paths / 27 new operations (24
+  under `/api/v1/agency/*`, 3 under
+  `/api/v1/partner-links/*`). `RbacAuditTest` nonTenant list
+  extended with the three partner-link routes.
+- Backend edits: `config/app.php` version 2.1.0;
+  `config/permissions.php`, `routes/api.php`,
+  `app/Permission.php`, `App\\Services\\EntitlementService`,
+  `App\\Services\\AuditService`, `App\\Services\\AuditObserver`
+  (AUDITABLE lists for the four new models),
+  `App\\Providers\\AppServiceProvider` (AuditObserver
+  registration), HealthCheckTest version 2.0.3 to 2.1.0.
+  Pre-existing tests updated only for the version bump.
+- Frontend: `src/lib/agency.ts` (typed client for all 27
+  contract endpoints), `src/lib/permissions.ts`
+  (`canManageAgency`: owner/admin/operations_manager),
+  agency types in `src/lib/types.ts` (`PartnerLink`,
+  `AgencyCarrierStats`, `AgencyDashboard`,
+  `ConsolidatedReport`, `ReferralCode`,
+  `CommissionRule`, `AgencyCommission`,
+  `AgencyCommissionRow`, `AgencyCommissions`,
+  `AgencyCarrierGrant`, `AgencyCarrierClaim`), AppShell
+  "Agency" nav entry (Workspace section), `/agency` page
+  (7 tabs: Overview, Carriers, Claims, Reports, Referrals,
+  Commissions, Reseller). Tests:
+  `src/lib/__tests__/agency.test.ts` (15 tests) and
+  `src/app/(app)/agency/__tests__/page.test.tsx` (7 tests).
+  Not verified against a live backend (contract trusted);
+  component conventions honored (Alert tones
+  error/success/info/warning; Table takes children;
+  Input/Select require id + label; CardHeader takes a
+  `title` prop, not children).
+- Docs: new `docs/AGENCY-MANAGEMENT.md` (definitions,
+  honest limits, what is recorded vs computed, the
+  reseller onboarding flow, what is NOT verified); OpenAPI
+  Agency tag (22 new paths, 27 new operations, 15 new
+  schemas), `info.version` 2.1.0, description extended;
+  CHANGELOG [2.1.0]. OpenAPI counts: 259 internal paths
+  (340 ops), public spec unchanged at 8 paths (9 ops).
+- Verification: full backend suite re-run: **807 tests /
+  4725 assertions, 0 failures** (was 776/4539 at v2.0.3;
+  +31 new AgencyTest tests, 132 assertions; the other +54
+  assertions come from `RbacAuditTest`'s route sweep over
+  the 27 new routes, which also proves every new route
+  requires auth and resolves an organization).
+  Frontend: **506 tests in 67 files, 0 failures;
+  `npm run build` 81/81 pages** including `/agency`
+  (80 at v2.0.3 + 1). Live HTTP smoke on a fresh SQLite DB
+  (built-in server, port 8133): **85/85 steps** — Agency
+  plan via mock checkout (payment method required: a
+  checkout with no method is a 422 by design), Free 402,
+  dispatcher 403, referral code create/list, link create
+  pending (self-link 422, duplicate 422), pending list from
+  the carrier side, agency approve-own-link 403, carrier
+  approves both links (approve twice 422), dashboard
+  aggregates for two carriers (requested 1200, accepted
+  900, recovered 650, payments 650, outstanding 250),
+  consolidated report rows/totals/date window/carrier
+  filter/unlinked carrier 404, carrier claims list/show/
+  status filter, grant scoping (ops manager 403, view grant
+  200, view-only create-rule 403, manage grant 201,
+  per-carrier rule 201), default rule 20% (second default
+  422), commissions (carrier B earned 30.00 capped at a
+  $30 cap, carrier C earned 80.00, totals 110.00),
+  referral detail attribution (2 links), deactivate and
+  link-with-deactivated-code 422, reseller plan assignment
+  (carrier subscription becomes starter; pending link 422),
+  suspend/reactivate/remove lifecycle with dashboard
+  visibility, cross-tenant 404 (second Agency-plan org —
+  a Free org hits the 402 plan gate first), grant delete
+  200 and the ops manager losing access. CLI checks:
+  `agency:commissions --organization` (1 carrier, 30.00
+  earned) and `agency:commissions` for all agencies — both
+  exit 0. Route diff: OpenAPI matches
+  `route:list --json` exactly on both surfaces (internal
+  340/340, public 9/9).
+- Verification findings, five real defects found by the
+  tests and fixed in this build:
+  (1) `HealthCheckTest` pinned the old version string
+  (2.0.3) — updated to 2.1.0; (2) the OpenAPI documented
+  both DELETE endpoints as 204, but both controllers return
+  200 with a message, as the backend test pins — corrected
+  in the spec; (3) the agency page used the children form
+  of `CardHeader`, which the component ignores — all 16
+  card headers would have rendered empty — fixed to the
+  `title` prop form; (4) the page omitted the required `id`
+  prop on all 17 `Input`/`Select` usages (vitest does not
+  type-check, so the tests caught what the compiler would
+  have) and used the nonexistent `danger` alert tone in 11
+  places — fixed to unique ids and the `error` tone; the
+  build then failed type-check on exactly those 11 and
+  passed after the fix; (5) the frontend
+  `AgencyCarrierStats.commission` type wrongly included a
+  `carrier` field — the dashboard nests
+  `commissionForLink` directly, which has no carrier key —
+  split into `AgencyCommission` and `AgencyCommissionRow`.
+  The live smoke found no code defects; its first runs had
+  6 failed steps, all wrong smoke assumptions, corrected
+  and re-run green: (a) completing a mock checkout for a
+  paid plan needs a payment method (`pm_mock_visa`) — a
+  422 without one is by design; (b) the agency owner must
+  not also own the carrier orgs, or the "agency cannot
+  approve its own link" check cannot be exercised — the
+  smoke now uses a separate carrier owner; (c) assigning a
+  plan to a carrier with no payment method on file is a 422
+  by design ("Add a payment method before upgrading") —
+  the smoke adds one first; (d) a Free org hits the 402
+  plan gate before the cross-tenant check, so the 404 test
+  needs a second Agency-plan org; (e) my regex that added
+  the `id` props also ate the `>` of `=>` in all 17
+  onChange handlers — restored, and the agency frontend
+  tests then passed 22/22. One count corrected during the
+  build: the OpenAPI adds 22 paths / 27 operations, not 27
+  paths (paths share operations: e.g. GET+POST on
+  `/agency/partners`).
+- Honest limits (v2.1.0-specific, also in
+  docs/AGENCY-MANAGEMENT.md): no live partner API and no
+  real Stripe — billing runs on the mock provider, and
+  commission is a recorded figure, never a payout; no
+  submission channel (the app never sends a claim package
+  to a broker); consolidated reporting and commission are
+  computed only from the linked carriers' own recorded
+  claims and payments; the dashboard computes outstanding
+  on bucket totals, so it can differ from summing per-claim
+  balances; white-label branding is v2.1.1, not this
+  version; Sanctum tokens never expire and the token lives
+  in localStorage, same as before; no malware scanning, no
+  carrier deletion, no pen test; Docker builds, live
+  Postgres, live Redis, S3, real mailer, and browser E2E
+  remain unverified.
+- Push status: **READY TO PUSH, not pushed — awaiting Aqib's
+  yes.** No git push, no tag, no `.github/workflows` files
+  (per the push rule). Delta manifest:
+  `~/workspace/claimtrail-v210-paths.txt` +
+  `~/workspace/claimtrail-v210-paths-manifest.json` — 33 files
+  (17 changed + 16 new), 1,286,804 bytes vs remote head
+  `8063bc8c`, recomputed by the parent run after the final
+  checkpoint edit, so the manifest is current.
 
 ### 2026-11-28 — v2.0.3 Enterprise Readiness built and verified (Phase 6 COMPLETE)
 
@@ -328,16 +527,14 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   monitoring checks are deployment-wide, so the
   availability and latency SLOs read the same probe history
   for every organization.
-- Push status: **READY TO PUSH, not pushed — awaiting Aqib's
-  yes.** No git push, no tag, no `.github/workflows` files
-  (per the push rule). Delta manifest:
-  `~/workspace/claimtrail-v203-paths.txt` +
-  `~/workspace/claimtrail-v203-paths-manifest.json` — 55 files
-  (25 changed + 30 new), 1,454,186 bytes vs remote head
-  `a2a7d9c2`, recomputed by the parent run after the final
-  checklist-note edit, so the manifest is current. The paths
-  file is one path per line (the v202 file was NUL-separated
-  — different format, flag to the pusher).
+- Push status: **PUSHED 2026-11-28 ~17:22 PKT, head `8063bc8c`** (55
+  files, read-back verified: all 55 blob SHAs match the new head via
+  the raw.githubusercontent.com fallback — the unauthenticated API
+  was rate-limited until 17:52 PKT and the MCP get_commit tool caps
+  files at 30 without blob SHAs. The v203 manifest was newline-
+  delimited, not NUL-delimited; the first push attempt was rejected
+  on validation, the manifest was rewritten NUL-delimited with the
+  identical 55 paths, and the push then succeeded).
 
 ### 2026-11-28 — v2.0.2 API and Integrations built and verified (Phase 6 continues)
 

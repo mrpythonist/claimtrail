@@ -3,6 +3,122 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [2.1.0] - 2026-11-28
+
+Phase 7, Partner Ecosystem (the first version of Phase 7):
+agency management. Partner accounts linking an agency to
+the carriers it manages, an agency dashboard, per-carrier
+permission grants, consolidated cross-carrier reporting,
+referral codes with attribution, commission rules and earned
+commission, and reseller workflows (carrier onboarding
+approval and plan assignment). Agency features need the
+`manage-agency` permission (owner, admin, operations
+manager) and the Agency plan ($149/month base plus $12 per
+extra carrier); plans below Agency are refused with 402.
+Honest limits, stated everywhere: consolidated reporting
+and commission are computed only from the linked carriers'
+own recorded claims and payments — no external benchmarks,
+no live partner API; commission is a recorded figure only,
+nothing pays a partner out, and billing runs on the mock
+provider; there is still no submission channel, so the app
+never sends a claim package to a broker. White-label
+branding is v2.1.1, not this version. App version bumped to
+2.1.0; OpenAPI at 259 paths (237 + 22 new paths, 340
+operations) for the internal surface; the public spec is
+unchanged at 8 paths, 9 operations. Verified: 807 backend
+tests / 4,725 assertions, 0 failures; 506 frontend tests
+in 67 files, 0 failures; build passes (81/81 pages); live
+smoke 85/85 steps plus 2 CLI checks on a fresh SQLite DB.
+
+### Added
+
+- Partner accounts (`App\\Services\\AgencyService`,
+  `App\\Http\\Controllers\\Api\\V1\\AgencyController`,
+  `App\\Http\\Controllers\\Api\\V1\\PartnerLinkController`):
+  partner links between an agency organization and a
+  carrier organization (`partner_links`, statuses pending /
+  approved / suspended / rejected / removed). The agency
+  creates the link (optionally with a referral code); it
+  starts pending, and only the carrier approves or rejects
+  it, from the carrier side (`GET /partner-links/pending`,
+  `POST /partner-links/{partnerLink}/approve|reject`). The
+  agency cannot approve its own link. Suspend, reactivate,
+  and remove are admin-only; a removed link keeps its row,
+  never deleted. Every link change is on the audit trail.
+- Multiple carrier management: an agency reads its linked
+  carriers' claims read-only (`GET /agency/carriers/{id}/
+  claims`, `GET /agency/carriers/{id}/claims/{claim}`).
+  Writing a claim stays with the carrier organization. The
+  link must be active; a suspended, removed, or rejected
+  link refuses claim access with 403, and a link belonging
+  to another agency 404s.
+- Agency dashboard (`GET /agency/dashboard`, `/agency`
+  page with Overview, Carriers, Claims, Reports, Referrals,
+  Commissions, and Reseller tabs): per-carrier claim stats,
+  consolidated totals by currency (decimal strings, never
+  converted), link counts by status, the referral summary,
+  and commission earned on recorded payments. Outstanding
+  is due minus recovered, where due is the accepted total
+  when it is above zero and the requested total otherwise.
+- Carrier-specific permissions: agency members are scoped
+  to specific carriers (`agency_carrier_grants`, scopes view
+  / manage; manage covers view). Owners and admins see
+  every link; other members see only granted carriers and
+  get 403 on the rest. Grants are admin-only, one per
+  member per link (re-granting replaces the scope), and the
+  member must be an active member of the agency.
+- Consolidated reporting (`GET /agency/reports/
+  consolidated`): one row per active linked carrier the
+  caller may see, plus totals by currency. Claims are
+  filtered by created date, payments by paid date. Computed
+  only from the linked carriers' own recorded claims and
+  payments; no external benchmarks exist, and the report
+  says so.
+- Referral tracking (`referral_codes`, prefix `REF` plus an
+  8-character random suffix): create, list, show with
+  attributed links, deactivate. Attribution is preserved
+  when a code is deactivated; `uses_count` is derived from
+  the links citing the code. Recorded only: no reward is
+  paid.
+- Commission tracking (`commission_rules`): a default rule
+  (only one active default may exist) plus per-carrier
+  rules that override it for one carrier. Rate 0-100% on
+  the paid basis, optional per-currency cap in minor units.
+  `GET /agency/commissions` returns earned commission per
+  carrier from recorded payments only, with the cap flag,
+  plus totals. `php artisan agency:commissions` prints the
+  same figures for one agency or all agencies.
+- Reseller workflows: carrier onboarding approval (link
+  lifecycle above) plus plan assignment (`POST /agency/
+  partners/{partnerLink}/plan`), which changes the linked
+  carrier's subscription through the mock billing provider
+  and records the assigned plan on the link. The link must
+  be approved. Admin-only.
+
+### Fixed
+
+- `docs/openapi.yaml` initially documented the two DELETE
+  endpoints (`/agency/partners/{partnerLink}/grants/{grant}`
+  and `/agency/commission-rules/{commissionRule}`) as 204
+  with no body; both controllers return 200 with a message,
+  as the backend test pins. Corrected to 200 in the spec
+  before verification.
+- The frontend agency page first used the children form of
+  `CardHeader` (`<CardHeader>Title</CardHeader>`), which
+  the component ignores — all 16 card headers would have
+  rendered empty — and omitted the required `id` prop on
+  all 17 `Input`/`Select` usages, and used the `danger`
+  alert tone, which the `Alert` component does not have (11
+  occurrences). All fixed to the `title` prop form, unique
+  ids, and the `error` tone; the frontend page test pins
+  the rendered headers and labels.
+- The frontend `AgencyCarrierStats.commission` type
+  wrongly included a `carrier` field: the dashboard nests
+  `commissionForLink` directly, which has no carrier key
+  (the key appears only on `agency:commissions` rows).
+  Split into `AgencyCommission` (dashboard) and
+  `AgencyCommissionRow` (commissions endpoint).
+
 ## [2.0.3] - 2026-11-28
 
 Phase 6, Intelligent Automation (the last version of Phase 6):

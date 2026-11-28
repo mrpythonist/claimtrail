@@ -2348,3 +2348,207 @@ export interface SecurityAssessment {
   created_at: string;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Agency management (v2.1.0)                                          */
+/* ------------------------------------------------------------------ */
+
+/** Partner link statuses (v2.1.0). */
+export type PartnerLinkStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "removed";
+
+/** One partner link from GET /agency/partners. */
+export interface PartnerLink {
+  id: string;
+  agency_organization_id: string;
+  carrier_organization_id: string;
+  carrier_organization_name: string | null;
+  status: PartnerLinkStatus;
+  referred_by_code: string | null;
+  assigned_plan: string | null;
+  approved_by: number | null;
+  approved_at: string | null;
+  created_by: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One money bucket: totals in a single currency, never converted. */
+export interface MoneyBucket {
+  currency: string;
+  requested: string;
+  accepted: string;
+  recovered: string;
+  payments: string;
+  outstanding: string;
+}
+
+/** Per-carrier stats from the agency dashboard. */
+export interface AgencyCarrierStats {
+  carrier: {
+    organization_id: string;
+    name: string;
+    slug: string;
+    partner_link_id: string;
+    link_status: PartnerLinkStatus;
+    referred_by_code: string | null;
+    assigned_plan: string | null;
+  };
+  claims_total: number;
+  by_status: Record<string, number>;
+  totals: MoneyBucket[];
+  commission: AgencyCommission | null;
+}
+
+/** The agency dashboard from GET /agency/dashboard. */
+export interface AgencyDashboard {
+  agency_organization_id: string;
+  carriers: AgencyCarrierStats[];
+  totals_by_currency: MoneyBucket[];
+  link_counts: {
+    total: number;
+    pending: number;
+    approved: number;
+    suspended: number;
+    rejected: number;
+    removed: number;
+  };
+  referrals: {
+    codes_total: number;
+    codes_active: number;
+    carriers_attributed: number;
+  };
+  commission: AgencyCommissions;
+}
+
+/** One row of the consolidated report from GET /agency/reports/consolidated. */
+export interface ConsolidatedReportRow {
+  carrier: AgencyCarrierStats["carrier"];
+  claims_total: number;
+  by_status: Record<string, number>;
+  totals: MoneyBucket[];
+}
+
+/** The consolidated cross-carrier report. */
+export interface ConsolidatedReport {
+  agency_organization_id: string;
+  date_from: string | null;
+  date_to: string | null;
+  carrier_organization_id: string | null;
+  carriers: ConsolidatedReportRow[];
+  totals_by_currency: MoneyBucket[];
+  note: string;
+}
+
+/** One referral code from GET /agency/referrals. */
+export interface ReferralCode {
+  id: string;
+  organization_id: string;
+  code: string;
+  active: boolean;
+  uses_count: number;
+  created_by: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One referral code with the links it brought in. */
+export interface ReferralCodeDetail extends ReferralCode {
+  attributed_links: PartnerLink[];
+}
+
+/** Commission rule scopes (v2.1.0). */
+export type AgencyCarrierGrantScope = "view" | "manage";
+
+/** One commission rule from GET /agency/commission-rules. */
+export interface CommissionRule {
+  id: string;
+  agency_organization_id: string;
+  partner_link_id: string | null;
+  carrier_organization_id: string | null;
+  carrier_organization_name: string | null;
+  is_default: boolean;
+  rate_percent: string;
+  cap_cents: number | null;
+  basis: "paid";
+  active: boolean;
+  effective_from: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Earned commission for one carrier, per currency. The
+ * dashboard nests this shape directly under a carrier row;
+ * the commissions endpoint adds the carrier presenter. */
+export interface AgencyCommission {
+  rate_percent: string;
+  rule_id: string | null;
+  rule_is_default: boolean;
+  basis: "paid";
+  by_currency: {
+    currency: string;
+    payments: string;
+    earned: string;
+    capped: boolean;
+  }[];
+  note: string;
+}
+
+/** One row of GET /agency/commissions: the carrier plus its commission. */
+export interface AgencyCommissionRow extends AgencyCommission {
+  carrier: AgencyCarrierStats["carrier"];
+}
+
+/** Earned commission for the whole agency from GET /agency/commissions. */
+export interface AgencyCommissions {
+  agency_organization_id: string;
+  date_from: string | null;
+  date_to: string | null;
+  carriers: AgencyCommissionRow[];
+  totals_by_currency: {
+    currency: string;
+    payments: string;
+    earned: string;
+  }[];
+  note: string;
+}
+
+/** One per-carrier permission grant from GET /agency/partners/{link}/grants. */
+export interface AgencyCarrierGrant {
+  id: string;
+  partner_link_id: string;
+  user_id: number;
+  user_name: string | null;
+  user_email: string | null;
+  scope: AgencyCarrierGrantScope;
+  granted_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One carrier claim as the agency sees it (read-only). */
+export interface AgencyCarrierClaim {
+  id: string;
+  claim_reference: string;
+  organization_id: string;
+  shipment_id: string;
+  shipment_reference: string | null;
+  carrier_id: string | null;
+  claim_category: string;
+  status: string;
+  currency: string;
+  requested_amount: string;
+  accepted_amount: string | null;
+  recovered_amount: string;
+  submitted_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -121,7 +121,14 @@ class AuditService
         ?array $before = null,
         ?array $after = null,
     ): ?AuditLog {
-        $organizationId = $entity->getAttribute('organization_id');
+        // Most audited models carry organization_id directly.
+        // Agency models carry agency_organization_id instead
+        // (v2.1.0): the audit row belongs to the agency org.
+        // A grant carries neither; its org comes from its
+        // partner link.
+        $organizationId = $entity->getAttribute('organization_id')
+            ?? $entity->getAttribute('agency_organization_id')
+            ?? $entity->partnerLink?->agency_organization_id;
 
         if ($organizationId === null) {
             return null;

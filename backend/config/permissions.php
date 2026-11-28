@@ -78,6 +78,7 @@ return [
         Permission::ManageApiKeys->value,
         Permission::ManageIntegrations->value,
         Permission::ManageEnterprise->value,
+        Permission::ManageAgency->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -122,6 +123,7 @@ return [
         Permission::ManageApiKeys->value,
         Permission::ManageIntegrations->value,
         Permission::ManageEnterprise->value,
+        Permission::ManageAgency->value,
     ],
 
     OrganizationRole::Dispatcher->value => [

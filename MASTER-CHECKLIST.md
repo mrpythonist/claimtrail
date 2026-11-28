@@ -664,14 +664,14 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v2.1.0 — Agency Management
 
-- [ ] Partner accounts.
-- [ ] Multiple carrier management.
-- [ ] Agency dashboard.
-- [ ] Carrier-specific permissions.
-- [ ] Consolidated reporting.
-- [ ] Referral tracking.
-- [ ] Commission tracking.
-- [ ] Reseller workflows.
+- [x] Partner accounts.
+- [x] Multiple carrier management.
+- [x] Agency dashboard.
+- [x] Carrier-specific permissions.
+- [x] Consolidated reporting.
+- [x] Referral tracking.
+- [x] Commission tracking.
+- [x] Reseller workflows.
 
 ### v2.1.1 — White Label
 
