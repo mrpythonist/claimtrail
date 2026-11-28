@@ -2010,3 +2010,101 @@ export interface DocumentAccuracy {
     decided_fields: number;
   };
 }
+
+/** One public API key from GET /api-keys (v2.0.2). The full key is never returned: only the prefix. */
+export interface ApiKey {
+  id: string;
+  organization_id: string;
+  name: string;
+  kind: "standard" | "broker";
+  key_prefix: string;
+  scopes: string[];
+  status: "active" | "rotating" | "revoked";
+  broker_name: string | null;
+  grace_ends_at: string | null;
+  last_used_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** The response to creating or rotating a key: the full key, shown exactly once (v2.0.2). */
+export interface ApiKeyCreated {
+  key: ApiKey;
+  plain_text_key: string;
+}
+
+/** One webhook endpoint from GET /webhooks (v2.0.2). The URL and secret are never returned: only the host. */
+export interface WebhookEndpoint {
+  id: string;
+  organization_id: string;
+  name: string;
+  url_host: string | null;
+  events: string[];
+  status: "active" | "disabled";
+  last_delivered_at: string | null;
+  last_error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** The response to creating a webhook endpoint: the signing secret, shown exactly once (v2.0.2). */
+export interface WebhookEndpointCreated {
+  endpoint: WebhookEndpoint;
+  plain_text_secret: string;
+}
+
+/** One webhook delivery from GET /webhooks/{id}/deliveries (v2.0.2). */
+export interface WebhookDelivery {
+  id: string;
+  webhook_endpoint_id: string;
+  organization_id: string;
+  event_type: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  http_status: number | null;
+  response_body: string | null;
+  next_retry_at: string | null;
+  delivered_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** One modelled accounting provider from GET /accounting/providers (v2.0.2). Mock only: live_available is always false. */
+export interface AccountingProviderOption {
+  value: string;
+  label: string;
+  live_available: boolean;
+}
+
+/** One accounting connection from GET /accounting (v2.0.2). Mock only: live_available is always false. */
+export interface AccountingConnection {
+  id: string;
+  organization_id: string;
+  provider: string;
+  provider_label: string;
+  name: string;
+  status: "connected" | "disconnected";
+  company_name: string | null;
+  live_available: boolean;
+  last_sync_summary: AccountingSyncSummary | null;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** The dummy sync summary from POST /accounting/{id}/sync (v2.0.2). No money moves. */
+export interface AccountingSyncSummary {
+  exported: number;
+  skipped: number;
+  records: {
+    external_id: string;
+    claim_payment_id: string;
+    claim_id: string;
+    amount: string;
+    currency: string;
+    payment_method: string | null;
+    reference: string | null;
+    recorded_at: string | null;
+  }[];
+}

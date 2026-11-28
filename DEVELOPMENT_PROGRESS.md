@@ -6,37 +6,40 @@ chat (see "Push rule" below).
 
 ## Current checkpoint
 
-- **Last completed version:** v2.0.0 (Phase 6, Workflow
-  Engine). App version is now **2.0.0**. Phase 6 is underway
-  (v2.0.0 Workflow Engine done; v2.0.1 AI Document Processing,
-  v2.0.2 API and Integrations, v2.0.3 Enterprise Readiness
-  next). Phase 5 is complete (v1.5.0, v1.5.1, v1.5.2). Phase 4
-  is complete (v1.3.0, v1.3.1, v1.3.2, v1.3.3). Phase 3 is
-  complete (v1.2.3). Phase 0 is complete (v0.1.0, v0.3.0,
-  v0.4.0, v0.5.0, v0.6.0 done; v0.2.0 interviews deferred,
-  still open). What remains before real customers is Aqib's
-  launch decision: open signups vs closed pilot first (pilot
-  prep is ready, no pilot customer recruited), plus the
-  person-only items in `docs/PRODUCTION-LAUNCH-CHECKLIST.md`
-  (lawyer review, real Stripe, real mailer, hosting, domain).
+- **Last completed version:** v2.0.2 (Phase 6, API and
+  Integrations). App version is now **2.0.2**. Phase 6 is underway
+  (v2.0.0 Workflow Engine, v2.0.1 AI Document Processing, and
+  v2.0.2 API and Integrations done; v2.0.3 Enterprise Readiness
+  next, last of Phase 6). Phase 5 is complete (v1.5.0, v1.5.1,
+  v1.5.2). Phase 4 is complete (v1.3.0, v1.3.1, v1.3.2,
+  v1.3.3). Phase 3 is complete (v1.2.3). Phase 0 is complete
+  (v0.1.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0 done; v0.2.0
+  interviews deferred, still open). What remains before real
+  customers is Aqib's launch decision: open signups vs closed
+  pilot first (pilot prep is ready, no pilot customer
+  recruited), plus the person-only items in
+  `docs/PRODUCTION-LAUNCH-CHECKLIST.md` (lawyer review, real
+  Stripe, real mailer, hosting, domain).
 - **Repo:** https://github.com/mrpythonist/claimtrail — branch `main`, remote
-  head `10c9da56` (v2.0.0, pushed 2026-11-27 ~22:21 PKT after Aqib's
-  yes + approval card). 41 files in the v2.0.0 commit, read-back verified
-  (commit file list matches the manifest exactly).
-- **Tests at v2.0.0:** 672 backend (3877 assertions) + 432 frontend, all
-  passing. `npm run build` succeeds (77/77 pages). Live HTTP smoke test:
-  71/71 backend steps + 2/2 CLI checks on a fresh SQLite DB (see the
-  2026-11-27 v2.0.0 log entry). OpenAPI 196 paths, verified to match
-  the 258 live `api/v1` route operations exactly.
+  head `3763ad28` (v2.0.1, pushed 2026-11-27 ~23:10 PKT after Aqib's
+  yes + approval card). v2.0.2 is built and verified locally,
+  46 files, awaiting Aqib's yes to push.
+- **Tests at v2.0.2:** 738 backend (4240 assertions) + 458 frontend, all
+  passing. `npm run build` succeeds (79/79 pages). Live HTTP smoke test:
+  105/105 backend steps on a fresh SQLite DB (see the
+  2026-11-28 v2.0.2 log entry). OpenAPI 218 internal paths (287 ops)
+  plus 8 public paths (9 ops), verified to match the live routes
+  exactly on both surfaces.
 - **Local-only files now pushed with v1.1.0:** `MASTER-CHECKLIST.md`,
   `DEVELOPMENT_PROGRESS.md`, `docs/DEPLOYMENT.md` rode with the v1.1.0
   push. They are repo files now; keep them updated in place.
 
 ## Next task
 
-**v2.0.1 — AI Document Processing** (MASTER-CHECKLIST.md, Phase 6,
-Intelligent Automation) is the next build. **Status 2026-11-27:
-v2.0.0 PUSHED, head `10c9da56`, Phase 6 UNDERWAY.**
+**v2.0.3 — Enterprise Readiness** (MASTER-CHECKLIST.md, Phase 6,
+Intelligent Automation) is the next build. **Status 2026-11-28:
+v2.0.2 BUILT AND VERIFIED, 46 files, awaiting Aqib's yes to push;
+remote head still `3763ad28` (v2.0.1).**
 Before real customers, Aqib still has the launch decision: open
 signups vs closed pilot first (pilot prep ready, no pilot customer
 recruited) and the person-only items in
@@ -108,6 +111,169 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   Aqib's manual steps via the web UI.
 
 ## Daily log
+
+### 2026-11-28 — v2.0.2 API and Integrations built and verified (Phase 6 continues)
+
+- Gate check passed first (main agent): no other builder
+  was running, remote head on GitHub is `3763ad28`
+  (v2.0.1), and no `claimtrail-scratch-v202` existed.
+  Build started 2026-11-28 ~06:55 PKT on Aqib's "Start
+  v2.0.2 now" in the main chat (subagent). This is the
+  THIRD version of Phase 6 (Intelligent Automation).
+- Spec: MASTER-CHECKLIST.md v2.0.2 (9 items). All nine
+  verified and checked.
+- Backend (new): migration
+  `2026_11_28_101100_create_public_api_tables.php`
+  (`api_keys`, `webhook_endpoints`, `webhook_deliveries`,
+  `accounting_connections`); models `ApiKey` (statuses
+  active/rotating/revoked, kinds standard/broker,
+  `isUsable()`, `hasScope()`), `WebhookEndpoint` (url +
+  secret encrypted casts, `wants()`), `WebhookDelivery`
+  (pending/delivered/failed), `AccountingConnection`;
+  `config/public_api.php` (rate limit 120/min, rotation
+  grace 24h, webhook max attempts 5, retry delays
+  60/300/900/1800, timeout 10s, key prefix `ct_live_`);
+  `App\Permission` additions `ManageApiKeys` +
+  `ManageIntegrations` (owner, admin, operations manager,
+  dispatcher); `EntitlementService` `public_api` limit +
+  `authorizePublicApi()` (402); `NotificationType`
+  `WebhookDeliveryFailed`; `App\Accounting\AccountingProvider`
+  interface + `MockAccountingProvider` (mock_quickbooks /
+  mock_xero, deterministic dummy ids `QB-MOCK-*` /
+  `XERO-MOCK-*`, skips zero-amount payments) +
+  `AccountingProviderRegistry`; `MockBrokerAdapter` (claim
+  status to broker status mapping, ids `BRK-MOCK-*`);
+  `App\Services\ApiKeyService` (scopes, SHA-256 hash,
+  create/rotate/revoke, broker keys restricted to
+  claims:read + broker:status and must name the broker,
+  standard keys may not carry broker:status);
+  `App\Services\WebhookDispatcher` (events list, dispatch
+  per endpoint, `deliver()` single attempt with HMAC-SHA256
+  signature `sha256=` over `timestamp.body`, headers
+  X-ClaimTrail-Event/Delivery-Id/Timestamp/Signature,
+  bounded retries via `recordAttempt()`, failure
+  notification, `test()` synchronous delivery, presenters
+  hiding URL/secret); `App\Jobs\DeliverWebhook` (tries=1,
+  single attempt, re-dispatches the next attempt with the
+  retry delay — see the Fixed note below);
+  `App\Services\AccountingService` (connect/test/sync/
+  disconnect, sync exports recorded payments);
+  `App\Http\Middleware\AuthenticateApiKey` (Bearer to
+  SHA-256 lookup to `isUsable()` to plan gate 402 to
+  per-key Cache fixed-window rate limit to 429 with
+  Retry-After, updates last_used_at), registered as
+  `api-key` alias in `bootstrap/app.php`;
+  `App\Observers\WebhookEventObserver` (claim.created,
+  claim.updated + claim.paid, payment.recorded,
+  document.processed, workflow.run_completed; dispatch
+  best-effort, never throws), registered in
+  `AppServiceProvider` for Claim, ClaimPayment,
+  DocumentExtraction, WorkflowRun;
+  `App\Http\Controllers\Api\Public\V1\PublicApiController`
+  (`/api/public/v1`: index, list/show claims, store claim
+  via ClaimReferenceService with monthly cap enforced,
+  list/show shipments, list payments, list documents,
+  broker claim status via MockBrokerAdapter; reuses
+  ClaimResource/ShipmentResource; cross-org to 404);
+  `ApiKeyController` (internal CRUD, full key returned once
+  under `plain_text_key`), `WebhookController` (internal
+  CRUD + test + deliveries, secret returned once under
+  `plain_text_secret`, URL/secret never returned, only url
+  host), `AccountingController` (internal management).
+  `routes/api.php`: 9 public routes under `public/v1` +
+  19 management routes under `v1` (5 api-keys, 7 webhooks,
+  7 accounting). Public API access gated by plan (Starter+,
+  Free refused 402). This version does NOT build a
+  submission channel: no claim package is ever sent to a
+  broker; broker integrations are read/status only, and
+  the docs say so plainly.
+- Backend edits: `config/app.php` version 2.0.2;
+  `config/permissions.php`, `routes/api.php`,
+  `app/NotificationType.php` (new type; the `label()`
+  match needed the new arm — see Fixed), HealthCheckTest
+  version 2.0.1 to 2.0.2, NotificationTest count 29 to 30.
+  Pre-existing tests updated only for the version bump and
+  the new notification type.
+- Frontend: `src/lib/developers.ts` (typed client for keys,
+  webhooks, accounting), `src/lib/permissions.ts`
+  (`canManageApiKeys`, `canManageIntegrations`), developer
+  types in `src/lib/types.ts`, AppShell "Developers" nav
+  entry (Workspace section, manager-only), `/developers`
+  page (API keys tab with create/rotate/revoke and the
+  full key shown once, webhooks tab with create/test/
+  deliveries/enable/disable/delete and the secret shown
+  once, accounting tab with mock connect/test/sync/
+  disconnect). Tests: `src/lib/__tests__/developers.test.ts`
+  (10 tests: client envelope shapes, once-only key/secret,
+  scope and event lists, permission mapping).
+- Docs: new `docs/DEVELOPER-API.md` (auth, scopes,
+  rotation, webhooks with signature verification, rate
+  limits, worked curl examples) and
+  `docs/openapi-public.yaml` (public spec, 8 paths, 9
+  operations); API.md Public API section + management
+  endpoint tables; OpenAPI internal tag ApiKeys/Webhooks/
+  Accounting (12 new paths, 19 new operations, 5 new
+  schemas); CHANGELOG [2.0.2]. OpenAPI `info.version`
+  bumped to 2.0.2 and the description extended (it had
+  been stale since v1.5.1: the v1.5.2, v2.0.0, and v2.0.1
+  sentences were missing).
+- Verification findings, two real defects found by the
+  tests and fixed in this build (both with pinning tests):
+  (1) the new `webhook.delivery_failed` notification type
+  had no `label()` arm, so listing notification
+  preferences crashed with an unhandled match error; the
+  label is now "Webhook delivery failed" and the
+  preferences test counts 30 types. (2) Webhook retries
+  used `$this->release()`, which is a no-op on the sync
+  queue driver (SyncJob::release only marks the job
+  released), so a sync queue silently dropped retries; a
+  failed attempt now dispatches the next attempt as a
+  fresh job with the retry delay, which runs immediately
+  on the sync driver and honors the delay on a real queue.
+  The smoke also corrected two wrong assumptions in the
+  build (not code defects): a fresh Free org still allows
+  a small monthly claim cap (the Free-plan 402 applies to
+  the public API and key management, not to claim
+  creation), and the claim reference prefix is `CLM-`, not
+  `CT-`. One frontend defect was caught by the build before
+  the smoke ran: the developers page used `Alert` tone
+  `danger` (the component's tone is `error`), a `rows`
+  prop on `Table` (it takes children), and `Input`/`Select`
+  without the required `id` prop (Select takes `<option>`
+  children, not an `options` prop); all fixed.
+- Verification (all counts re-run after the fixes):
+  backend 738 tests / 4240 assertions, 0 failures (711 at
+  v2.0.1 + 27 new API/webhook/accounting tests); frontend
+  458 tests / 63 files, 0 failures; `npm run build`
+  succeeds (79/79 pages, including the new
+  /developers page). Live HTTP smoke test: 105/105 steps
+  on a fresh SQLite DB (see
+  `claimtrail-scratch-v202/smoke/`): key created with the
+  full key shown once and never again, scoped read OK,
+  out-of-scope 403, wrong key 401, cross-org 404, public
+  claim creation with write scope, rate limit 30/30 then
+  429 with Retry-After on a fresh key, rotation with the
+  old key working in grace and stopping after it (grace
+  window closed in the smoke DB to simulate time passing),
+  revocation 401 immediately, Free-plan 402 on the public
+  API and on key management after a downgrade, webhook
+  endpoint created with the secret shown once, a real
+  signed delivery to a local listener with the HMAC
+  verified in the smoke, test delivery, listener stopped
+  for 5 attempts then a recorded failure, listener
+  restarted and delivery working again, mock QuickBooks
+  connect/test/sync of a recorded payment to a `QB-MOCK-*`
+  dummy id, disconnect then sync refused 422, broker key
+  reading claims and broker status only (approved, mock).
+  OpenAPI 218 paths, verified to match the 287 live
+  `api/v1` route operations exactly, and the public spec
+  verified to match the 9 live `api/public/v1` route
+  operations exactly (diff script covers both surfaces).
+- Push status: **READY TO PUSH — built and verified, awaiting Aqib's
+  yes in the main chat. Verified by the main agent 2026-11-28 ~07:40
+  PKT: backend 738/4240, frontend 458, build 79/79, smoke 105/105,
+  OpenAPI exact on both surfaces, delta 46 files vs 3763ad28 (final
+  byte total in the push notice).**
 
 ### 2026-11-27 — v2.0.1 AI Document Processing built and verified (Phase 6 continues)
 
@@ -244,9 +410,13 @@ Aqib chose Phase 0 validation next; work starts with v0.1.0 on the
   fields agreed); cross-tenant isolation and a Free-plan
   402 on a second org. OpenAPI 206 paths, verified to
   match the 268 live `api/v1` route operations exactly.
-- Push status: for the main agent (not pushed by the
-  builder; awaiting Aqib's yes + approval card in the
-  main chat).
+- Push status: **PUSHED 2026-11-27 ~23:10 PKT, head `3763ad28`**
+  (41 files, read-back verified: branch head, commit message, file
+  list, and all 41 blob SHAs match the manifest exactly; 18
+  changed + 23 new vs the old head, remote tree 711 to 734 files).
+  Delta recomputed by the main agent before the push and identical
+  to the builder's manifest (1,125,591 bytes — the builder's figure
+  matched the recomputation exactly, no correction).
 
 ### 2026-11-27 — v2.0.0 Workflow Engine built and verified (Phase 6 starts)
 

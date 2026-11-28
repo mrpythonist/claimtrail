@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\CorrelationId;
 use App\Http\Middleware\ResolveOrganization;
 use App\Http\Middleware\ResponseTime;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'organization' => ResolveOrganization::class,
             'correlation' => CorrelationId::class,
+            'api-key' => AuthenticateApiKey::class,
         ]);
 
         $middleware->append(SecurityHeaders::class);

@@ -75,6 +75,8 @@ return [
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
         Permission::ManageDocumentProcessing->value,
+        Permission::ManageApiKeys->value,
+        Permission::ManageIntegrations->value,
     ],
 
     OrganizationRole::OperationsManager->value => [
@@ -116,6 +118,8 @@ return [
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
         Permission::ManageDocumentProcessing->value,
+        Permission::ManageApiKeys->value,
+        Permission::ManageIntegrations->value,
     ],
 
     OrganizationRole::Dispatcher->value => [
@@ -138,6 +142,8 @@ return [
         Permission::ManageReconciliation->value,
         Permission::ManageWorkflows->value,
         Permission::ManageDocumentProcessing->value,
+        Permission::ManageApiKeys->value,
+        Permission::ManageIntegrations->value,
         Permission::ViewAnalytics->value,
     ],
 

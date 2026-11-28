@@ -3,6 +3,134 @@
 All notable changes to ClaimTrail are documented here. The format follows
 Keep a Changelog, and the project follows semantic versioning.
 
+## [2.0.2] - 2026-11-28
+
+Phase 6, Intelligent Automation (the third version of
+Phase 6): API and integrations. Other systems can now talk
+to ClaimTrail through a separate public API surface, and
+ClaimTrail can push events out through webhooks: Bearer API
+keys with per-key scopes, rotation with a grace window, and
+revocation; HMAC-signed webhook deliveries with bounded
+retries and a delivery log; mock accounting connections and
+broker-scoped read/status access. Nothing here sends a claim
+package to a broker: there is still no submission channel,
+and broker integrations are read/status only. App version
+bumped to 2.0.2; OpenAPI at 218 paths (206 + 12 new paths,
+287 operations) for the internal surface, plus a new public
+spec at 8 paths, 9 operations. Verified: 738 backend tests /
+4,240 assertions, 0 failures; 458 frontend tests in 63
+files, 0 failures; build passes; live smoke 105/105.
+
+### Added
+
+- Public REST API (`/api/public/v1`, v2.0.2): a separate
+  surface from the internal `/api/v1` API the frontend
+  uses, authenticated by Bearer API key, never by user
+  session. Endpoints: index, list and show claims, create
+  a claim, list and show shipments, list payments, list
+  documents, and broker claim status. The monthly claim cap
+  still applies to public creation. See
+  `docs/DEVELOPER-API.md` and `docs/openapi-public.yaml`.
+- API keys (`App\Services\ApiKeyService`,
+  `App\Http\Controllers\Api\V1\ApiKeyController`): per-org,
+  stored hashed (SHA-256); the full key is shown exactly
+  once, at creation or rotation, and never again. Scopes
+  are `claims:read`, `claims:write`, `shipments:read`,
+  `payments:read`, `documents:read`, and `broker:status`.
+  Standard keys may not carry `broker:status`; broker keys
+  must name the broker and may only carry `claims:read`
+  and `broker:status`. Last-used tracking. A key with the
+  wrong scope gets 403; an unknown or revoked key gets
+  401; a key from another organization sees nothing
+  cross-tenant (unknown ids answer 404, never 403).
+- Key rotation and revocation: rotation issues a
+  replacement key and keeps the old key working for a 24
+  hour grace window (`public_api.rotation_grace_hours`),
+  then it stops; revocation is immediate and permanent.
+- Per-key rate limiting on the public surface
+  (`App\Http\Middleware\AuthenticateApiKey`): 120 requests
+  per minute by default (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`),
+  429 with a `Retry-After` header. The limit is per key,
+  not per organization.
+- Plan gate for the public surface
+  (`EntitlementService::authorizePublicApi`): the Free plan
+  is refused with 402 (`plan_limit_exceeded`), following
+  the existing pattern, for key management, webhook
+  management, accounting management, and every public API
+  call.
+- Permissions `manage-api-keys` and `manage-integrations`
+  (owner, admin, operations manager, dispatcher),
+  following the existing pattern, with matching frontend
+  gates (`canManageApiKeys`, `canManageIntegrations`) and
+  a Developers page (`/developers`) with API key, webhook,
+  and accounting tabs.
+- Webhooks (`App\Services\WebhookDispatcher`,
+  `App\Jobs\DeliverWebhook`): org-configured endpoints with
+  a per-endpoint HMAC signing secret, stored encrypted and
+  shown exactly once, at creation. Event types are
+  `claim.created`, `claim.updated`, `claim.paid`,
+  `payment.recorded`, `document.processed`, and
+  `workflow.run_completed`. Deliveries are real HTTP POSTs
+  with an HMAC-SHA256 signature over the raw body in
+  `X-ClaimTrail-Signature` (`sha256=<hex>`), plus
+  `X-ClaimTrail-Event`, `X-ClaimTrail-Delivery-Id`, and
+  `X-ClaimTrail-Timestamp`. A 2xx response delivers;
+  anything else retries with backoff, at most 5 attempts
+  (`public_api.webhook_max_attempts`, delays 60, 300, 900,
+  1800 seconds), then the delivery is recorded `failed`.
+  The delivery log per endpoint is the audit trail. A
+  `webhook.test` event can be sent on demand. A disabled
+  endpoint receives nothing. The observer
+  (`App\Observers\WebhookEventObserver`) dispatches
+  best-effort and never throws: a webhook failure cannot
+  break the request that fired the event.
+- A new notification type, `webhook.delivery_failed`, sent
+  to the organization's integration managers when a
+  delivery gives up after its retry budget.
+- Accounting integrations (`App\Accounting\AccountingProvider`,
+  `App\Accounting\MockAccountingProvider`,
+  `App\Services\AccountingService`): a provider interface
+  with a mock provider behind it. Only mock QuickBooks and
+  mock Xero exist, modelled schema-only, with deterministic
+  dummy ids (`QB-MOCK-*`, `XERO-MOCK-*`); a sync exports
+  recorded payments to the provider's dummy shape and a
+  zero-amount payment is skipped, never exported. No live
+  credentials, no real sync, no money moves. A real provider
+  is a later swap.
+- Authorized broker integrations
+  (`App\Accounting\MockBrokerAdapter`): brokers as API
+  consumers through broker-scoped keys, plus a mock
+  broker-system adapter for status modelling (claim status
+  to broker status: potential / evidence_required /
+  ready_to_submit to not_submitted, submitted to received,
+  under_review to under_review, accepted to approved,
+  partially_accepted to partially_approved, rejected to
+  denied, paid to paid, closed to closed). Read/status
+  access only, labelled mock. This version does not build a
+  submission channel: no claim package is ever sent to a
+  broker, and the docs say so plainly.
+- Developer documentation: `docs/DEVELOPER-API.md` (auth,
+  scopes, rotation, webhooks with signature verification,
+  rate limits, worked curl examples) and a public OpenAPI
+  spec (`docs/openapi-public.yaml`), plus a management
+  section in `docs/API.md` and the new endpoints and
+  schemas in `docs/openapi.yaml`.
+
+### Fixed
+
+- The new `webhook.delivery_failed` notification type had
+  no `label()` arm, so listing notification preferences
+  crashed with an unhandled match error. The label is now
+  "Webhook delivery failed", and the preferences test
+  counts 30 types instead of 29.
+- Webhook retries used `$this->release()`, which is a no-op
+  on the sync queue driver (SyncJob::release only marks
+  the job released), so a sync queue silently dropped
+  retries. A failed attempt now dispatches the next attempt
+  as a fresh job with the retry delay: it runs immediately
+  on the sync driver and honors the delay on a real queue.
+  The retry budget is still bounded at 5 attempts.
+
 ## [2.0.1] - 2026-11-27
 
 Phase 6, Intelligent Automation (the second version of

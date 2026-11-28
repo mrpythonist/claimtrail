@@ -68,6 +68,24 @@ a login page.
 - Login, forgot password, reset password: 5 per minute per IP.
 - Resend verification email: 3 per minute per user.
 
+## Public API (v2.0.2)
+
+A separate surface for other systems, at `/api/public/v1`,
+authenticated by Bearer API key, never by user session. Keys
+are managed through this internal API (`/api-keys`,
+`/webhooks`, `/accounting`) or the Developers page
+(`/developers`); the full key and the webhook signing secret
+are shown exactly once, at creation or rotation, and never
+again. The public surface is rate limited per key (120
+requests per minute, 429 with `Retry-After`) and gated by
+plan: the Free plan is refused with 402. Broker integrations
+are read/status access only: this version does not send claim
+packages to a broker, and no submission channel exists.
+Accounting providers are mock only (QuickBooks / Xero
+modelled schema-only). Full guide with worked curl examples
+and webhook signature verification: `docs/DEVELOPER-API.md`.
+Machine-readable definition: `docs/openapi-public.yaml`.
+
 ## Endpoints
 
 ### Auth
@@ -839,6 +857,50 @@ sends a `document.needs_verification` notification.
 | POST | `/documents/{extraction}/reject` | Yes + org header | Reject an extraction as not usable. Body: `reason`. A verified extraction cannot be rejected. Requires `manage-document-processing`; Free plan refused with 402. |
 | POST | `/documents/{extraction}/link-shipment` | Yes + org header | Link a shipment by hand. Body: `shipment_id`. Records confidence 100.00 and method `manual`. Requires `manage-document-processing`; Free plan refused with 402. |
 | POST | `/documents/{extraction}/dismiss-match` | Yes + org header | Dismiss the reference match: a human decided this document belongs to no shipment. Requires `manage-document-processing`; Free plan refused with 402. |
+
+### API and Integrations (v2.0.2)
+
+The developer surface: public API keys, webhook endpoints,
+and mock accounting connections. The public API itself is a
+separate surface (`/api/public/v1`, Bearer API key), fully
+documented in docs/DEVELOPER-API.md and
+docs/openapi-public.yaml. Managing keys needs
+`manage-api-keys`; managing endpoints and connections needs
+`manage-integrations` (both: owner, admin, operations
+manager, dispatcher). Every write endpoint on the Free plan
+is refused with 402. The full key is returned exactly once,
+at creation or rotation, and never again; the webhook
+signing secret is returned exactly once, at creation, and
+never again. Webhook deliveries are real HTTP attempts
+signed with HMAC-SHA256; failed deliveries retry with
+backoff, at most 5 attempts, then are recorded failed.
+Accounting providers are mock only (QuickBooks / Xero
+modelled schema-only): no live credentials, no real sync, no
+money moves. Broker integrations are read/status access
+only: this version does not send claim packages to a broker,
+and no submission channel exists.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET | `/api-keys` | Yes + org header | List API keys, newest first. The full key is never returned: only the prefix. Requires `manage-api-keys`. |
+| POST | `/api-keys` | Yes + org header | Create an API key. Body: `name`, `scopes`, optional `kind` (`standard`, `broker`), `broker_name` (required for broker keys). Returns the key plus `plain_text_key`, the full key shown exactly once (201). Standard keys may not carry `broker:status`. Requires `manage-api-keys`; Free plan refused with 402. |
+| GET | `/api-keys/{apiKey}` | Yes + org header | One API key. The full key is never returned. Requires `manage-api-keys`. |
+| POST | `/api-keys/{apiKey}/rotate` | Yes + org header | Rotate a key. The old key keeps working for a 24 hour grace window, then stops. Returns the replacement key plus `plain_text_key`, shown exactly once. Requires `manage-api-keys`; Free plan refused with 402. |
+| DELETE | `/api-keys/{apiKey}` | Yes + org header | Revoke a key. Immediate and permanent. Requires `manage-api-keys`. |
+| GET | `/webhooks` | Yes + org header | List webhook endpoints, newest first. The URL and secret are never returned: only the host. Requires `manage-integrations`. |
+| POST | `/webhooks` | Yes + org header | Create a webhook endpoint. Body: `name`, `url`, `events` (empty means every event type). Returns the endpoint plus `plain_text_secret`, the signing secret shown exactly once (201). Requires `manage-integrations`; Free plan refused with 402. |
+| GET | `/webhooks/{webhook}` | Yes + org header | One webhook endpoint. Requires `manage-integrations`. |
+| PUT | `/webhooks/{webhook}` | Yes + org header | Update an endpoint's name, events, or status. The URL cannot be changed. Requires `manage-integrations`; Free plan refused with 402. |
+| DELETE | `/webhooks/{webhook}` | Yes + org header | Delete an endpoint and its delivery history. Requires `manage-integrations`. |
+| POST | `/webhooks/{webhook}/test` | Yes + org header | Send a `webhook.test` delivery immediately and return the delivery row. Requires `manage-integrations`; Free plan refused with 402. |
+| GET | `/webhooks/{webhook}/deliveries` | Yes + org header | The delivery log for one endpoint, newest first. Requires `manage-integrations`. |
+| GET | `/accounting/providers` | Yes + org header | The modelled providers: mock QuickBooks and mock Xero. Both mock only: `live_available` is always false. Requires `manage-integrations`. |
+| GET | `/accounting` | Yes + org header | List accounting connections, newest first. Requires `manage-integrations`. |
+| POST | `/accounting` | Yes + org header | Connect a mock provider. Body: `provider` (`mock_quickbooks`, `mock_xero`), `name`, `settings.company_name` (required). Returns the connection (201). Requires `manage-integrations`; Free plan refused with 402. |
+| GET | `/accounting/{accounting}` | Yes + org header | One accounting connection. Requires `manage-integrations`. |
+| POST | `/accounting/{accounting}/test` | Yes + org header | Test the connection's settings through its provider. The connection row is not changed. Requires `manage-integrations`; Free plan refused with 402. |
+| POST | `/accounting/{accounting}/sync` | Yes + org header | Run a mock sync: export recorded payments to the provider's dummy shape. Body: optional `payment_ids`. A zero-amount payment is skipped. No money moves. Requires `manage-integrations`; Free plan refused with 402. A disconnected connection is refused with 422. |
+| DELETE | `/accounting/{accounting}` | Yes + org header | Disconnect a connection. History stays readable. Requires `manage-integrations`. |
 
 ## Example: register, create an organization, invite someone
 

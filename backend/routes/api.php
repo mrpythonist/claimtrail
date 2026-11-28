@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\Public\V1\PublicApiController;
+use App\Http\Controllers\Api\V1\AccountingController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AnalyticsEventController;
+use App\Http\Controllers\Api\V1\ApiKeyController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
@@ -17,6 +20,7 @@ use App\Http\Controllers\Api\V1\CommunicationDeliveryController;
 use App\Http\Controllers\Api\V1\CustomFieldController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DeadlineSettingController;
+use App\Http\Controllers\Api\V1\DocumentProcessingController;
 use App\Http\Controllers\Api\V1\DriverEvidenceLinkController;
 use App\Http\Controllers\Api\V1\DriverEvidenceSubmissionController;
 use App\Http\Controllers\Api\V1\EmailIntakeWebhookController;
@@ -55,7 +59,7 @@ use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\SyncRunController;
 use App\Http\Controllers\Api\V1\TmsIntegrationController;
 use App\Http\Controllers\Api\V1\TmsSyncRunController;
-use App\Http\Controllers\Api\V1\DocumentProcessingController;
+use App\Http\Controllers\Api\V1\WebhookController;
 use App\Http\Controllers\Api\V1\WorkflowController;
 use Illuminate\Support\Facades\Route;
 
@@ -521,6 +525,47 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
             Route::post('/documents/{extraction}/reject', [DocumentProcessingController::class, 'reject']);
             Route::post('/documents/{extraction}/link-shipment', [DocumentProcessingController::class, 'linkShipment']);
             Route::post('/documents/{extraction}/dismiss-match', [DocumentProcessingController::class, 'dismissMatch']);
+
+            // Public API keys (v2.0.2): Bearer keys for the
+            // public API. Managing keys needs manage-api-keys
+            // (owner, admin, operations manager, dispatcher)
+            // and the Starter plan or better: the Free plan is
+            // refused with a 402. The full key is returned
+            // exactly once, at creation or rotation.
+            Route::get('/api-keys', [ApiKeyController::class, 'index']);
+            Route::post('/api-keys', [ApiKeyController::class, 'store']);
+            Route::get('/api-keys/{apiKey}', [ApiKeyController::class, 'show']);
+            Route::post('/api-keys/{apiKey}/rotate', [ApiKeyController::class, 'rotate']);
+            Route::delete('/api-keys/{apiKey}', [ApiKeyController::class, 'destroy']);
+
+            // Webhook endpoints (v2.0.2): organization webhook
+            // subscriptions and delivery history. Managing
+            // endpoints needs manage-integrations (owner,
+            // admin, operations manager, dispatcher) and the
+            // Starter plan or better. The signing secret is
+            // returned once, at creation; the target URL is
+            // stored encrypted and never returned.
+            Route::get('/webhooks', [WebhookController::class, 'index']);
+            Route::post('/webhooks', [WebhookController::class, 'store']);
+            Route::get('/webhooks/{webhook}', [WebhookController::class, 'show']);
+            Route::put('/webhooks/{webhook}', [WebhookController::class, 'update']);
+            Route::delete('/webhooks/{webhook}', [WebhookController::class, 'destroy']);
+            Route::post('/webhooks/{webhook}/test', [WebhookController::class, 'test']);
+            Route::get('/webhooks/{webhook}/deliveries', [WebhookController::class, 'deliveries']);
+
+            // Accounting integrations (v2.0.2): mock provider
+            // connections (QuickBooks / Xero modelled
+            // schema-only). Managing connections needs
+            // manage-integrations and the Starter plan or
+            // better. A sync exports recorded payments to the
+            // provider's dummy shape; no money moves.
+            Route::get('/accounting/providers', [AccountingController::class, 'providers']);
+            Route::get('/accounting', [AccountingController::class, 'index']);
+            Route::post('/accounting', [AccountingController::class, 'store']);
+            Route::get('/accounting/{accounting}', [AccountingController::class, 'show']);
+            Route::post('/accounting/{accounting}/test', [AccountingController::class, 'test']);
+            Route::post('/accounting/{accounting}/sync', [AccountingController::class, 'sync']);
+            Route::delete('/accounting/{accounting}', [AccountingController::class, 'destroy']);
         });
     });
 
@@ -549,4 +594,23 @@ Route::prefix('v1')->middleware('correlation')->group(function () {
         ->middleware('throttle:30,1,driver-evidence');
     Route::post('/driver-evidence/{token}/submit', [DriverEvidenceSubmissionController::class, 'submit'])
         ->middleware('throttle:10,1,driver-evidence-submit');
+});
+
+// Public REST API (v2.0.2): a separate surface from the
+// internal /api/v1 API the frontend uses. Authenticated by
+// Bearer API key (the api-key middleware), never by user
+// session. Keys are scoped per endpoint, rate limited per
+// key, and refused with a 402 on the Free plan. The
+// /broker routes come before /claims/{claim} so a broker
+// status lookup is never read as a claim id.
+Route::prefix('public/v1')->middleware(['correlation', 'api-key'])->group(function () {
+    Route::get('/', [PublicApiController::class, 'index']);
+    Route::get('/claims', [PublicApiController::class, 'listClaims']);
+    Route::post('/claims', [PublicApiController::class, 'storeClaim']);
+    Route::get('/broker/claims/{claim}/status', [PublicApiController::class, 'brokerClaimStatus']);
+    Route::get('/claims/{claim}', [PublicApiController::class, 'showClaim']);
+    Route::get('/shipments', [PublicApiController::class, 'listShipments']);
+    Route::get('/shipments/{shipment}', [PublicApiController::class, 'showShipment']);
+    Route::get('/payments', [PublicApiController::class, 'listPayments']);
+    Route::get('/documents', [PublicApiController::class, 'listDocuments']);
 });

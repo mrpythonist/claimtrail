@@ -617,15 +617,15 @@ Goal: Build a complete, production-ready, profitable B2B SaaS platform.
 
 ### v2.0.2 — API and Integrations
 
-- [ ] Public REST API.
-- [ ] API authentication.
-- [ ] API keys and scopes.
-- [ ] Key rotation and revocation.
-- [ ] Webhooks.
-- [ ] Webhook retries.
-- [ ] Accounting integrations.
-- [ ] Authorized broker integrations.
-- [ ] Developer documentation.
+- [x] Public REST API.
+- [x] API authentication.
+- [x] API keys and scopes.
+- [x] Key rotation and revocation.
+- [x] Webhooks.
+- [x] Webhook retries.
+- [x] Accounting integrations.
+- [x] Authorized broker integrations.
+- [x] Developer documentation.
 
 ### v2.0.3 — Enterprise Readiness
 

@@ -1,0 +1,536 @@
+openapi: 3.0.3
+info:
+  title: ClaimTrail Public API
+  version: 2.0.2
+  description: >-
+    The public REST API for ClaimTrail (v2.0.2): a separate
+    surface from the internal API the frontend uses
+    (docs/openapi.yaml). It is versioned (/api/public/v1) and
+    authenticated by Bearer API key, never by user session.
+    Keys are created, rotated, and revoked through the
+    internal API (GET/POST /api/v1/api-keys) and the
+    Developers page; the full key is shown exactly once, at
+    creation or rotation, and never again.
+
+    Scopes: every endpoint lists the scope it needs. A key
+    with the wrong scope gets 403; an unknown or revoked key
+    gets 401; a key from another organization sees nothing
+    cross-tenant (unknown ids answer 404, never 403).
+    Broker keys carry only claims:read and broker:status and
+    must name the broker; standard keys may not carry
+    broker:status.
+
+    Rate limiting is per key: 120 requests per minute by
+    default. A key over the limit gets 429 with a Retry-After
+    header in seconds.
+
+    Plan gate: the public API needs the Starter plan or
+    better. The Free plan is refused with 402
+    (plan_limit_exceeded). Key rotation keeps the old key
+    working for a 24 hour grace window, then it stops;
+    revocation is immediate and permanent.
+
+    Broker integrations are read/status access only: this
+    version does not send claim packages to a broker, and no
+    submission channel exists. Accounting integrations are
+    mock only (QuickBooks / Xero modelled schema-only): no
+    live credentials, no real sync, no money moves. See
+    docs/DEVELOPER-API.md for worked curl examples and
+    webhook signature verification.
+servers:
+  - url: http://localhost:8000/api/public/v1
+    description: Local development
+security:
+  - apiKeyAuth: []
+tags:
+  - name: Public
+  - name: Broker
+paths:
+  /:
+    get:
+      tags: [Public]
+      summary: Public API index
+      description: >-
+        The key's identity, scopes, and the rate limit that
+        applies to it. Any scope may call it.
+      responses:
+        "200":
+          description: Public API index
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      service: { type: string }
+                      version: { type: string }
+                      app_version: { type: string }
+                      organization_id: { type: string, format: uuid }
+                      key_id: { type: string, format: uuid }
+                      key_kind: { type: string, enum: [standard, broker] }
+                      scopes:
+                        type: array
+                        items: { type: string }
+                      rate_limit_per_minute: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /claims:
+    get:
+      tags: [Public]
+      summary: List claims
+      description: >-
+        The organization's claims, newest first, scoped to the
+        key's organization. Requires claims:read.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [potential, evidence_required, under_review, ready_to_submit, submitted, accepted, partially_accepted, rejected, paid, closed]
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Claims
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicClaim"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [Public]
+      summary: Create a claim
+      description: >-
+        Create a claim in the key's organization. The monthly
+        claim cap still applies: above it the creation is
+        refused with 402. Requires claims:write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipment_id, requested_amount]
+              properties:
+                shipment_id: { type: string, format: uuid }
+                claim_category:
+                  type: string
+                  enum: [detention, layover, tonu, lumper, additional_stop, additional_miles, other]
+                description: { type: string, maxLength: 5000 }
+                requested_amount: { type: number, minimum: 0.01 }
+                currency: { type: string, size: 3 }
+                internal_notes: { type: string, maxLength: 5000 }
+                external_broker_reference: { type: string, maxLength: 255 }
+                submission_deadline_at: { type: string, format: date }
+      responses:
+        "201":
+          description: Claim created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicClaim"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /claims/{claim}:
+    get:
+      tags: [Public]
+      summary: Get one claim
+      description: >-
+        One claim. A claim from another organization answers
+        404, never 403. Requires claims:read.
+      parameters:
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Claim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicClaim"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /broker/claims/{claim}/status:
+    get:
+      tags: [Broker]
+      summary: Broker claim status
+      description: >-
+        The claim's status as a broker would see it, modelled
+        from the claim as recorded in ClaimTrail. Mock only:
+        live_available is always false, no broker system is
+        contacted. Requires broker:status, so only broker keys
+        may call it.
+      parameters:
+        - name: claim
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Broker claim status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BrokerClaimStatus"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /shipments:
+    get:
+      tags: [Public]
+      summary: List shipments
+      description: >-
+        The organization's shipments, newest first. Requires
+        shipments:read.
+      parameters:
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Shipments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicShipment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /shipments/{shipment}:
+    get:
+      tags: [Public]
+      summary: Get one shipment
+      description: >-
+        One shipment. A shipment from another organization
+        answers 404, never 403. Requires shipments:read.
+      parameters:
+        - name: shipment
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Shipment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicShipment"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /payments:
+    get:
+      tags: [Public]
+      summary: List payments
+      description: >-
+        Recorded claim payments, newest first. A payment
+        records what the organization says it received; no
+        money moves through this API. Requires payments:read.
+      parameters:
+        - name: claim_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicPayment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /documents:
+    get:
+      tags: [Public]
+      summary: List documents
+      description: >-
+        Processed document extractions, newest first. Requires
+        documents:read.
+      parameters:
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicDocument"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: >-
+        A public API key (ct_live_...), created through the
+        internal API or the Developers page. Send it as
+        `Authorization: Bearer <key>`.
+  parameters:
+    ApiKeyHeader:
+      name: Authorization
+      in: header
+      required: true
+      schema: { type: string }
+      description: "Bearer <api key>"
+  responses:
+    Unauthorized:
+      description: Unknown, revoked, or expired key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    Forbidden:
+      description: The key lacks the scope this endpoint needs
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    NotFound:
+      description: Unknown id (including ids from another organization)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    PlanLimitExceeded:
+      description: The organization is on the Free plan, which cannot use the public API
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              error: { type: string, example: plan_limit_exceeded }
+    RateLimited:
+      description: The key is over its per-minute rate limit; retry after the Retry-After seconds
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+  schemas:
+    PaginationMeta:
+      type: object
+      properties:
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    PublicClaim:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        claim_reference: { type: string, description: "Per-organization reference, e.g. CLM-2026-0001" }
+        shipment_id: { type: string, format: uuid }
+        shipment:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            internal_reference: { type: string }
+            broker_or_customer_name: { type: string }
+            status: { type: string }
+        claim_category: { type: string, enum: [detention, layover, tonu, lumper, additional_stop, additional_miles, other] }
+        claim_category_label: { type: string }
+        description: { type: string, nullable: true }
+        requested_amount: { type: string, description: Decimal string }
+        accepted_amount: { type: string, nullable: true, description: Decimal string, set only on acceptance }
+        recovered_amount: { type: string, nullable: true, description: Decimal string, set only by payment recording }
+        currency: { type: string }
+        internal_notes: { type: string, nullable: true }
+        external_broker_reference: { type: string, nullable: true }
+        submission_deadline_at: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [potential, evidence_required, under_review, ready_to_submit, submitted, accepted, partially_accepted, rejected, paid, closed] }
+        status_label: { type: string }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        rejected_at: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        rejection_reason: { type: string, nullable: true }
+        payment_reference: { type: string, nullable: true }
+        custom_field_values: { type: object }
+        allowed_transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string }
+              label: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PublicShipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        internal_reference: { type: string }
+        external_load_reference: { type: string, nullable: true }
+        broker_or_customer_name: { type: string }
+        carrier_id: { type: string, format: uuid, nullable: true }
+        carrier:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        driver_name: { type: string, nullable: true }
+        driver_contact: { type: string, nullable: true }
+        pickup_location: { type: string, nullable: true }
+        delivery_location: { type: string, nullable: true }
+        pickup_appointment: { type: string, format: date-time, nullable: true }
+        delivery_appointment: { type: string, format: date-time, nullable: true }
+        actual_arrival_at: { type: string, format: date-time, nullable: true }
+        actual_departure_at: { type: string, format: date-time, nullable: true }
+        base_rate: { type: string, nullable: true, description: Decimal string }
+        currency: { type: string }
+        status: { type: string }
+        status_label: { type: string }
+        notes: { type: string, nullable: true }
+        custom_field_values: { type: object }
+        events_count: { type: integer }
+        evidence_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PublicPayment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        claim_id: { type: string, format: uuid }
+        amount: { type: string, description: Decimal string }
+        currency: { type: string }
+        payment_method: { type: string }
+        payment_reference: { type: string, nullable: true }
+        paid_at: { type: string, format: date }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PublicDocument:
+      type: object
+      description: >-
+        A processed document extraction summary. The extracted
+        text and the document file stay in the internal API.
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        classification: { type: string }
+        status: { type: string }
+        shipment_id: { type: string, format: uuid, nullable: true, description: Matched shipment, if any }
+        is_duplicate: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    BrokerClaimStatus:
+      type: object
+      description: >-
+        The claim's status as a broker would see it, modelled
+        from the claim as recorded in ClaimTrail. Mock only.
+      properties:
+        broker_name: { type: string }
+        broker_reference: { type: string, description: "Deterministic dummy id, BRK-MOCK-*" }
+        claim_reference: { type: string }
+        claim_status: { type: string }
+        broker_status: { type: string, enum: [not_submitted, received, under_review, approved, partially_approved, denied, paid, closed] }
+        external_broker_reference: { type: string, nullable: true }
+        requested_amount: { type: string, description: Decimal string }
+        accepted_amount: { type: string, nullable: true, description: Decimal string }
+        recovered_amount: { type: string, nullable: true, description: Decimal string }
+        currency: { type: string }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        live_available: { type: boolean, description: Always false in this version }
+        note: { type: string }

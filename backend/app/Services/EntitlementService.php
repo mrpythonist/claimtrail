@@ -102,7 +102,7 @@ class EntitlementService
      * The resolved numeric limits for a plan key at a carrier
      * count. Agency claims and storage scale per carrier.
      *
-     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool}
+     * @return array{claims_per_month: int|null, members: int|null, storage_bytes: int|null, pdf_packages: bool, reports: bool, workflows: bool, document_processing: bool, public_api: bool}
      */
     public function limitsForPlan(string $plan, int $carriers): array
     {
@@ -129,6 +129,7 @@ class EntitlementService
             'reports' => $plan !== PlanCatalog::FREE,
             'workflows' => $plan !== PlanCatalog::FREE,
             'document_processing' => $plan !== PlanCatalog::FREE,
+            'public_api' => $plan !== PlanCatalog::FREE,
         ];
     }
 
@@ -453,6 +454,41 @@ class EntitlementService
             'Document processing is not included in the '.$limits['plan_name'].' plan.'
                 .($upgrade !== null
                     ? ' Upgrade to '.$upgrade['name'].' to use document processing.'
+                    : ''),
+        );
+    }
+
+    /**
+     * Refuse public API access on the Free plan. A Free
+     * organization may not create API keys, call the public
+     * API, or manage webhook and accounting integrations.
+     * Reading nothing is lost by the refusal: keys and
+     * endpoints created before a downgrade stay listed, but
+     * the public surface answers 402 until the plan is
+     * upgraded again.
+     *
+     * @throws EntitlementExceededException
+     */
+    public function authorizePublicApi(Organization $organization): void
+    {
+        $limits = $this->limits($organization);
+
+        if ($limits['public_api']) {
+            return;
+        }
+
+        $upgrade = $this->nextPlanFor('public_api', $organization);
+
+        throw new EntitlementExceededException(
+            'public_api',
+            null,
+            0,
+            $limits['plan'],
+            $upgrade['key'] ?? null,
+            $upgrade['name'] ?? null,
+            'The public API is not included in the '.$limits['plan_name'].' plan.'
+                .($upgrade !== null
+                    ? ' Upgrade to '.$upgrade['name'].' to use the public API.'
                     : ''),
         );
     }

@@ -156,6 +156,26 @@ enum Permission: string
     // refused with a 402.
     case ManageDocumentProcessing = 'manage-document-processing';
 
+    // Public API keys (enforced from v2.0.2): creating,
+    // rotating, and revoking Bearer keys for the public API,
+    // and reading the key list. Owner, admin, operations
+    // manager, and dispatcher. Keys are sensitive: the full
+    // key is shown exactly once at creation and never again,
+    // and no member without this permission may list keys.
+    // Key management needs the Starter plan or better: the
+    // Free plan is refused with a 402.
+    case ManageApiKeys = 'manage-api-keys';
+
+    // Integrations (enforced from v2.0.2): webhook endpoint
+    // subscriptions and delivery history, mock accounting
+    // provider connections, and the mock broker adapter.
+    // Owner, admin, operations manager, and dispatcher.
+    // Webhook URLs and signing secrets are stored encrypted
+    // and never returned by the API. Integrations need the
+    // Starter plan or better: the Free plan is refused
+    // with a 402.
+    case ManageIntegrations = 'manage-integrations';
+
     /**
      * Every permission value, for validation and documentation.
      *

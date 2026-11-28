@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ClaimTrail API
-  version: 2.0.1
+  version: 2.0.2
   description: >
     Multi-tenant transportation revenue recovery API. Milestones 1, 2,
     3, and 4 cover authentication, organizations, members, invitations,
@@ -48,7 +48,28 @@ info:
     reports. Version 1.5.1 adds advanced analytics: recovery
     and rejection rates, average submission and payment times,
     broker, carrier, and event-type performance, monthly and
-    yearly comparisons, and CSV exports.
+    yearly comparisons, and CSV exports. Version 1.5.2 adds
+    operational intelligence: detention and facility trends,
+    rejection reasons, missing evidence trends, broker trends,
+    revenue leakage, and operational recommendations, all
+    computed only from the organization's own recorded claims
+    and payments. Version 2.0.0 adds the workflow engine:
+    workflow configuration, triggers, conditional rules,
+    automated evidence and deadline checks, automated claim
+    preparation as a local draft PDF only, escalation, human
+    approval checkpoints, and execution history. Version 2.0.1
+    adds AI document processing: a local text-based OCR
+    provider, rule-based classification, field extraction with
+    per-field confidence, shipment matching, duplicate
+    detection, human verification, and accuracy monitoring as
+    measured agreement only. Version 2.0.2 adds the developer
+    surface managed through this API: public API keys with
+    scopes, rotation, and revocation; webhook endpoints with
+    HMAC-signed deliveries, bounded retries, and a delivery
+    log; and mock accounting connections (QuickBooks and Xero
+    modelled schema-only). The public API itself is a separate
+    surface, /api/public/v1, documented in
+    docs/openapi-public.yaml and docs/DEVELOPER-API.md.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
@@ -87,6 +108,9 @@ tags:
   - name: Operational Intelligence
   - name: Workflows
   - name: DocumentProcessing
+  - name: ApiKeys
+  - name: Webhooks
+  - name: Accounting
 paths:
   /auth/register:
     post:
@@ -8054,6 +8078,599 @@ paths:
         "402": { $ref: "#/components/responses/PlanLimitExceeded" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api-keys:
+    get:
+      tags: [ApiKeys]
+      summary: List API keys
+      description: >-
+        The organization's public API keys, newest first. The
+        full key is never returned: only the prefix. Requires
+        manage-api-keys.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [ApiKeys]
+      summary: Create an API key
+      description: >-
+        Issue a Bearer key for the public API. The full key is
+        returned exactly once, in plain_text_key, and never
+        again. Keys are stored hashed (SHA-256). Standard keys
+        may not carry broker:status; broker keys must name the
+        broker and may only carry claims:read and broker:status.
+        Requires manage-api-keys; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              properties:
+                name: { type: string, maxLength: 100 }
+                kind: { type: string, enum: [standard, broker], default: standard }
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [claims:read, claims:write, shipments:read, payments:read, documents:read, broker:status]
+                broker_name: { type: string, maxLength: 255 }
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+                  plain_text_key:
+                    type: string
+                    description: The full key, shown exactly once
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api-keys/{apiKey}:
+    get:
+      tags: [ApiKeys]
+      summary: Get one API key
+      description: >-
+        One key. The full key is never returned. Requires
+        manage-api-keys.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: apiKey
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: API key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [ApiKeys]
+      summary: Revoke an API key
+      description: >-
+        Revocation is immediate and permanent. Requires
+        manage-api-keys.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: apiKey
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: API key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api-keys/{apiKey}/rotate:
+    post:
+      tags: [ApiKeys]
+      summary: Rotate an API key
+      description: >-
+        Issue a replacement key. The old key keeps working for
+        a 24 hour grace window, then stops. The replacement
+        full key is returned exactly once, in plain_text_key.
+        Requires manage-api-keys; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: apiKey
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+                  plain_text_key:
+                    type: string
+                    description: The replacement key, shown exactly once
+                  rotated_from:
+                    $ref: "#/components/schemas/ApiKey"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhook endpoints
+      description: >-
+        The organization's webhook endpoints, newest first.
+        The URL and signing secret are never returned: only
+        the host. Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Webhook endpoints
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WebhookEndpoint"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Webhooks]
+      summary: Create a webhook endpoint
+      description: >-
+        Subscribe a URL to event types. The signing secret is
+        returned exactly once, in plain_text_secret, and never
+        again. An empty events list means every event type.
+        Requires manage-integrations; Free plan refused with
+        402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, maxLength: 100 }
+                url: { type: string, format: uri, maxLength: 2000 }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [claim.created, claim.updated, claim.paid, payment.recorded, document.processed, workflow.run_completed]
+      responses:
+        "201":
+          description: Webhook endpoint created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookEndpoint"
+                  plain_text_secret:
+                    type: string
+                    description: The signing secret, shown exactly once
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{webhook}:
+    get:
+      tags: [Webhooks]
+      summary: Get one webhook endpoint
+      description: >-
+        One endpoint. The URL and signing secret are never
+        returned. Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: webhook
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Webhook endpoint
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookEndpoint"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Webhooks]
+      summary: Update a webhook endpoint
+      description: >-
+        Change the name, subscribed events, or status. The URL
+        cannot be changed: delete the endpoint and create a new
+        one. Requires manage-integrations; Free plan refused
+        with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: webhook
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [claim.created, claim.updated, claim.paid, payment.recorded, document.processed, workflow.run_completed]
+                status: { type: string, enum: [active, disabled] }
+      responses:
+        "200":
+          description: Webhook endpoint updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookEndpoint"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook endpoint
+      description: >-
+        Its delivery history goes with it. Requires
+        manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: webhook
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Webhook endpoint deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{webhook}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send a test delivery
+      description: >-
+        Deliver a webhook.test event to the endpoint
+        immediately and return the delivery row. The test
+        payload is marked test so a receiver never mistakes it
+        for a real event. Requires manage-integrations; Free
+        plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: webhook
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Test delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookDelivery"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{webhook}/deliveries:
+    get:
+      tags: [Webhooks]
+      summary: List deliveries for an endpoint
+      description: >-
+        The delivery log for one endpoint, newest first.
+        Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: webhook
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Webhook deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WebhookDelivery"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounting/providers:
+    get:
+      tags: [Accounting]
+      summary: List modelled accounting providers
+      description: >-
+        The modelled providers: mock QuickBooks and mock Xero.
+        Both are mock only: live_available is always false, no
+        live accounting system exists. Requires
+        manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      responses:
+        "200":
+          description: Accounting providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        value: { type: string }
+                        label: { type: string }
+                        live_available: { type: boolean }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounting:
+    get:
+      tags: [Accounting]
+      summary: List accounting connections
+      description: >-
+        The organization's accounting connections, newest
+        first. Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Accounting connections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountingConnection"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Accounting]
+      summary: Connect a mock accounting provider
+      description: >-
+        Connect mock QuickBooks or mock Xero. The provider
+        validates the settings shape; a company name is
+        required. No live credentials, no real sync. Requires
+        manage-integrations; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, name]
+              properties:
+                provider: { type: string, enum: [mock_quickbooks, mock_xero] }
+                name: { type: string, maxLength: 100 }
+                settings:
+                  type: object
+                  properties:
+                    company_name: { type: string, maxLength: 255 }
+      responses:
+        "201":
+          description: Accounting connection created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountingConnection"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounting/{accounting}:
+    get:
+      tags: [Accounting]
+      summary: Get one accounting connection
+      description: >-
+        One connection. Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: accounting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Accounting connection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountingConnection"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Accounting]
+      summary: Disconnect an accounting connection
+      description: >-
+        History stays readable: the row and its last sync
+        summary remain, it just cannot sync again until
+        reconnected. Requires manage-integrations.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: accounting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Accounting connection disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountingConnection"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounting/{accounting}/test:
+    post:
+      tags: [Accounting]
+      summary: Test an accounting connection
+      description: >-
+        Test the connection's settings through its provider.
+        The connection row is not changed. Requires
+        manage-integrations; Free plan refused with 402.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: accounting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      ok: { type: boolean }
+                      live_available: { type: boolean }
+                      message: { type: string }
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounting/{accounting}/sync:
+    post:
+      tags: [Accounting]
+      summary: Run a mock accounting sync
+      description: >-
+        Export recorded payments to the provider's dummy shape
+        and return the dummy summary. A zero-amount payment is
+        skipped, never exported. No money moves. Requires
+        manage-integrations; Free plan refused with 402. A
+        disconnected connection is refused with 422.
+      parameters:
+        - $ref: "#/components/parameters/OrganizationHeader"
+        - name: accounting
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Sync only these payments; empty means every recorded payment
+      responses:
+        "200":
+          description: Mock sync summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountingSyncSummary"
+        "402": { $ref: "#/components/responses/PlanLimitExceeded" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -10542,3 +11159,105 @@ components:
             verified_extractions: { type: integer }
             duplicates: { type: integer }
             decided_fields: { type: integer }
+    ApiKey:
+      type: object
+      description: >-
+        A public API key. The full key is never returned: only
+        the prefix. Keys are stored hashed (SHA-256).
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [standard, broker] }
+        key_prefix: { type: string, description: "First 12 characters of the full key" }
+        scopes:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [active, rotating, revoked] }
+        broker_name: { type: string, nullable: true }
+        rotated_from_id: { type: string, format: uuid, nullable: true }
+        grace_ends_at: { type: string, format: date-time, nullable: true }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WebhookEndpoint:
+      type: object
+      description: >-
+        A webhook subscription. The URL and signing secret are
+        never returned: only the host.
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        url_host: { type: string, nullable: true }
+        events:
+          type: array
+          items: { type: string }
+          description: Subscribed event types; empty means every event type
+        status: { type: string, enum: [active, disabled] }
+        last_delivered_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WebhookDelivery:
+      type: object
+      description: >-
+        One webhook delivery attempt log. A delivery is failed
+        only after the retry budget (5 attempts) is spent.
+      properties:
+        id: { type: string, format: uuid }
+        webhook_endpoint_id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        event_type: { type: string }
+        status: { type: string, enum: [pending, delivered, failed] }
+        attempts: { type: integer }
+        http_status: { type: integer, nullable: true }
+        response_body: { type: string, nullable: true }
+        next_retry_at: { type: string, format: date-time, nullable: true }
+        delivered_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AccountingConnection:
+      type: object
+      description: >-
+        A mock accounting connection. Mock only: live_available
+        is always false, no live accounting system exists.
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        provider: { type: string, enum: [mock_quickbooks, mock_xero] }
+        provider_label: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [connected, disconnected] }
+        company_name: { type: string, nullable: true }
+        live_available: { type: boolean }
+        last_sync_summary:
+          $ref: "#/components/schemas/AccountingSyncSummary"
+          nullable: true
+        last_synced_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AccountingSyncSummary:
+      type: object
+      description: >-
+        The dummy sync summary. No money moves: records carry
+        deterministic dummy external ids (QB-MOCK-*, XERO-MOCK-*).
+      properties:
+        exported: { type: integer }
+        skipped: { type: integer }
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              external_id: { type: string }
+              claim_payment_id: { type: string, format: uuid }
+              claim_id: { type: string, format: uuid }
+              amount: { type: string }
+              currency: { type: string }
+              payment_method: { type: string, nullable: true }
+              reference: { type: string, nullable: true }
+              recorded_at: { type: string, format: date-time, nullable: true }

@@ -400,6 +400,39 @@ export function canTransitionClaimTo(
   }
 }
 
+// ManageApiKeys in the backend map (config/permissions.php):
+// Owner, Admin, Operations Manager, and Dispatcher. They
+// create, rotate, and revoke public API keys. Key management
+// also needs the Starter plan or better: the Free plan is
+// refused with a 402.
+const API_KEY_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageApiKeys(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, API_KEY_MANAGERS);
+}
+
+// ManageIntegrations in the backend map
+// (config/permissions.php): Owner, Admin, Operations
+// Manager, and Dispatcher. They manage webhook endpoints and
+// accounting connections. Integration management also needs
+// the Starter plan or better: the Free plan is refused with
+// a 402.
+const INTEGRATION_MANAGERS: OrganizationRole[] = [
+  "owner",
+  "admin",
+  "operations_manager",
+  "dispatcher",
+];
+
+export function canManageIntegrations(role: OrganizationRole | null | undefined): boolean {
+  return isOneOf(role, INTEGRATION_MANAGERS);
+}
+
 export function roleLabel(role: OrganizationRole): string {
   switch (role) {
     case "owner":

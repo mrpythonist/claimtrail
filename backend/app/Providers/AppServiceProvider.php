@@ -6,8 +6,10 @@ use App\Billing\BillingProvider;
 use App\Billing\MockBillingProvider;
 use App\Models\Claim;
 use App\Models\ClaimDeadline;
+use App\Models\ClaimPayment;
 use App\Models\CustomField;
 use App\Models\DeadlineSetting;
+use App\Models\DocumentExtraction;
 use App\Models\EventCategory;
 use App\Models\EvidenceFile;
 use App\Models\EvidenceTemplate;
@@ -17,7 +19,9 @@ use App\Models\OrganizationInvitation;
 use App\Models\OrganizationMember;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
+use App\Models\WorkflowRun;
 use App\Observers\AuditObserver;
+use App\Observers\WebhookEventObserver;
 use App\Permission;
 use App\Support\Correlation;
 use App\Support\CurrentOrganization;
@@ -94,6 +98,16 @@ class AppServiceProvider extends ServiceProvider
         ExportTemplate::observe(AuditObserver::class);
         OrganizationMember::observe(AuditObserver::class);
         OrganizationInvitation::observe(AuditObserver::class);
+
+        // Webhook events (v2.0.2): the observer fires the
+        // claim, payment, document, and workflow-run events
+        // that subscribed endpoints receive. Dispatch is best
+        // effort and never throws, so a webhook failure can
+        // never break the operation that fired the event.
+        Claim::observe(WebhookEventObserver::class);
+        ClaimPayment::observe(WebhookEventObserver::class);
+        DocumentExtraction::observe(WebhookEventObserver::class);
+        WorkflowRun::observe(WebhookEventObserver::class);
 
         // Password reset links go to the frontend, which collects the
         // new password and calls the API reset endpoint.
